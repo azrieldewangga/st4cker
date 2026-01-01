@@ -21,13 +21,13 @@ const GlassCard = ({
 
     return (
         <div className={clsx(
-            "card bg-base-100 shadow-xl border border-base-200", // Default / Fallback styles
+            "rounded-xl bg-card shadow-lg border border-border", // Shadcn-compatible styles
             className
         )}>
-            <div className={clsx("card-body p-6", bodyClassName)}>
+            <div className={clsx("p-6", bodyClassName)}>
                 {(title || action) && (
                     <div className="flex justify-between items-center mb-4">
-                        {title && <h2 className="card-title text-xl">{title}</h2>}
+                        {title && <h2 className="text-xl font-semibold text-card-foreground">{title}</h2>}
                         {action && <div>{action}</div>}
                     </div>
                 )}

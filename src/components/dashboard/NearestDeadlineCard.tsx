@@ -49,17 +49,17 @@ const NearestDeadlineCard = () => {
             const hours = differenceInHours(due, now);
             return { text: `${hours}h left`, color: 'text-warning' };
         }
-        return { text: `${days}d left`, color: 'text-base-content/70' };
+        return { text: `${days}d left`, color: 'text-muted-foreground' };
     };
 
     return (
         <GlassCard className="h-full">
             <div className="flex justify-between items-center mb-2">
-                <h2 className="card-title text-lg flex items-center gap-2">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
                     <Clock size={20} className="text-primary" />
                     Deadline Terdekat
                 </h2>
-                <Link to="/assignments" className="btn btn-xs btn-ghost gap-1">
+                <Link to="/assignments" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
                     Lihat <ArrowRight size={14} />
                 </Link>
             </div>
@@ -73,10 +73,10 @@ const NearestDeadlineCard = () => {
                     nearest.map(item => {
                         const timeLeft = getTimeLeft(item.deadline);
                         return (
-                            <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition-colors group">
+                            <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors group">
                                 <button
                                     onClick={() => updateAssignment(item.id, { status: 'done' })}
-                                    className="btn btn-circle btn-xs btn-ghost text-success opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="rounded-full p-1 text-green-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-green-500/10"
                                     title="Mark Done"
                                 >
                                     <CheckCircle size={16} />

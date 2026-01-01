@@ -11,20 +11,20 @@ const TaskCard = ({ task, status }: { task: Assignment; status: 'to-do' | 'progr
 
     // Status circle color (pale versions)
     const circleColor = status === 'to-do'
-        ? 'bg-base-content/30'
+        ? 'bg-muted-foreground/30'
         : status === 'progress'
             ? 'bg-warning'
             : 'bg-success';
 
     return (
-        <div className="bg-base-100/50 hover:bg-base-100/80 p-3 rounded-xl border border-base-200 transition-all cursor-pointer group shadow-sm hover:shadow-md backdrop-blur-sm">
+        <div className="bg-card/50 hover:bg-card/80 p-3 rounded-xl border border-border transition-all cursor-pointer group shadow-sm hover:shadow-md backdrop-blur-sm">
             <div className="flex justify-between items-start mb-2">
                 <span className={clsx(
                     "text-[10px] uppercase font-bold px-2 py-0.5 rounded-full",
                     task.type === 'Tugas' && "bg-info/10 text-info",
                     task.type === 'Laporan Resmi' && "bg-secondary/10 text-secondary",
                     task.type === 'Laporan Sementara' && "bg-accent/10 text-accent",
-                    !['Tugas', 'Laporan Resmi', 'Laporan Sementara'].includes(task.type) && "bg-base-200 text-base-content/70"
+                    !['Tugas', 'Laporan Resmi', 'Laporan Sementara'].includes(task.type) && "bg-muted text-muted-foreground"
                 )}>
                     {task.type}
                 </span>
@@ -85,7 +85,7 @@ const TaskBoard = () => {
         <div className="flex flex-col h-full">
             <div className="flex justify-between items-center mb-4 px-2">
                 <h3 className="font-bold text-lg">Status Tugas</h3>
-                <button onClick={() => navigate('/assignments')} className="btn btn-xs btn-ghost gap-1">
+                <button onClick={() => navigate('/assignments')} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
                     Lihat <ArrowRight size={14} />
                 </button>
             </div>
@@ -95,11 +95,11 @@ const TaskBoard = () => {
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
                         <div
-                            className="radial-progress text-base-content/40 text-[8px] font-bold"
+                            className="text-muted-foreground text-[8px] font-bold"
                             style={{ "--value": todoPercent, "--size": "2rem", "--thickness": "3px" } as React.CSSProperties}
                             role="progressbar"
                         >{todoPercent}%</div>
-                        TO DO <span className="bg-base-200 px-1.5 rounded text-[10px]">{todoAll.length}</span>
+                        TO DO <span className="bg-muted px-1.5 rounded text-[10px]">{todoAll.length}</span>
                     </div>
                     <div className="flex flex-col gap-3 overflow-y-auto pr-1">
                         {todo.map(task => <TaskCard key={task.id} task={task} status="to-do" />)}
@@ -115,7 +115,7 @@ const TaskBoard = () => {
                             style={{ "--value": progressPercent, "--size": "2rem", "--thickness": "3px" } as React.CSSProperties}
                             role="progressbar"
                         >{progressPercent}%</div>
-                        DOING <span className="bg-base-200 px-1.5 rounded text-[10px]">{progressAll.length}</span>
+                        DOING <span className="bg-muted px-1.5 rounded text-[10px]">{progressAll.length}</span>
                     </div>
                     <div className="flex flex-col gap-3 overflow-y-auto pr-1">
                         {progress.map(task => <TaskCard key={task.id} task={task} status="progress" />)}
@@ -131,7 +131,7 @@ const TaskBoard = () => {
                             style={{ "--value": donePercent, "--size": "2rem", "--thickness": "3px" } as React.CSSProperties}
                             role="progressbar"
                         >{donePercent}%</div>
-                        DONE <span className="bg-base-200 px-1.5 rounded text-[10px]">{doneAll.length}</span>
+                        DONE <span className="bg-muted px-1.5 rounded text-[10px]">{doneAll.length}</span>
                     </div>
                     <div className="flex flex-col gap-3 overflow-y-auto pr-1">
                         {done.map(task => <TaskCard key={task.id} task={task} status="done" />)}

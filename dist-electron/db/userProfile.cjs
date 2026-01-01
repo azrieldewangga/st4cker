@@ -17,7 +17,8 @@ exports.userProfile = {
         const semester = db.prepare("SELECT value FROM meta WHERE key = 'user_semester'").get();
         const avatar = db.prepare("SELECT value FROM meta WHERE key = 'user_avatar'").get();
         const cardLast4 = db.prepare("SELECT value FROM meta WHERE key = 'user_card_last4'").get();
-        console.log('[DEBUG] userProfile.get() found:', { name, semester, cardLast4 });
+        const major = db.prepare("SELECT value FROM meta WHERE key = 'user_major'").get();
+        console.log('[DEBUG] userProfile.get() found:', { name, semester, cardLast4, major });
         if (name && semester) {
             return {
                 id: 'user-default-1', // Static ID for single user
@@ -25,6 +26,7 @@ exports.userProfile = {
                 semester: parseInt(semester.value),
                 avatar: avatar ? avatar.value : '',
                 cardLast4: cardLast4 ? cardLast4.value : '',
+                major: major ? major.value : '',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
@@ -41,6 +43,8 @@ exports.userProfile = {
             db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('user_avatar', ?)").run(data.avatar);
         if (data.cardLast4 !== undefined)
             db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('user_card_last4', ?)").run(data.cardLast4);
+        if (data.major !== undefined)
+            db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('user_major', ?)").run(data.major);
         return exports.userProfile.get();
     }
 };

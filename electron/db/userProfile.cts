@@ -16,8 +16,9 @@ export const userProfile = {
         const semester = db.prepare("SELECT value FROM meta WHERE key = 'user_semester'").get() as { value: string } | undefined;
         const avatar = db.prepare("SELECT value FROM meta WHERE key = 'user_avatar'").get() as { value: string } | undefined;
         const cardLast4 = db.prepare("SELECT value FROM meta WHERE key = 'user_card_last4'").get() as { value: string } | undefined;
+        const major = db.prepare("SELECT value FROM meta WHERE key = 'user_major'").get() as { value: string } | undefined;
 
-        console.log('[DEBUG] userProfile.get() found:', { name, semester, cardLast4 });
+        console.log('[DEBUG] userProfile.get() found:', { name, semester, cardLast4, major });
 
         if (name && semester) {
             return {
@@ -26,6 +27,7 @@ export const userProfile = {
                 semester: parseInt(semester.value),
                 avatar: avatar ? avatar.value : '',
                 cardLast4: cardLast4 ? cardLast4.value : '',
+                major: major ? major.value : '',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
@@ -39,6 +41,7 @@ export const userProfile = {
         if (data.semester !== undefined) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('user_semester', ?)").run(String(data.semester));
         if (data.avatar !== undefined) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('user_avatar', ?)").run(data.avatar);
         if (data.cardLast4 !== undefined) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('user_card_last4', ?)").run(data.cardLast4);
+        if (data.major !== undefined) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('user_major', ?)").run(data.major);
 
         return userProfile.get();
     }

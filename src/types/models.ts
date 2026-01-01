@@ -23,6 +23,7 @@ export interface UserProfile extends BaseEntity {
     semester: number;
     avatar?: string;
     cardLast4?: string;
+    major?: string;
 }
 
 

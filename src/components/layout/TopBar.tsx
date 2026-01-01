@@ -1,47 +1,44 @@
-import { Search, Plus, X } from 'lucide-react';
-import { useStore } from '../../store/useStore';
-import SearchResults from './SearchResults';
+import { Search, X } from 'lucide-react';
 import { useState } from 'react';
+import SearchResults from './SearchResults';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const TopBar = () => {
-    const { setQuickAddOpen } = useStore();
     const [searchQuery, setSearchQuery] = useState('');
 
     return (
-        <div className="navbar bg-base-100 border-b border-base-content/10 h-16 min-h-[4rem] px-4">
+        <div className="flex h-16 items-center border-b px-4 bg-background">
             <div className="flex-1">
                 {/* Global Search */}
                 <div className="relative w-full max-w-md hidden md:block">
-                    <input
-                        type="text"
-                        placeholder="Cari tugas, matkul..."
-                        className="input input-sm input-bordered w-full pl-10 rounded-full bg-base-200 focus:bg-base-100 transition-all font-normal"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 btn btn-xs btn-circle btn-ghost"
-                        >
-                            <X size={14} />
-                        </button>
-                    )}
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="text"
+                            placeholder="Cari tugas, matkul..."
+                            className="w-full pl-9 pr-8 rounded-full bg-muted/50 focus:bg-background transition-colors"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        {searchQuery && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full hover:bg-muted"
+                            >
+                                <X className="h-3 w-3" />
+                                <span className="sr-only">Clear search</span>
+                            </Button>
+                        )}
+                    </div>
 
                     {searchQuery && <SearchResults query={searchQuery} closeSearch={() => setSearchQuery('')} />}
                 </div>
             </div>
 
-            <div className="flex-none gap-2">
-                <button
-                    onClick={() => setQuickAddOpen(true)}
-                    className="btn btn-sm btn-primary gap-2 rounded-half normal-case px-4 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all"
-                >
-                    <Plus size={16} />
-                    Quick Add
-                </button>
-            </div>
+            {/* Quick Add Removed as per cleanup request and missing store action */}
         </div>
     );
 };

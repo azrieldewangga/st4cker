@@ -2,7 +2,7 @@ import React from 'react';
 
 const LoadingScreen = () => {
     return (
-        <div className="h-screen w-screen bg-base-100 text-base-content flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center justify-center relative overflow-hidden">
             {/* Background Decorations */}
             <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-3xl animate-pulse"></div>
             <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-secondary/5 rounded-full blur-3xl animate-pulse delay-700"></div>
@@ -17,7 +17,7 @@ const LoadingScreen = () => {
                 </div>
 
                 <div className="flex flex-col items-center gap-2">
-                    <h1 className="text-2xl font-bold tracking-tight text-base-content font-display animate-fade-in-up">CampusDash</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground font-display animate-fade-in-up">CampusDash</h1>
                     <div className="flex gap-1">
                         <div className="w-2 h-2 bg-primary rounded-full animate-bounce delay-0"></div>
                         <div className="w-2 h-2 bg-primary rounded-full animate-bounce delay-100"></div>

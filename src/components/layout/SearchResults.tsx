@@ -28,7 +28,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ query, closeSearch }) => 
     const hasResults = filteredAssignments.length > 0 || filteredCourses.length > 0;
 
     return (
-        <div className="absolute top-full mt-2 left-0 w-full bg-base-100 shadow-xl rounded-lg border border-base-300 z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full mt-2 left-0 w-full bg-popover shadow-xl rounded-lg border border-border z-50 max-h-96 overflow-y-auto">
             {!hasResults ? (
                 <div className="p-4 text-center opacity-50">No results found for "{query}"</div>
             ) : (
@@ -36,7 +36,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ query, closeSearch }) => 
                     {/* Assignments Group */}
                     {filteredAssignments.length > 0 && (
                         <div>
-                            <div className="px-4 py-2 text-xs font-bold opacity-50 uppercase tracking-wider bg-base-200/50">
+                            <div className="px-4 py-2 text-xs font-bold opacity-50 uppercase tracking-wider bg-muted/50">
                                 Assignments
                             </div>
                             {filteredAssignments.map(item => (
@@ -44,7 +44,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ query, closeSearch }) => 
                                     key={item.id}
                                     to="/assignments"
                                     onClick={closeSearch}
-                                    className="flex items-center gap-3 px-4 py-3 hover:bg-base-200 transition-colors"
+                                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors"
                                 >
                                     <BookOpen size={16} className="opacity-70" />
                                     <div>

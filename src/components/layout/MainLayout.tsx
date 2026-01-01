@@ -1,131 +1,107 @@
-import React, { ReactNode, useEffect } from 'react';
-import clsx from 'clsx';
-import Sidebar from './Sidebar';
-import TopBar from './TopBar';
-import QuickAddModal from '../shared/QuickAddModal';
+import React, { ReactNode } from 'react';
 import { useStore } from '../../store/useStore';
+import { MainNav } from './MainNav';
+import { Search } from './Search';
+import { UserNav } from './UserNav';
+import { SemesterSwitcher } from './SemesterSwitcher';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils'; // Assuming cn is available
 
 interface MainLayoutProps {
     children: ReactNode;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
-    const { isQuickAddOpen, fetchUserProfile, isHistoryWindowOpen, setHistoryWindowOpen, notification } = useStore();
+    const { notification } = useStore();
+
+    // Notification Listener
+    React.useEffect(() => {
+        if (notification) {
+            // @ts-ignore
+            toast[notification.type === 'error' ? 'error' : notification.type === 'success' ? 'success' : 'message'](notification.message);
+        }
+    }, [notification]);
+
+    // Window Controls
     const handleMinimize = () => window.electronAPI.minimize();
     const handleMaximize = () => window.electronAPI.maximize();
     const handleClose = () => window.electronAPI.close();
 
-    useEffect(() => {
-        fetchUserProfile();
+    // Child Window Blur Effect
+    const [isChildWindowOpen, setIsChildWindowOpen] = React.useState(false);
 
-        // Listen for child window events from Electron
+    React.useEffect(() => {
         // @ts-ignore
-        const removeOpenListener = window.electronAPI.on('child-window-opened', () => {
-            console.log("MainLayout: Child window opened");
-            setHistoryWindowOpen(true);
-        });
+        const handleOpen = () => {
+            console.log('[MainLayout] Received child-window-opened');
+            setIsChildWindowOpen(true);
+        };
+        // @ts-ignore
+        const handleClose = () => {
+            console.log('[MainLayout] Received child-window-closed');
+            setIsChildWindowOpen(false);
+        };
 
         // @ts-ignore
-        const removeCloseListener = window.electronAPI.on('child-window-closed', () => {
-            console.log("MainLayout: Child window closed");
-            setHistoryWindowOpen(false);
-        });
+        window.electronAPI.on('child-window-opened', handleOpen);
+        // @ts-ignore
+        window.electronAPI.on('child-window-closed', handleClose);
 
         return () => {
-            // Cleanup - using removeAllListeners for simplicity since we can't easily pass the exact callback back if it's wrapped
             // @ts-ignore
-            if (window.electronAPI.removeAllListeners) {
-                // @ts-ignore
-                window.electronAPI.removeAllListeners('child-window-opened');
-                // @ts-ignore
-                window.electronAPI.removeAllListeners('child-window-closed');
-            }
+            window.electronAPI.off('child-window-opened', handleOpen);
+            // @ts-ignore
+            window.electronAPI.off('child-window-closed', handleClose);
         };
     }, []);
 
-    const isDimmed = isQuickAddOpen || isHistoryWindowOpen;
-
     return (
         <div className="h-screen w-screen overflow-hidden bg-transparent flex flex-col p-4">
-            {/* Custom Window Frame - Replaces mockup-browser for full control */}
-            <div id="layout-mockup-frame" className="flex flex-col h-full w-full bg-base-100 rounded-3xl overflow-hidden shadow-2xl relative">
+            {/* Custom Window Frame */}
+            <div className="flex flex-col h-full w-full bg-background rounded-xl overflow-hidden shadow-2xl border border-border relative ring-1 ring-white/10">
+                {/* Blur Overlay when Child Window is Open */}
+                {isChildWindowOpen && (
+                    <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
+                )}
 
-                {/* Custom Titlebar */}
-                <div className="h-12 min-h-[3rem] w-full titlebar-drag flex items-center pr-4 bg-base-100 border-b border-base-content/5 z-50">
-
-                    {/* Branding - Left Side */}
-                    <div className="flex items-center gap-2 pl-5 no-drag select-none">
-                        <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-                            <span className="font-bold text-primary-content text-sm">CD</span>
+                {/* Title Bar / Header */}
+                <div className="border-b bg-card">
+                    <div className="flex h-16 items-center px-4 titlebar-drag">
+                        {/* Left: Switcher & Nav */}
+                        <div className="no-drag flex items-center pr-4">
+                            <SemesterSwitcher />
+                            <MainNav className="mx-6" />
                         </div>
-                        <span className="font-bold text-lg tracking-tight text-base-content font-display">CampusDash</span>
-                    </div>
 
-                    <div className="flex-1"></div>
+                        {/* Spacer */}
+                        <div className="flex-1" />
 
-                    {/* Address Bar Simulation */}
-                    <div className="hidden md:flex items-center justify-center gap-2 bg-base-200/50 px-4 py-1.5 rounded-full border border-base-content/5 no-drag absolute left-1/2 -translate-x-1/2 opacity-60 hover:opacity-100 transition-opacity w-96 max-w-[40vw]">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                        <span className="text-xs font-mono opacity-70 selection:bg-primary/30">campus-dash://app</span>
-                    </div>
+                        {/* Right: Search & User & Window Controls */}
+                        <div className="no-drag flex items-center space-x-4">
+                            <Search />
+                            <UserNav />
 
-                    <div className="flex-1"></div>
-
-                    {/* Custom Window Controls (Traffic Lights) */}
-                    <div className="flex gap-2 no-drag z-50">
-                        <button onClick={handleMinimize} className="w-3.5 h-3.5 rounded-full bg-yellow-400 hover:bg-yellow-500 border border-yellow-600/20 transition-all shadow-sm group flex items-center justify-center" title="Minimize">
-                            <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                        </button>
-                        <button onClick={handleMaximize} className="w-3.5 h-3.5 rounded-full bg-green-500 hover:bg-green-600 border border-green-600/20 transition-all shadow-sm group flex items-center justify-center" title="Maximize">
-                            <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
-                        </button>
-                        <button onClick={handleClose} className="w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 border border-red-600/20 transition-all shadow-sm group flex items-center justify-center" title="Close">
-                            <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                        </button>
+                            {/* Window Actions */}
+                            <div className="flex gap-2 ml-4">
+                                <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-400 border border-yellow-600/30" />
+                                <button onClick={handleMaximize} className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-400 border border-green-600/30" />
+                                <button onClick={handleClose} className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-400 border border-red-600/30" />
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 {/* Main Content Area */}
-                <div id="layout-main-wrapper" className="flex flex-1 overflow-hidden bg-base-100 relative">
-                    {/* Dimming Overlay */}
-                    <div className={clsx(
-                        "absolute inset-0 z-[100] bg-black/40 backdrop-blur-sm transition-all duration-300 pointer-events-none",
-                        isDimmed ? "opacity-100" : "opacity-0"
-                    )}></div>
-
-                    <div className="drawer lg:drawer-open h-full w-full">
-                        <input id="main-drawer" type="checkbox" className="drawer-toggle" />
-
-                        <div id="layout-drawer-content" className="drawer-content flex flex-col h-full overflow-hidden relative">
-                            <TopBar />
-                            <main id="layout-content-area" className="flex-1 overflow-y-auto p-6 bg-base-200/50">
-                                <div className="container mx-auto max-w-7xl animate-fade-in">
-                                    {children}
-                                </div>
-                            </main>
-                        </div>
-
-                        <Sidebar />
+                <div className="flex-1 space-y-4 p-8 pt-6 overflow-y-auto bg-muted/10">
+                    <div className="mx-auto max-w-7xl animate-fade-in text-foreground">
+                        {children}
                     </div>
                 </div>
+
             </div>
 
-            <QuickAddModal />
-
-            {/* Notification Toast */}
-            {notification && (
-                <div className="toast toast-bottom toast-end z-[9999]">
-                    <div className={clsx(
-                        "alert shadow-lg",
-                        notification.type === 'info' && "alert-info",
-                        notification.type === 'success' && "alert-success",
-                        notification.type === 'error' && "alert-error",
-                        notification.type === 'warning' && "alert-warning"
-                    )}>
-                        <span>{notification.message}</span>
-                    </div>
-                </div>
-            )}
+            <Toaster />
         </div>
     );
 };

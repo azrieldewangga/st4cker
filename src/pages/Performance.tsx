@@ -2,7 +2,26 @@ import { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { GraduationCap } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import GlassCard from '../components/shared/GlassCard';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
 
 const Performance = () => {
     const { grades, fetchGrades, updateGrade, userProfile, getSemesterCourses } = useStore();
@@ -92,9 +111,12 @@ const Performance = () => {
             </h1>
 
             {/* IPS Trend Chart */}
-            <GlassCard className="p-6">
-                <h3 className="text-xl font-bold mb-4">Grafik IPS</h3>
-                <div className="h-64 w-full">
+            {/* IPS Trend Chart */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Grafik IPS</CardTitle>
+                </CardHeader>
+                <CardContent className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart
                             data={chartData}
@@ -102,28 +124,30 @@ const Performance = () => {
                         >
                             <defs>
                                 <linearGradient id="colorIps" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} />
-                                    <stop offset="50%" stopColor="var(--color-primary)" stopOpacity={0} />
+                                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.4} />
+                                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.05} />
                                 </linearGradient>
                             </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                            <XAxis dataKey="semester" />
-                            <YAxis domain={[0, 4]} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
+                            <XAxis dataKey="semester" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                            <YAxis domain={[0, 4]} stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
                             <Tooltip
-                                contentStyle={{ backgroundColor: '#1d232a', borderColor: '#374151' }}
-                                itemStyle={{ color: '#fff' }}
+                                contentStyle={{ backgroundColor: 'var(--popover)', borderColor: 'var(--border)', color: 'var(--popover-foreground)', borderRadius: '8px' }}
+                                itemStyle={{ color: 'var(--primary)' }}
+                                labelStyle={{ color: 'var(--popover-foreground)' }}
                             />
                             <Area
                                 type="monotone"
                                 dataKey="ips"
-                                stroke="var(--color-primary)"
+                                stroke="var(--primary)"
+                                strokeWidth={2}
                                 fillOpacity={1}
                                 fill="url(#colorIps)"
                             />
                         </AreaChart>
                     </ResponsiveContainer>
-                </div>
-            </GlassCard>
+                </CardContent>
+            </Card>
 
 
 
@@ -132,84 +156,122 @@ const Performance = () => {
                 const semesterCourses = getSemesterCourses(viewSemester);
 
                 return (
-                    <GlassCard className="overflow-x-auto" bodyClassName="p-0">
-                        <div className="p-4 bg-base-100/30 backdrop-blur-md font-bold text-lg flex justify-between items-center border-b border-white/10">
-                            <span>Mata Kuliah</span>
-                            <span className="text-sm font-normal opacity-70">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                            <CardTitle className="text-base font-bold">Mata Kuliah - Semester {viewSemester}</CardTitle>
+                            <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-md">
                                 {semesterCourses.length} Courses
                             </span>
-                        </div>
-                        <table className="table w-full">
-                            <thead>
-                                <tr>
-                                    <th>No</th>
-                                    <th>Mata Kuliah</th>
-                                    <th>SKS</th>
-                                    <th>Nilai</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {semesterCourses.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={4} className="text-center py-8 opacity-50">
-                                            No courses found for this semester.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    semesterCourses.map((course, idx) => (
-                                        <tr key={idx} className="hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
-                                            <th>{idx + 1}</th>
-                                            <td className="font-medium">{course.name}</td>
-                                            <td>{course.sks}</td>
-                                            <td>
-                                                <div className="dropdown dropdown-end">
-                                                    <div
-                                                        tabIndex={0}
-                                                        role="button"
-                                                        className="btn btn-sm btn-ghost gap-2 h-8 min-h-0 px-4 font-medium text-sm border border-base-300 rounded-lg hover:bg-base-200 min-w-[70px] justify-between"
-                                                    >
-                                                        <span>{grades[course.id] || '-'}</span>
-                                                        <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                                    </div>
-                                                    <ul tabIndex={0} className="dropdown-content menu p-2 shadow-lg bg-base-100 rounded-xl w-24 border border-base-300 mt-1" style={{ position: 'fixed', zIndex: 9999 }}>
-                                                        {['A', 'A-', 'AB', 'B+', 'B', 'BC', 'C', 'D', 'E'].map(g => (
-                                                            <li key={g}>
-                                                                <button
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[50px]">No</TableHead>
+                                        <TableHead>Mata Kuliah</TableHead>
+                                        <TableHead>SKS</TableHead>
+                                        <TableHead className="text-right">Nilai</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {semesterCourses.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                                                No courses found for this semester.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        semesterCourses.map((course, idx) => (
+                                            <TableRow key={idx}>
+                                                <TableCell>{idx + 1}</TableCell>
+                                                <TableCell className="font-medium">{course.name}</TableCell>
+                                                <TableCell>{course.sks}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="outline" size="sm" className="w-[60px]">
+                                                                {grades[course.id] || '-'}
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            {['A', 'A-', 'AB', 'B+', 'B', 'BC', 'C', 'D', 'E'].map(g => (
+                                                                <DropdownMenuItem
+                                                                    key={g}
                                                                     onClick={() => updateGrade(course.id, g)}
-                                                                    className={`text-sm ${grades[course.id] === g ? 'active' : ''}`}
                                                                 >
                                                                     {g}
-                                                                </button>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </GlassCard>
+                                                                </DropdownMenuItem>
+                                                            ))}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
                 );
             })()}
 
-            {/* Bottom Semester Pagination (Radio Style) */}
-            <div className="flex justify-center mt-6 pb-6">
-                <div className="join">
-                    {semesterList.map((sem) => (
-                        <input
-                            key={sem}
-                            className="join-item btn btn-square"
-                            type="radio"
-                            name="semester-pagination"
-                            aria-label={`${sem}`}
-                            checked={viewSemester === sem}
-                            onChange={() => setViewSemester(sem)}
+            {/* Bottom Semester Pagination (Shadcn Style) */}
+            <Pagination className="mt-6 pb-6">
+                <PaginationContent>
+                    <PaginationItem>
+                        <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                if (viewSemester > 1) setViewSemester(viewSemester - 1);
+                            }}
+                            className={viewSemester <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
-                    ))}
-                </div>
-            </div>
+                    </PaginationItem>
+
+                    {(() => {
+                        const total = semesterList.length;
+                        let start = viewSemester - 1;
+                        if (start < 1) start = 1;
+                        let end = start + 2;
+                        if (end > total) {
+                            end = total;
+                            start = Math.max(1, end - 2);
+                        }
+
+                        const visiblePages = [];
+                        for (let i = start; i <= end; i++) {
+                            visiblePages.push(i);
+                        }
+
+                        return visiblePages.map((sem) => (
+                            <PaginationItem key={sem}>
+                                <PaginationLink
+                                    href="#"
+                                    isActive={viewSemester === sem}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setViewSemester(sem);
+                                    }}
+                                >
+                                    {sem}
+                                </PaginationLink>
+                            </PaginationItem>
+                        ));
+                    })()}
+
+                    <PaginationItem>
+                        <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                if (viewSemester < semesterList.length) setViewSemester(viewSemester + 1);
+                            }}
+                            className={viewSemester >= semesterList.length ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                    </PaginationItem>
+                </PaginationContent>
+            </Pagination>
 
         </div>
     );

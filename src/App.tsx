@@ -14,7 +14,7 @@ import Schedule from './pages/Schedule';
 
 import Cashflow from './pages/Cashflow';
 import TransactionHistoryModal from './components/modals/TransactionHistoryModal'; // Now acting as a page
-import ImageCropperWindow from './components/modals/ImageCropperWindow';
+
 
 function App() {
   return (
@@ -74,7 +74,7 @@ const StandaloneRoutes = () => {
       <Routes>
         {/* Standalone Window Routes - MUST BE FIRST */}
         <Route path="/history" element={<TransactionHistoryModal />} />
-        <Route path="/cropper" element={<ImageCropperWindow />} />
+
 
         {/* Main App Routes - Catch all others */}
         <Route path="/*" element={

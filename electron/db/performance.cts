@@ -42,5 +42,13 @@ export const performance = {
         stmt.run(course);
         console.log('[DEBUG-DB] upsertCourse success');
         return course;
+    },
+
+    updateSksOnly: (id: string, sks: number) => {
+        const db = getDB();
+        const stmt = db.prepare('UPDATE performance_courses SET sks = ? WHERE id = ?');
+        stmt.run(sks, id);
+        console.log(`[DEBUG-DB] updateSksOnly: ${id} -> ${sks} SKS`);
+        return { id, sks };
     }
 };

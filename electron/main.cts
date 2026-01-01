@@ -149,6 +149,7 @@ app.on('ready', async () => {
     ipcMain.handle('performance:upsertSemester', (_, s, i) => performance.upsertSemester(s, i));
     ipcMain.handle('performance:getCourses', (_, sem) => performance.getCourses(sem));
     ipcMain.handle('performance:upsertCourse', (_, c) => performance.upsertCourse(c));
+    ipcMain.handle('performance:updateSksOnly', (_, id, sks) => performance.updateSksOnly(id, sks));
 
     // Schedule
     ipcMain.handle('schedule:getAll', () => schedule.getAll());
@@ -284,7 +285,7 @@ app.on('ready', async () => {
             const childWin = new BrowserWindow({
                 width,
                 height,
-                parent: mainWindow || undefined,
+                // parent: mainWindow || undefined, // REMOVED to decouple windows
                 modal: false,
                 frame: false,
                 transparent: true,
@@ -305,6 +306,24 @@ app.on('ready', async () => {
             }
 
             console.log('[Main] Window created successfully');
+
+            // Notify ALL other windows (Main Window)
+            BrowserWindow.getAllWindows().forEach(win => {
+                if (win.id !== childWin.id) {
+                    console.log('[Main] Broadcasting child-window-opened to window:', win.id);
+                    win.webContents.send('child-window-opened', route);
+                }
+            });
+
+            childWin.on('closed', () => {
+                console.log('[Main] Child window closed, notifying all windows');
+                BrowserWindow.getAllWindows().forEach(win => {
+                    if (win.id !== childWin.id && !win.isDestroyed()) {
+                        win.webContents.send('child-window-closed', route);
+                        win.focus(); // Force focus back to main window
+                    }
+                });
+            });
 
         } catch (err) {
             console.error('[Main] Failed to create window:', err);

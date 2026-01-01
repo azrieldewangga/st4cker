@@ -27,26 +27,26 @@ class ErrorBoundary extends React.Component<Props, State> {
     render() {
         if (this.state.hasError) {
             return (
-                <div className="min-h-screen w-full flex items-center justify-center bg-base-300 p-4">
-                    <div className="card bg-base-100 shadow-2xl max-w-lg w-full border border-base-content/10">
-                        <div className="card-body items-center text-center">
-                            <div className="w-16 h-16 bg-error/10 rounded-full flex items-center justify-center mb-2">
-                                <AlertTriangle className="w-8 h-8 text-error" />
+                <div className="min-h-screen w-full flex items-center justify-center bg-background p-4">
+                    <div className="rounded-xl bg-card shadow-2xl max-w-lg w-full border border-border">
+                        <div className="p-6 flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-2">
+                                <AlertTriangle className="w-8 h-8 text-destructive" />
                             </div>
-                            <h2 className="card-title text-2xl font-bold">Oops! Something went wrong.</h2>
-                            <p className="opacity-70">
+                            <h2 className="text-2xl font-bold text-card-foreground">Oops! Something went wrong.</h2>
+                            <p className="opacity-70 mt-2">
                                 We encountered an unexpected error. Please try reloading the application.
                             </p>
 
-                            <div className="bg-base-200 p-4 rounded-lg w-full mt-4 text-left overflow-auto max-h-48 border border-base-content/5">
+                            <div className="bg-muted p-4 rounded-lg w-full mt-4 text-left overflow-auto max-h-48 border border-border">
                                 <code className="text-xs font-mono opacity-80 break-words">
                                     {this.state.error && this.state.error.toString()}
                                 </code>
                             </div>
 
-                            <div className="card-actions justify-end mt-6 w-full">
+                            <div className="mt-6 w-full">
                                 <button
-                                    className="btn btn-primary w-full gap-2"
+                                    className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground h-10 px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors"
                                     onClick={() => window.location.reload()}
                                 >
                                     <RefreshCw size={18} />

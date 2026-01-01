@@ -1,0 +1,202 @@
+import { useState, useEffect } from 'react';
+import { useStore } from '@/store/useStore';
+import { format } from 'date-fns';
+import { AssignmentType } from '@/types/models';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
+
+interface AssignmentModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    editingId?: string | null;
+}
+
+const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) => {
+    const {
+        addAssignment,
+        updateAssignment,
+        courses,
+        fetchCourses,
+        assignments,
+        userProfile
+    } = useStore();
+
+    const [formData, setFormData] = useState({
+        courseName: '',
+        type: 'Tugas' as AssignmentType,
+        deadline: new Date(),
+        note: ''
+    });
+
+    // Fetch courses when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            fetchCourses();
+        }
+    }, [isOpen, fetchCourses]);
+
+    // Reset or populate form based on edit mode
+    useEffect(() => {
+        if (isOpen) {
+            if (editingId) {
+                const item = assignments.find(a => a.id === editingId);
+                if (item) {
+                    setFormData({
+                        courseName: item.courseId,
+                        type: item.type,
+                        deadline: new Date(item.deadline),
+                        note: item.note || ''
+                    });
+                }
+            } else {
+                setFormData({
+                    courseName: courses[0]?.id || '',
+                    type: 'Tugas',
+                    deadline: new Date(),
+                    note: ''
+                });
+            }
+        }
+    }, [isOpen, editingId, assignments, courses]);
+
+    // Set default course when courses load
+    useEffect(() => {
+        if (isOpen && !editingId && courses.length > 0 && !formData.courseName) {
+            setFormData(prev => ({ ...prev, courseName: courses[0].id }));
+        }
+    }, [courses, isOpen, editingId, formData.courseName]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!formData.courseName) return;
+
+        const courseNameForTitle = courses.find(c => c.id === formData.courseName)?.name || formData.courseName;
+        const finalTitle = `${formData.type} - ${courseNameForTitle}`;
+
+        if (editingId) {
+            await updateAssignment(editingId, {
+                courseId: formData.courseName,
+                title: finalTitle,
+                type: formData.type,
+                deadline: format(formData.deadline, "yyyy-MM-dd'T'HH:mm"),
+                note: formData.note
+            });
+        } else {
+            await addAssignment({
+                courseId: formData.courseName,
+                title: finalTitle,
+                type: formData.type,
+                deadline: format(formData.deadline, "yyyy-MM-dd'T'HH:mm"),
+                status: 'to-do',
+                note: formData.note
+            });
+        }
+
+        onClose();
+    };
+
+    const assignmentTypes: AssignmentType[] = ['Tugas', 'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'];
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                    <DialogTitle>{editingId ? 'Edit Assignment' : 'New Assignment'}</DialogTitle>
+                </DialogHeader>
+
+                <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                    {/* Course Selection */}
+                    <div className="space-y-2">
+                        <Label>Course</Label>
+                        <Select
+                            value={formData.courseName}
+                            onValueChange={(value) => setFormData({ ...formData, courseName: value })}
+                            disabled={!userProfile}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a course" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {courses.map((course) => (
+                                    <SelectItem key={course.id} value={course.id}>
+                                        {course.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {userProfile && courses.length === 0 && (
+                            <p className="text-sm text-amber-500">
+                                No courses found for Semester {userProfile.semester}. Check your settings.
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Type and Deadline */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Type</Label>
+                            <Select
+                                value={formData.type}
+                                onValueChange={(value) => setFormData({ ...formData, type: value as AssignmentType })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {assignmentTypes.map((type) => (
+                                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Deadline</Label>
+                            <Input
+                                type="date"
+                                value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ''}
+                                onChange={(e) => setFormData({ ...formData, deadline: new Date(e.target.value) })}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Note */}
+                    <div className="space-y-2">
+                        <Label>Note</Label>
+                        <Textarea
+                            placeholder="Additional notes..."
+                            value={formData.note}
+                            onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                            className="h-24"
+                        />
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="pt-4">
+                        <Button type="submit" className="w-full">
+                            {editingId ? 'Update Assignment' : 'Create Assignment'}
+                        </Button>
+                    </div>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+export default AssignmentModal;

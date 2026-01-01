@@ -9,12 +9,12 @@
   <script>
     // Immediately apply theme to avoid flash
     let savedTheme = localStorage.getItem('theme') || 'dark';
-    // Migrate old theme names to new ones
-    if (!['dark', 'light'].includes(savedTheme)) {
-      savedTheme = 'dark';
-      localStorage.setItem('theme', savedTheme);
-    }
+    // Enforce dark mode if requested or invalid
+    if (savedTheme !== 'dark') savedTheme = 'dark';
+    
+    localStorage.setItem('theme', savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
+    document.documentElement.classList.add('dark');
   </script>
 </head>
 

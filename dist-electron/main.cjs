@@ -140,6 +140,7 @@ electron_1.app.on('ready', async () => {
     electron_1.ipcMain.handle('performance:upsertSemester', (_, s, i) => performance_cjs_1.performance.upsertSemester(s, i));
     electron_1.ipcMain.handle('performance:getCourses', (_, sem) => performance_cjs_1.performance.getCourses(sem));
     electron_1.ipcMain.handle('performance:upsertCourse', (_, c) => performance_cjs_1.performance.upsertCourse(c));
+    electron_1.ipcMain.handle('performance:updateSksOnly', (_, id, sks) => performance_cjs_1.performance.updateSksOnly(id, sks));
     // Schedule
     electron_1.ipcMain.handle('schedule:getAll', () => schedule_cjs_1.schedule.getAll());
     electron_1.ipcMain.handle('schedule:upsert', (_, item) => schedule_cjs_1.schedule.upsert(item));
@@ -260,7 +261,7 @@ electron_1.app.on('ready', async () => {
             const childWin = new electron_1.BrowserWindow({
                 width,
                 height,
-                parent: mainWindow || undefined,
+                // parent: mainWindow || undefined, // REMOVED to decouple windows
                 modal: false,
                 frame: false,
                 transparent: true,
@@ -280,6 +281,22 @@ electron_1.app.on('ready', async () => {
                 childWin.loadFile(path_1.default.join(__dirname, '../dist/index.html'), { hash: route });
             }
             console.log('[Main] Window created successfully');
+            // Notify ALL other windows (Main Window)
+            electron_1.BrowserWindow.getAllWindows().forEach(win => {
+                if (win.id !== childWin.id) {
+                    console.log('[Main] Broadcasting child-window-opened to window:', win.id);
+                    win.webContents.send('child-window-opened', route);
+                }
+            });
+            childWin.on('closed', () => {
+                console.log('[Main] Child window closed, notifying all windows');
+                electron_1.BrowserWindow.getAllWindows().forEach(win => {
+                    if (win.id !== childWin.id && !win.isDestroyed()) {
+                        win.webContents.send('child-window-closed', route);
+                        win.focus(); // Force focus back to main window
+                    }
+                });
+            });
         }
         catch (err) {
             console.error('[Main] Failed to create window:', err);

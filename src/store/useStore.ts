@@ -56,9 +56,6 @@ interface AppState {
     isLoading: boolean;
     isAppReady: boolean;
     error: string | null;
-    isQuickAddOpen: boolean;
-    quickAddTab: 'assignment' | 'transaction';
-    setQuickAddOpen: (isOpen: boolean, tab?: 'assignment' | 'transaction') => void;
 
     isHistoryWindowOpen: boolean;
     setHistoryWindowOpen: (isOpen: boolean) => void;
@@ -68,6 +65,9 @@ interface AppState {
 
     theme: string;
     setTheme: (theme: string) => void;
+
+    monthlyLimit: number;
+    setMonthlyLimit: (limit: number) => void;
 
     // Actions
     fetchUserProfile: () => Promise<void>;
@@ -81,8 +81,7 @@ interface AppState {
     duplicateAssignment: (id: string) => Promise<void>;
     reorderAssignments: (newOrder: Assignment[]) => Promise<void>;
 
-    editingAssignmentId: string | null;
-    setEditingAssignmentId: (id: string | null) => void;
+
 
     fetchCourses: () => Promise<void>;
     fetchGrades: () => Promise<void>;
@@ -210,9 +209,6 @@ export const useStore = create<AppState>((set, get) => ({
     isLoading: false,
     isAppReady: false,
     error: null,
-    isQuickAddOpen: false,
-    quickAddTab: 'assignment',
-    setQuickAddOpen: (isOpen, tab = 'assignment') => set({ isQuickAddOpen: isOpen, quickAddTab: tab }),
 
     isHistoryWindowOpen: false,
     setHistoryWindowOpen: (isOpen) => set({ isHistoryWindowOpen: isOpen }),
@@ -223,19 +219,19 @@ export const useStore = create<AppState>((set, get) => ({
     setCurrency: (currency) => set({ currency }),
 
     // Theme State - migrate old themes to new ones
-    theme: (() => {
-        const stored = localStorage.getItem('theme');
-        // Migrate old theme names to new ones
-        if (stored && !['dark', 'light'].includes(stored)) {
-            localStorage.setItem('theme', 'dark');
-            return 'dark';
-        }
-        return stored || 'dark';
-    })(),
+    theme: 'dark',
     setTheme: (theme: string) => {
-        localStorage.setItem('theme', theme);
-        document.documentElement.setAttribute('data-theme', theme);
-        set({ theme });
+        // Enforce dark mode
+        localStorage.setItem('theme', 'dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+        set({ theme: 'dark' });
+    },
+
+    // Monthly Limit
+    monthlyLimit: parseInt(localStorage.getItem('monthlyLimit') || '5000000'),
+    setMonthlyLimit: (limit: number) => {
+        localStorage.setItem('monthlyLimit', limit.toString());
+        set({ monthlyLimit: limit });
     },
 
     initApp: async (skipDelay = false) => {
@@ -433,8 +429,6 @@ export const useStore = create<AppState>((set, get) => ({
         // Optional: Persist order if DB supports it (e.g. 'order' column)
     },
 
-    editingAssignmentId: null,
-    setEditingAssignmentId: (id) => set({ editingAssignmentId: id }),
 
     // --- Courses & Grades (Performance) ---
 
@@ -761,6 +755,107 @@ export const useStore = create<AppState>((set, get) => ({
             // Refresh
             get().fetchGrades();
         }
+
+        // --- Course Data Sync: Fix names and SKS from curriculum.json ---
+        const syncPromises: Promise<any>[] = [];
+        // @ts-ignore
+        Object.keys(curriculumData).forEach((semKey) => {
+            // @ts-ignore
+            const courses = curriculumData[semKey];
+            courses.forEach((c: any, idx: number) => {
+                const id = `course-${semKey}-${idx}`;
+                const dbRecord = currentRecords.find((r: any) => r.id === id);
+                if (dbRecord) {
+                    // Check if name or sks needs updating
+                    const needsNameFix = dbRecord.name !== c.name;
+                    const needsSksFix = dbRecord.sks !== c.sks;
+
+                    if (needsNameFix || needsSksFix) {
+                        console.log(`[Course-Sync] Fixing ${id}: name=${needsNameFix ? dbRecord.name + ' -> ' + c.name : 'OK'}, sks=${needsSksFix ? dbRecord.sks + ' -> ' + c.sks : 'OK'}`);
+                        syncPromises.push(window.electronAPI.performance.upsertCourse({
+                            ...dbRecord,
+                            name: c.name,
+                            sks: c.sks,
+                            updatedAt: new Date().toISOString()
+                        }));
+                    }
+                }
+            });
+        });
+
+        if (syncPromises.length > 0) {
+            await Promise.all(syncPromises);
+            console.log(`[Course-Sync] Fixed ${syncPromises.length} courses.`);
+            // Refresh records for grade seeding
+            currentRecords = await window.electronAPI.performance.getCourses();
+            set({ performanceRecords: currentRecords });
+        }
+
+        // --- Grades Seeding: Insert grades for semesters 1-3 ---
+        const gradesData: Record<string, { name: string; grade: string }[]> = {
+            "1": [
+                { name: "Agama", grade: "A-" },
+                { name: "Algoritma dan Struktur Data", grade: "AB" },
+                { name: "Arsitektur Komputer", grade: "BC" },
+                { name: "Elektronika Digital 1", grade: "C" },
+                { name: "Matematika 1", grade: "BC" },
+                { name: "Praktikum Algoritma dan Struktur Data", grade: "A" },
+                { name: "Praktikum Arsitektur Komputer", grade: "B" },
+                { name: "Praktikum Elektronika Digital 1", grade: "B+" },
+                { name: "Praktikum Sistem Komunikasi", grade: "AB" },
+                { name: "Sistem Komunikasi", grade: "C" },
+                { name: "Workshop Teknologi Web dan Aplikasi", grade: "AB" }
+            ],
+            "2": [
+                { name: "Arsitektur Jaringan dan Internet", grade: "B+" },
+                { name: "Dasar Pemrograman", grade: "A-" },
+                { name: "Elektronika Digital 2", grade: "C" },
+                { name: "Komunikasi Data", grade: "AB" },
+                { name: "Kreatifitas Mahasiswa 1", grade: "" },
+                { name: "Matematika 2", grade: "B" },
+                { name: "Pancasila", grade: "A-" },
+                { name: "Praktikum Arsitektur Jaringan dan Internet", grade: "AB" },
+                { name: "Praktikum Dasar Pemrograman", grade: "BC" },
+                { name: "Praktikum Elektronika Digital 2", grade: "B" },
+                { name: "Praktikum Komunikasi Data", grade: "AB" },
+                { name: "Workshop Basis data", grade: "AB" }
+            ],
+            "3": [
+                { name: "Jaringan Nirkabel", grade: "AB" },
+                { name: "Kewarganegaraan", grade: "A" },
+                { name: "Kreatifitas Mahasiswa 2", grade: "" },
+                { name: "Praktikum Jaringan Nirkabel", grade: "AB" },
+                { name: "Praktikum Sistem Komunikasi Nirkabel", grade: "A" },
+                { name: "Praktikum Sistem dan Jaringan Komputer", grade: "B+" },
+                { name: "Sistem Komunikasi Nirkabel", grade: "A-" },
+                { name: "Sistem dan Jaringan Komputer", grade: "B" },
+                { name: "Statistika", grade: "B+" },
+                { name: "Workshop Embedded System", grade: "B+" },
+                { name: "Workshop Pemrograman Lanjut", grade: "A-" }
+            ]
+        };
+
+        // Update grades for courses in semesters 1-3 if empty in DB
+        for (const semKey of Object.keys(gradesData)) {
+            const gradesList = gradesData[semKey];
+            // @ts-ignore
+            const curriculum = curriculumData[semKey] || [];
+            for (let idx = 0; idx < gradesList.length; idx++) {
+                const id = `course-${semKey}-${idx}`;
+                const dbRecord = currentRecords.find((r: any) => r.id === id);
+                const newGrade = gradesList[idx].grade;
+                // Only update if DB has no grade and we have one to insert
+                if (dbRecord && (!dbRecord.grade || dbRecord.grade === '') && newGrade) {
+                    console.log(`[Grades-Seed] Setting grade for ${gradesList[idx].name}: ${newGrade}`);
+                    await window.electronAPI.performance.upsertCourse({
+                        ...dbRecord,
+                        grade: newGrade,
+                        updatedAt: new Date().toISOString()
+                    });
+                }
+            }
+        }
+        get().fetchGrades(); // Final refresh
     },
 
     // --- Materials ---

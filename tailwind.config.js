@@ -1,77 +1,71 @@
-import daisyui from 'daisyui';
-
 /** @type {import('tailwindcss').Config} */
+import animate from "tailwindcss-animate";
+
 export default {
+    darkMode: ["class"],
     content: [
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
     theme: {
-        extend: {},
+        extend: {
+            colors: {
+                border: "hsl(var(--border))",
+                input: "hsl(var(--input))",
+                ring: "hsl(var(--ring))",
+                background: "hsl(var(--background))",
+                foreground: "hsl(var(--foreground))",
+                primary: {
+                    DEFAULT: "hsl(var(--primary))",
+                    foreground: "hsl(var(--primary-foreground))",
+                },
+                secondary: {
+                    DEFAULT: "hsl(var(--secondary))",
+                    foreground: "hsl(var(--secondary-foreground))",
+                },
+                destructive: {
+                    DEFAULT: "hsl(var(--destructive))",
+                    foreground: "hsl(var(--destructive-foreground))",
+                },
+                muted: {
+                    DEFAULT: "hsl(var(--muted))",
+                    foreground: "hsl(var(--muted-foreground))",
+                },
+                accent: {
+                    DEFAULT: "hsl(var(--accent))",
+                    foreground: "hsl(var(--accent-foreground))",
+                },
+                popover: {
+                    DEFAULT: "hsl(var(--popover))",
+                    foreground: "hsl(var(--popover-foreground))",
+                },
+                card: {
+                    DEFAULT: "hsl(var(--card))",
+                    foreground: "hsl(var(--card-foreground))",
+                },
+            },
+            borderRadius: {
+                lg: "var(--radius)",
+                md: "calc(var(--radius) - 2px)",
+                sm: "calc(var(--radius) - 4px)",
+            },
+            keyframes: {
+                "accordion-down": {
+                    from: { height: "0" },
+                    to: { height: "var(--radix-accordion-content-height)" },
+                },
+                "accordion-up": {
+                    from: { height: "var(--radix-accordion-content-height)" },
+                    to: { height: "0" },
+                },
+            },
+            animation: {
+                "accordion-down": "accordion-down 0.2s ease-out",
+                "accordion-up": "accordion-up 0.2s ease-out",
+            },
+        },
     },
     plugins: [
-        daisyui,
+        animate,
     ],
-    daisyui: {
-        themes: [
-            {
-                dark: {
-                    "color-scheme": "dark",
-                    "primary": "oklch(78% 0.154 211.53)",
-                    "primary-content": "oklch(30% 0.056 229.695)",
-                    "secondary": "oklch(85% 0.199 91.936)",
-                    "secondary-content": "oklch(28% 0.066 53.813)",
-                    "accent": "oklch(71% 0.203 305.504)",
-                    "accent-content": "oklch(29% 0.149 302.717)",
-                    "neutral": "oklch(27% 0.041 260.031)",
-                    "neutral-content": "oklch(98% 0.003 247.858)",
-                    "base-100": "oklch(12% 0.042 264.695)",
-                    "base-200": "oklch(20% 0.042 265.755)",
-                    "base-300": "oklch(27% 0.041 260.031)",
-                    "base-content": "oklch(96% 0.007 247.896)",
-                    "info": "oklch(68% 0.169 237.323)",
-                    "info-content": "oklch(97% 0.013 236.62)",
-                    "success": "oklch(72% 0.219 149.579)",
-                    "success-content": "oklch(98% 0.018 155.826)",
-                    "warning": "oklch(76% 0.188 70.08)",
-                    "warning-content": "oklch(98% 0.022 95.277)",
-                    "error": "oklch(63% 0.237 25.331)",
-                    "error-content": "oklch(97% 0.013 17.38)",
-                    "--radius-selector": "1rem",
-                    "--radius-field": "1rem",
-                    "--radius-box": "0.5rem",
-                    "--border": "1px",
-                },
-            },
-            {
-                light: {
-                    "color-scheme": "light",
-                    "primary": "oklch(76.662% 0.135 153.45)",
-                    "primary-content": "oklch(33.387% 0.04 162.24)",
-                    "secondary": "oklch(61.302% 0.202 261.294)",
-                    "secondary-content": "oklch(100% 0 0)",
-                    "accent": "oklch(72.772% 0.149 33.2)",
-                    "accent-content": "oklch(0% 0 0)",
-                    "neutral": "oklch(35.519% 0.032 262.988)",
-                    "neutral-content": "oklch(98.462% 0.001 247.838)",
-                    "base-100": "oklch(100% 0 0)",
-                    "base-200": "oklch(93% 0 0)",
-                    "base-300": "oklch(86% 0 0)",
-                    "base-content": "oklch(35.519% 0.032 262.988)",
-                    "info": "oklch(72.06% 0.191 231.6)",
-                    "info-content": "oklch(0% 0 0)",
-                    "success": "oklch(64.8% 0.15 160)",
-                    "success-content": "oklch(0% 0 0)",
-                    "warning": "oklch(84.71% 0.199 83.87)",
-                    "warning-content": "oklch(0% 0 0)",
-                    "error": "oklch(71.76% 0.221 22.18)",
-                    "error-content": "oklch(0% 0 0)",
-                    "--radius-selector": "1rem",
-                    "--radius-field": "0.5rem",
-                    "--radius-box": "1rem",
-                    "--border": "1px",
-                },
-            },
-        ],
-    },
 }
