@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Assignment, Course, UserProfile, Transaction, CourseMaterial, Subscription } from '../types/models';
+import { NotificationService } from '../services/NotificationService';
 // @ts-ignore
 import curriculumData from '../lib/curriculum.json';
 
@@ -258,6 +259,11 @@ export const useStore = create<AppState>((set, get) => ({
         }
 
         await Promise.all(promises);
+
+        // Check for notifications after data is loaded
+        const { assignments, subscriptions } = get();
+        NotificationService.checkDeadlineNotifications(assignments, subscriptions);
+
         set({ isAppReady: true });
     },
 

@@ -378,6 +378,12 @@ app.on('ready', async () => {
         }
     });
 
+    // Notifications
+    ipcMain.handle('notifications:send', (_, title, body) => {
+        const { Notification } = require('electron');
+        new Notification({ title, body }).show();
+    });
+
     app.on('will-quit', () => {
         // Unregister all shortcuts.
         const { globalShortcut } = require('electron');

@@ -88,6 +88,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         openPath: (path: string) => ipcRenderer.invoke('utils:openPath', path)
     },
 
+    notifications: {
+        send: (title: string, body: string) => ipcRenderer.invoke('notifications:send', title, body)
+    },
+
     settings: {
         getStartupStatus: () => ipcRenderer.invoke('settings:getStartupStatus'),
         toggleStartup: (openAtLogin: boolean) => ipcRenderer.invoke('settings:toggleStartup', openAtLogin)

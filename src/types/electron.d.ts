@@ -76,6 +76,10 @@ export interface IElectronAPI {
         openPath: (path: string) => Promise<void>;
     };
 
+    notifications: {
+        send: (title: string, body: string) => Promise<void>;
+    };
+
     settings: {
         getStartupStatus: () => Promise<boolean>;
         toggleStartup: (openAtLogin: boolean) => Promise<boolean>;

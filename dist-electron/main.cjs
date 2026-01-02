@@ -347,6 +347,11 @@ electron_1.app.on('ready', async () => {
             console.error('[Main] Failed to create window:', err);
         }
     });
+    // Notifications
+    electron_1.ipcMain.handle('notifications:send', (_, title, body) => {
+        const { Notification } = require('electron');
+        new Notification({ title, body }).show();
+    });
     electron_1.app.on('will-quit', () => {
         // Unregister all shortcuts.
         const { globalShortcut } = require('electron');

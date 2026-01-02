@@ -76,6 +76,9 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         openExternal: (url) => electron_1.ipcRenderer.invoke('utils:openExternal', url),
         openPath: (path) => electron_1.ipcRenderer.invoke('utils:openPath', path)
     },
+    notifications: {
+        send: (title, body) => electron_1.ipcRenderer.invoke('notifications:send', title, body)
+    },
     settings: {
         getStartupStatus: () => electron_1.ipcRenderer.invoke('settings:getStartupStatus'),
         toggleStartup: (openAtLogin) => electron_1.ipcRenderer.invoke('settings:toggleStartup', openAtLogin)

@@ -223,10 +223,30 @@ const Settings = () => {
             window.electronAPI.settings.getStartupStatus().then(setRunAtStartup);
         }
 
-        // Load tips preference
+        // Load tips & notification preference
         const tipsEnabled = localStorage.getItem('tips-enabled');
         setShowTips(tipsEnabled !== 'false'); // Default to true
+
+        const notifEnabled = localStorage.getItem('notifications-enabled');
+        setNotificationsEnabled(notifEnabled !== 'false'); // Default to true
     }, []);
+
+    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+    const toggleNotifications = (val: boolean) => {
+        setNotificationsEnabled(val);
+        localStorage.setItem('notifications-enabled', String(val));
+        if (val) {
+            showNotification('Desktop notifications enabled', 'success');
+            // @ts-ignore
+            if (window.electronAPI?.notifications) {
+                // @ts-ignore
+                window.electronAPI.notifications.send("Notifications Enabled", "You will now receive desktop alerts.");
+            }
+        } else {
+            showNotification('Desktop notifications disabled', 'info');
+        }
+    };
 
     const toggleStartup = async (val: boolean) => {
         // @ts-ignore
@@ -407,6 +427,14 @@ const Settings = () => {
                                     <p className="text-sm text-muted-foreground">Display helpful tips and keyboard shortcuts</p>
                                 </div>
                                 <Switch checked={showTips} onCheckedChange={toggleTips} />
+                            </div>
+
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base">Desktop Notifications</Label>
+                                    <p className="text-sm text-muted-foreground">Receive alerts for deadlines and due dates</p>
+                                </div>
+                                <Switch checked={notificationsEnabled} onCheckedChange={toggleNotifications} />
                             </div>
 
 
