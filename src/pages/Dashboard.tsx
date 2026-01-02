@@ -19,9 +19,55 @@ import { MetricCards } from "@/components/dashboard/MetricCards"
 import { CashflowChart } from "@/components/dashboard/CashflowChart"
 import { RecentTransactions } from "@/components/dashboard/RecentTransactions"
 import CreditCard from "@/components/dashboard/CreditCard"
+import { AnalyticsTab } from "@/components/dashboard/AnalyticsTab"
+import { ReportsTab } from "@/components/dashboard/ReportsTab"
+import { NotificationsTab } from "@/components/dashboard/NotificationsTab"
+import { useMemo } from "react"
+import { differenceInDays, isPast, isToday, setDate, addMonths } from "date-fns"
 
 export default function Dashboard() {
-    const { transactions, currency, userProfile } = useStore();
+    const { transactions, currency, userProfile, assignments, subscriptions } = useStore();
+
+    // Calculate Notification Count
+    const notificationCount = useMemo(() => {
+        let count = 0;
+        const now = new Date();
+
+        assignments.forEach(a => {
+            if (a.status === 'done') return;
+            const dueDate = new Date(a.deadline);
+            const daysLeft = differenceInDays(dueDate, now);
+            // Overdue or Due Soon (<= 3 days)
+            if ((isPast(dueDate) && !isToday(dueDate)) || (daysLeft >= 0 && daysLeft <= 3)) {
+                count++;
+            }
+        });
+
+        subscriptions.forEach(sub => {
+            let candidate = setDate(now, sub.dueDay);
+            if (isPast(candidate) && !isToday(candidate)) {
+                candidate = addMonths(candidate, 1);
+            }
+
+            // Check if paid
+            const isPaid = transactions.some(t =>
+                t.type === 'expense' &&
+                t.category === 'Subscription' &&
+                t.title.includes(sub.name) &&
+                new Date(t.date).getMonth() === candidate.getMonth() &&
+                new Date(t.date).getFullYear() === candidate.getFullYear()
+            );
+
+            if (isPaid) return;
+
+            const daysUntil = differenceInDays(candidate, now);
+            if (daysUntil >= 0 && daysUntil <= 7) {
+                count++;
+            }
+        });
+
+        return count;
+    }, [assignments, subscriptions, transactions]);
 
     // Calculate Monthly Expense
     const now = new Date();
@@ -61,24 +107,23 @@ export default function Dashboard() {
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="analytics">Analytics</TabsTrigger>
                         <TabsTrigger value="reports">Reports</TabsTrigger>
-                        <TabsTrigger value="notifications">Notifications</TabsTrigger>
+                        <TabsTrigger value="notifications" className="relative">
+                            Notifications
+                            {notificationCount > 0 && (
+                                <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-blue-500/20">
+                                    {notificationCount}
+                                </span>
+                            )}
+                        </TabsTrigger>
                     </TabsList>
                 </div>
 
                 <TabsContent value="overview" className="space-y-4">
                     <MetricCards />
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <Card className="col-span-4">
-                            <CardHeader>
-                                <CardTitle>Cashflow</CardTitle>
-                                <CardDescription>
-                                    Your income vs expense overview for the current semester.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="pl-2">
-                                <CashflowChart />
-                            </CardContent>
-                        </Card>
+                        <div className="col-span-4">
+                            <CashflowChart />
+                        </div>
                         <Card className="col-span-3">
                             <CardHeader>
                                 <CardTitle>Wallet</CardTitle>
@@ -90,31 +135,54 @@ export default function Dashboard() {
                                 <div className="space-y-3 mb-6">
                                     <div className="flex items-center justify-between text-sm">
                                         <div className="flex items-center gap-2">
-                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                                                <DollarSign size={16} /> {/* Reusing import if available or need new */}
+                                            <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                                <DollarSign size={16} />
                                             </div>
                                             <div>
-                                                <p className="font-medium">Monthly Limit</p>
-                                                <p className="text-xs text-muted-foreground">Spend wisely</p>
+                                                <p className="font-medium">Current Balance</p>
+                                                <p className="text-xs text-muted-foreground">Available funds</p>
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-medium">{percentage}%</p>
+                                            <p className="font-semibold text-lg text-emerald-500">
+                                                {formatter.format(
+                                                    transactions.reduce((acc, t) => {
+                                                        const val = Number(t.amount);
+                                                        if (val < 0) return acc + val;
+                                                        return t.type === 'income' ? acc + val : acc - val;
+                                                    }, 0)
+                                                )}
+                                            </p>
                                         </div>
                                     </div>
-                                    {/* Progress Bar */}
-                                    <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-primary rounded-full transition-all duration-500 ease-in-out"
-                                            style={{ width: `${percentage}%` }}
-                                        />
+                                    {/* Monthly Summary */}
+                                    <div className="flex items-center justify-center gap-4 text-xs pt-2 border-t border-border/50">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
+                                            <span className="text-muted-foreground">Income:</span>
+                                            <span className="font-medium text-emerald-500">
+                                                {formatter.format(
+                                                    transactions
+                                                        .filter(t => {
+                                                            const date = new Date(t.date);
+                                                            return t.type === 'income' && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                                                        })
+                                                        .reduce((acc, t) => acc + t.amount, 0)
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="h-3 w-px bg-border"></div>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                                            <span className="text-muted-foreground">Expense:</span>
+                                            <span className="font-medium text-red-500">
+                                                {formatter.format(monthlyExpense)}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-muted-foreground text-center pt-1">
-                                        You have spent {formatter.format(monthlyExpense)} this month
-                                    </p>
                                 </div>
 
-                                <div className="h-[220px]">
+                                <div className="w-full aspect-[1.58/1] mt-4">
                                     <CreditCard />
                                 </div>
                             </CardContent>
@@ -123,23 +191,14 @@ export default function Dashboard() {
                 </TabsContent>
 
                 {/* Placeholder Content for other tabs */}
-                <TabsContent value="analytics" className="h-[400px] flex items-center justify-center border rounded-lg border-dashed bg-muted/20">
-                    <div className="text-center space-y-2">
-                        <p className="text-muted-foreground font-medium">Detailed Analytics coming soon.</p>
-                        <p className="text-xs text-muted-foreground">Check Cashflow page for more charts.</p>
-                    </div>
+                <TabsContent value="analytics" className="space-y-4">
+                    <AnalyticsTab />
                 </TabsContent>
-                <TabsContent value="reports" className="h-[400px] flex items-center justify-center border rounded-lg border-dashed bg-muted/20">
-                    <div className="text-center space-y-2">
-                        <p className="text-muted-foreground font-medium">No reports generated yet.</p>
-                        <Button variant="outline" size="sm">Generate PDF Report</Button>
-                    </div>
+                <TabsContent value="reports" className="space-y-4">
+                    <ReportsTab />
                 </TabsContent>
-                <TabsContent value="notifications" className="h-[400px] flex items-center justify-center border rounded-lg border-dashed bg-muted/20">
-                    <div className="text-center space-y-2">
-                        <p className="text-muted-foreground font-medium">No new notifications.</p>
-                        <p className="text-xs text-muted-foreground">We'll notify you about deadlines and expenses.</p>
-                    </div>
+                <TabsContent value="notifications" className="space-y-4">
+                    <NotificationsTab />
                 </TabsContent>
             </Tabs>
         </div>

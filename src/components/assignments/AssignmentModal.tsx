@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -168,10 +169,9 @@ const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) =
                         </div>
                         <div className="space-y-2">
                             <Label>Deadline</Label>
-                            <Input
-                                type="date"
-                                value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ''}
-                                onChange={(e) => setFormData({ ...formData, deadline: new Date(e.target.value) })}
+                            <DatePicker
+                                date={formData.deadline}
+                                setDate={(date) => date && setFormData({ ...formData, deadline: date })}
                             />
                         </div>
                     </div>

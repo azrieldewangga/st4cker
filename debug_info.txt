@@ -175,3 +175,24 @@
 [DB] Connecting to: D:\Project\CampusDash\campusdash.db
 [Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
 [Migration] Already migrated (v2). Skipping.
+[DB] Connecting to: D:\Project\CampusDash\campusdash.db
+[Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
+[Migration] Already migrated (v2). Skipping.
+[DB] Connecting to: D:\Project\CampusDash\campusdash.db
+[Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
+[Migration] Already migrated (v2). Skipping.
+[DB] Connecting to: D:\Project\CampusDash\campusdash.db
+[Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
+[Migration] Already migrated (v2). Skipping.
+[DB] Connecting to: D:\Project\CampusDash\campusdash.db
+[Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
+[Migration] Already migrated (v2). Skipping.
+[DB] Connecting to: D:\Project\CampusDash\campusdash.db
+[Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
+[Migration] Already migrated (v2). Skipping.
+[DB] Connecting to: D:\Project\CampusDash\campusdash.db
+[Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
+[Migration] Already migrated (v2). Skipping.
+[DB] Connecting to: D:\Project\CampusDash\campusdash.db
+[Migration] Found JSON in UserData (Priority): C:\Users\washi\AppData\Roaming\temp-app\campusdash-db.json
+[Migration] Already migrated (v2). Skipping.

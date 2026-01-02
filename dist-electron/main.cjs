@@ -193,6 +193,34 @@ electron_1.app.on('ready', async () => {
     electron_1.ipcMain.handle('drive:isAuthenticated', () => driveService?.isAuthenticated());
     electron_1.ipcMain.handle('drive:logout', () => driveService?.logout());
     electron_1.ipcMain.handle('drive:lastBackup', () => driveService?.getLastBackup());
+    // Reports (PDF Export)
+    electron_1.ipcMain.handle('reports:export-pdf', async (_, filename = 'Report.pdf') => {
+        const win = electron_1.BrowserWindow.getFocusedWindow();
+        if (!win)
+            return { success: false, error: 'No focused window' };
+        const { dialog } = require('electron');
+        const fs = require('fs/promises');
+        try {
+            const { filePath } = await dialog.showSaveDialog(win, {
+                title: 'Save Report PDF',
+                defaultPath: filename,
+                filters: [{ name: 'PDF', extensions: ['pdf'] }]
+            });
+            if (!filePath)
+                return { success: false, canceled: true };
+            const pdfData = await win.webContents.printToPDF({
+                printBackground: true,
+                pageSize: 'A4',
+                margins: { top: 0, bottom: 0, left: 0, right: 0 } // Let CSS handle margins
+            });
+            await fs.writeFile(filePath, pdfData);
+            return { success: true, filePath };
+        }
+        catch (error) {
+            console.error('PDF Generation Error:', error);
+            return { success: false, error: error.message };
+        }
+    });
     // Settings (Startup)
     electron_1.ipcMain.handle('settings:getStartupStatus', () => {
         const settings = electron_1.app.getLoginItemSettings();

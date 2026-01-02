@@ -7,6 +7,7 @@ import { SemesterSwitcher } from './SemesterSwitcher';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils'; // Assuming cn is available
+import { TipBanner } from '@/components/ui/tip-banner';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -57,7 +58,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     }, []);
 
     return (
-        <div className="h-screen w-screen overflow-hidden bg-transparent flex flex-col p-4">
+        <div className="h-screen w-screen overflow-hidden bg-transparent flex flex-col">
             {/* Custom Window Frame */}
             <div className="flex flex-col h-full w-full bg-background rounded-xl overflow-hidden shadow-2xl border border-border relative ring-1 ring-white/10">
                 {/* Blur Overlay when Child Window is Open */}
@@ -102,6 +103,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </div>
 
             <Toaster />
+            <TipBanner />
         </div>
     );
 };

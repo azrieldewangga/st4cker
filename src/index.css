@@ -23,11 +23,17 @@
   --destructive: oklch(0.637 0.208 25.326);
   --destructive-foreground: oklch(0.985 0 180);
   --ring: oklch(0.145 0 180);
-  --chart-1: oklch(0.204 0 180);
-  --chart-2: oklch(0.97 0 180);
-  --chart-3: oklch(0.97 0 180);
-  --chart-4: oklch(0.993 0 180);
-  --chart-5: oklch(0.203 0.002 17.337);
+  /* Vivid Chart Colors (Blue, Teal, Orange, Purple, Pink) */
+  --chart-1: oklch(0.646 0.222 250);
+  /* Blue */
+  --chart-2: oklch(0.723 0.15 170);
+  /* Teal */
+  --chart-3: oklch(0.704 0.14 70);
+  /* Orange */
+  --chart-4: oklch(0.65 0.2 300);
+  /* Purple */
+  --chart-5: oklch(0.7 0.15 0);
+  /* Red/Pink */
 }
 
 .dark {
@@ -51,11 +57,18 @@
   --destructive: oklch(0.637 0.208 25.326);
   --destructive-foreground: oklch(0.985 0 180);
   --ring: oklch(0.87 0 180);
-  --chart-1: oklch(0.985 0 180);
-  --chart-2: oklch(0.269 0 180);
-  --chart-3: oklch(0.269 0 180);
-  --chart-4: oklch(0.3 0 180);
-  --chart-5: oklch(0.985 0 17.164);
+
+  /* Vivid Chart Colors for Dark Mode (Lighter/Brighter) */
+  --chart-1: oklch(0.7 0.2 250);
+  /* Blue */
+  --chart-2: oklch(0.8 0.15 170);
+  /* Teal */
+  --chart-3: oklch(0.8 0.14 70);
+  /* Orange */
+  --chart-4: oklch(0.75 0.2 300);
+  /* Purple */
+  --chart-5: oklch(0.75 0.15 0);
+  /* Red/Pink */
 }
 
 
@@ -94,6 +107,26 @@
     -moz-appearance: textfield;
     appearance: textfield;
   }
+}
+
+/* React Day Picker Overrides for V9 - Placed OUTSIDE layer base to ensure specificity */
+.rdp-dropdown_root {
+  @apply relative inline-flex items-center;
+}
+
+.rdp-dropdown {
+  @apply appearance-none bg-transparent border border-input rounded-md py-1 px-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground cursor-pointer;
+  padding-right: 1.5rem;
+  /* Space for arrow */
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.2rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25em 1.25em;
+}
+
+/* Dark mode adjustment for arrow icon */
+.dark .rdp-dropdown {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23e5e7eb' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
 }
 
 @theme {

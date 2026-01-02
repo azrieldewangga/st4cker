@@ -80,6 +80,10 @@ const Schedule = () => {
     const [isAddingLink, setIsAddingLink] = useState(false);
     const [linkForm, setLinkForm] = useState({ title: '', url: '' });
 
+    // Edit Material State
+    const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
+    const [editMaterialForm, setEditMaterialForm] = useState({ title: '', url: '', type: 'link' as 'link' | 'file' });
+
     // Context Menu State (Custom)
     const [contextMenu, setContextMenu] = useState<{ day: string, time: string, x: number, y: number } | null>(null);
 
@@ -226,7 +230,12 @@ const Schedule = () => {
         if (!detailSlot) return;
         if (type === 'link') {
             if (!linkForm.url || !linkForm.title) return;
-            await addMaterial(detailSlot.data.course.id, 'link', linkForm.title, linkForm.url);
+            // Normalize URL - add https:// if missing protocol
+            let normalizedUrl = linkForm.url.trim();
+            if (!normalizedUrl.match(/^https?:\/\//i)) {
+                normalizedUrl = 'https://' + normalizedUrl;
+            }
+            await addMaterial(detailSlot.data.course.id, 'link', linkForm.title, normalizedUrl);
             setIsAddingLink(false);
             setLinkForm({ title: '', url: '' });
         } else {
@@ -238,6 +247,28 @@ const Schedule = () => {
                 await addMaterial(detailSlot.data.course.id, 'file', fileName, path);
             }
         }
+    };
+
+    const handleUpdateMaterial = async () => {
+        if (!detailSlot || !editingMaterialId || !editMaterialForm.title || !editMaterialForm.url) return;
+
+        // Normalize URL if it's a link - add https:// if missing protocol
+        let normalizedUrl = editMaterialForm.url.trim();
+        if (editMaterialForm.type === 'link' && !normalizedUrl.match(/^https?:\/\//i)) {
+            normalizedUrl = 'https://' + normalizedUrl;
+        }
+
+        // Delete old and create new
+        await deleteMaterial(editingMaterialId, detailSlot.data.course.id);
+        await addMaterial(
+            detailSlot.data.course.id,
+            editMaterialForm.type,
+            editMaterialForm.title,
+            normalizedUrl
+        );
+
+        setEditingMaterialId(null);
+        setEditMaterialForm({ title: '', url: '', type: 'link' });
     };
 
     // Filtered courses for selector
@@ -415,29 +446,102 @@ const Schedule = () => {
                                 </div>
                                 {isAddingLink && (
                                     <div className="p-3 bg-muted rounded-md space-y-2 animate-in slide-in-from-top-2">
-                                        <Input placeholder="Title" value={linkForm.title} onChange={e => setLinkForm(p => ({ ...p, title: e.target.value }))} className="h-8" />
-                                        <Input placeholder="URL" value={linkForm.url} onChange={e => setLinkForm(p => ({ ...p, url: e.target.value }))} className="h-8" />
+                                        <Input
+                                            placeholder="Title"
+                                            value={linkForm.title}
+                                            onChange={e => setLinkForm(p => ({ ...p, title: e.target.value }))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && linkForm.url && linkForm.title) {
+                                                    e.preventDefault();
+                                                    handleAddMaterial('link');
+                                                }
+                                            }}
+                                            className="h-8"
+                                        />
+                                        <Input
+                                            placeholder="URL"
+                                            value={linkForm.url}
+                                            onChange={e => setLinkForm(p => ({ ...p, url: e.target.value }))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && linkForm.url && linkForm.title) {
+                                                    e.preventDefault();
+                                                    handleAddMaterial('link');
+                                                }
+                                            }}
+                                            className="h-8"
+                                        />
                                         <Button size="sm" onClick={() => handleAddMaterial('link')} disabled={!linkForm.url}>Save Link</Button>
                                     </div>
                                 )}
 
-                                {/* Show Materials List in Edit Mode with Delete Button */}
+                                {/* Show Materials List in Edit Mode with Edit and Delete Buttons */}
                                 <div className="rounded-md border p-2 space-y-2 max-h-[150px] overflow-auto mt-2">
                                     {((detailSlot && materials[detailSlot.data.course.id]) || []).length === 0 ? (
                                         <p className="text-sm text-muted-foreground italic p-2">No materials added yet.</p>
                                     ) : (
                                         (materials[detailSlot!.data.course.id] || []).map(m => (
-                                            <div key={m.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted rounded group">
-                                                <div className="flex items-center gap-2 truncate flex-1 opacity-70">
-                                                    {m.type === 'link' ? <LinkIcon className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
-                                                    <span className="truncate">{m.title}</span>
+                                            editingMaterialId === m.id ? (
+                                                <div key={m.id} className="p-2 bg-muted/50 rounded space-y-2">
+                                                    <Input
+                                                        placeholder="Title"
+                                                        value={editMaterialForm.title}
+                                                        onChange={e => setEditMaterialForm(p => ({ ...p, title: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' && editMaterialForm.title && editMaterialForm.url) {
+                                                                e.preventDefault();
+                                                                handleUpdateMaterial();
+                                                            }
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    />
+                                                    <Input
+                                                        placeholder="URL"
+                                                        value={editMaterialForm.url}
+                                                        onChange={e => setEditMaterialForm(p => ({ ...p, url: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' && editMaterialForm.title && editMaterialForm.url) {
+                                                                e.preventDefault();
+                                                                handleUpdateMaterial();
+                                                            }
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    />
+                                                    <div className="flex gap-1">
+                                                        <Button size="sm" className="h-6 text-xs" onClick={handleUpdateMaterial}>Save</Button>
+                                                        <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setEditingMaterialId(null)}>Cancel</Button>
+                                                    </div>
                                                 </div>
-                                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={() => {
-                                                    deleteMaterial(m.id, detailSlot!.data.course.id);
-                                                }}>
-                                                    <Trash2 className="w-3 h-3" />
-                                                </Button>
-                                            </div>
+                                            ) : (
+                                                <div key={m.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted rounded group">
+                                                    <div className="flex items-center gap-2 truncate flex-1 opacity-70">
+                                                        {m.type === 'link' ? <LinkIcon className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
+                                                        <span className="truncate">{m.title}</span>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 hover:bg-muted"
+                                                            onClick={() => {
+                                                                setEditingMaterialId(m.id);
+                                                                setEditMaterialForm({ title: m.title, url: m.url, type: m.type });
+                                                            }}
+                                                        >
+                                                            <Edit2 className="w-3 h-3" />
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                                            onClick={() => deleteMaterial(m.id, detailSlot!.data.course.id)}
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )
                                         ))
                                     )}
                                 </div>

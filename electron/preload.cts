@@ -61,6 +61,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         checkDeductions: () => ipcRenderer.invoke('subscriptions:checkDeductions')
     },
 
+    reports: {
+        exportPdf: (filename?: string) => ipcRenderer.invoke('reports:export-pdf', filename)
+    },
+
     // Dialog
     dialog: {
         openFile: () => ipcRenderer.invoke('dialog:openFile')

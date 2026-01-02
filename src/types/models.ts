@@ -42,6 +42,7 @@ export interface Transaction extends BaseEntity {
     type: 'income' | 'expense';
     category: string;
     date: string; // ISO date string
+    currency?: 'IDR' | 'USD';
 }
 
 export interface CourseMaterial extends BaseEntity {

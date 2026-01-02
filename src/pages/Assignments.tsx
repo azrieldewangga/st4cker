@@ -177,9 +177,19 @@ const SortableRow = ({
 
             {/* Jenis Laporan */}
             <TableCell>
-                <Badge variant="secondary" className="font-normal">
-                    {assignment.type}
-                </Badge>
+                {(() => {
+                    let typeConfig = { className: 'bg-slate-500/15 text-slate-400 border-0' };
+                    if (assignment.type === 'Tugas') typeConfig = { className: 'bg-blue-500/15 text-blue-400 border-0' };
+                    if (assignment.type === 'Laporan Pendahuluan') typeConfig = { className: 'bg-purple-500/15 text-purple-400 border-0' };
+                    if (assignment.type === 'Laporan Sementara') typeConfig = { className: 'bg-orange-500/15 text-orange-400 border-0' };
+                    if (assignment.type === 'Laporan Resmi') typeConfig = { className: 'bg-emerald-500/15 text-emerald-400 border-0' };
+
+                    return (
+                        <Badge variant="outline" className={cn("font-normal px-3 py-1", typeConfig.className)}>
+                            {assignment.type}
+                        </Badge>
+                    );
+                })()}
             </TableCell>
 
             {/* Note */}
@@ -298,6 +308,24 @@ const Assignments = () => {
         fetchAssignments();
         fetchCourses();
     }, [fetchAssignments, fetchCourses]);
+
+    // Keyboard Shortcut: Ctrl+N to open New Assignment modal
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const cmdKey = isMac ? e.metaKey : e.ctrlKey;
+
+            // Ctrl + N: New Assignment
+            if (cmdKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                setEditingId(null);
+                setIsModalOpen(true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // Filtering & Sorting
     const filteredAssignments = useMemo(() => {

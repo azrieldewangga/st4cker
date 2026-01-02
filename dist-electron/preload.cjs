@@ -54,6 +54,9 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         delete: (id) => electron_1.ipcRenderer.invoke('subscriptions:delete', id),
         checkDeductions: () => electron_1.ipcRenderer.invoke('subscriptions:checkDeductions')
     },
+    reports: {
+        exportPdf: (filename) => electron_1.ipcRenderer.invoke('reports:export-pdf', filename)
+    },
     // Dialog
     dialog: {
         openFile: () => electron_1.ipcRenderer.invoke('dialog:openFile')

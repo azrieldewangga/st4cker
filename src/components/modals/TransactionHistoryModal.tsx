@@ -53,20 +53,25 @@ const TransactionHistoryModal = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // Standalone Window Theme State - Read from localStorage (key: 'theme', same as main window store)
-    const [currentTheme, setCurrentTheme] = useState(localStorage.getItem('theme') || 'dark');
+    // Read theme from URL query parameter (passed by parent window)
+    const urlParams = new URLSearchParams(window.location.search);
+    const themeFromUrl = urlParams.get('theme');
+    const fallbackTheme = localStorage.getItem('vite-ui-theme') || 'dark';
+    const [currentTheme, setCurrentTheme] = useState(themeFromUrl || fallbackTheme);
 
     useEffect(() => {
-        // Apply Theme to Document
+        // Apply theme to document
         document.documentElement.setAttribute('data-theme', currentTheme);
-        document.documentElement.classList.toggle('dark', currentTheme === 'dark');
+        if (currentTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
 
         // Listen for storage changes (sync with main window)
         const handleStorage = (e: StorageEvent) => {
-            if (e.key === 'theme') {
-                const newTheme = e.newValue || 'dark';
-                setCurrentTheme(newTheme);
-                document.documentElement.classList.toggle('dark', newTheme === 'dark');
+            if (e.key === 'theme' && e.newValue) {
+                setCurrentTheme(e.newValue);
             }
         };
         window.addEventListener('storage', handleStorage);

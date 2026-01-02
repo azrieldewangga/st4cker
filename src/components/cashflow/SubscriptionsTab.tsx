@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberStepper } from "@/components/ui/number-stepper";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface SubscriptionsTabProps {
     formatMoney: (amount: number) => string;
@@ -33,21 +34,25 @@ interface SubscriptionsTabProps {
 const SubscriptionsTab: React.FC<SubscriptionsTabProps> = ({ formatMoney }) => {
     const { subscriptions, addSubscription, deleteSubscription } = useStore();
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [newSub, setNewSub] = useState({
+    const [newSub, setNewSub] = useState<{
+        name: string;
+        cost: string;
+        date: Date;
+    }>({
         name: '',
         cost: '',
-        dueDay: ''
+        date: new Date()
     });
 
     const handleAdd = () => {
-        if (!newSub.name || !newSub.cost || !newSub.dueDay) return;
+        if (!newSub.name || !newSub.cost || !newSub.date) return;
         addSubscription({
             name: newSub.name,
             cost: parseFloat(newSub.cost),
-            dueDay: parseInt(newSub.dueDay),
+            dueDay: newSub.date.getDate(),
         });
         setIsAddOpen(false);
-        setNewSub({ name: '', cost: '', dueDay: '' });
+        setNewSub({ name: '', cost: '', date: new Date() });
     };
 
     const totalMonthly = useMemo(() => {
@@ -150,13 +155,10 @@ const SubscriptionsTab: React.FC<SubscriptionsTabProps> = ({ formatMoney }) => {
                                 />
                             </div>
                             <div className="grid gap-2">
-                                <Label>Due Day (1-31)</Label>
-                                <NumberStepper
-                                    value={newSub.dueDay}
-                                    onChange={(val) => setNewSub({ ...newSub, dueDay: val })}
-                                    placeholder="1"
-                                    min={1}
-                                    max={31}
+                                <Label>Subscription Date</Label>
+                                <DatePicker
+                                    date={newSub.date}
+                                    setDate={(date) => date && setNewSub({ ...newSub, date: date })}
                                 />
                             </div>
                         </div>

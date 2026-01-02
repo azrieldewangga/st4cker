@@ -52,6 +52,10 @@ export interface IElectronAPI {
         checkDeductions: () => Promise<{ deductionsMade: number }>;
     };
 
+    reports: {
+        exportPdf: (filename?: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+    };
+
     // Tools
     dialog: {
         openFile: () => Promise<any>;

@@ -517,6 +517,8 @@ export const useStore = create<AppState>((set, get) => ({
             name: course ? course.name : courseId, // use ID as name fallback, or better lookup
             sks: sks,
             grade: grade,
+            location: course?.location || '',
+            lecturer: course?.lecturer || '',
             updatedAt: new Date().toISOString()
         });
 
@@ -641,12 +643,14 @@ export const useStore = create<AppState>((set, get) => ({
 
     addTransaction: async (data, skipLog = false) => {
         try {
+            const payload = { ...data, currency: get().currency };
+
             // Generate ID manually if needed or let DB handle? DB handles, but we need it for undo.
             // Better to let DB handle, but for Undo we need the full object.
             // Let's generate ID here to be safe for undo consistency?
             // Actually our Main.cts `transactions.create` expects data without ID usually?
             // Let's assume create returns the ID.
-            const created = await window.electronAPI.transactions.create(data);
+            const created = await window.electronAPI.transactions.create(payload);
 
             // If we use the returned object, we are good.
             // But we need to push to undo stack.
@@ -655,7 +659,7 @@ export const useStore = create<AppState>((set, get) => ({
                 set(state => ({
                     undoStack: [...state.undoStack, {
                         type: 'ADD_TRANSACTION',
-                        payload: { id: created.id || created.lastInsertRowid, data: { ...data, id: created.id } as Transaction }
+                        payload: { id: created.id || created.lastInsertRowid, data: created as Transaction }
                         // Note: 'created' usually contains ID.
                     }]
                 }));

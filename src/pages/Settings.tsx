@@ -214,6 +214,7 @@ const Settings = () => {
 
     // Startup State
     const [runAtStartup, setRunAtStartup] = useState(false);
+    const [showTips, setShowTips] = useState(true);
 
     useEffect(() => {
         // @ts-ignore
@@ -221,6 +222,10 @@ const Settings = () => {
             // @ts-ignore
             window.electronAPI.settings.getStartupStatus().then(setRunAtStartup);
         }
+
+        // Load tips preference
+        const tipsEnabled = localStorage.getItem('tips-enabled');
+        setShowTips(tipsEnabled !== 'false'); // Default to true
     }, []);
 
     const toggleStartup = async (val: boolean) => {
@@ -231,6 +236,17 @@ const Settings = () => {
             setRunAtStartup(newState);
             if (newState) showNotification('App will run at startup', 'success');
             else showNotification('App will not run at startup', 'info');
+        }
+    };
+
+    const toggleTips = (val: boolean) => {
+        setShowTips(val);
+        localStorage.setItem('tips-enabled', String(val));
+        if (val) {
+            localStorage.removeItem('tips-dismissed'); // Reset dismissed state
+            showNotification('Tips enabled', 'success');
+        } else {
+            showNotification('Tips disabled', 'info');
         }
     };
 
@@ -384,21 +400,17 @@ const Settings = () => {
                                 </div>
                                 <Switch checked={runAtStartup} onCheckedChange={toggleStartup} />
                             </div>
+
                             <div className="flex items-center justify-between rounded-lg border p-4">
                                 <div className="space-y-0.5">
-                                    <Label className="text-base">Monthly Spending Limit</Label>
-                                    <p className="text-sm text-muted-foreground">Set your target budget limit for the dashboard</p>
+                                    <Label className="text-base">Show Tips</Label>
+                                    <p className="text-sm text-muted-foreground">Display helpful tips and keyboard shortcuts</p>
                                 </div>
-                                <div className="w-[150px] flex items-center gap-2">
-                                    <span className="text-sm text-muted-foreground">Rp</span>
-                                    <Input
-                                        type="number"
-                                        defaultValue={useStore.getState().monthlyLimit}
-                                        onChange={(e) => useStore.getState().setMonthlyLimit(parseInt(e.target.value) || 0)}
-                                        className="text-right"
-                                    />
-                                </div>
+                                <Switch checked={showTips} onCheckedChange={toggleTips} />
                             </div>
+
+
+
                         </CardContent>
                     </Card>
 

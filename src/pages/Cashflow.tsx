@@ -25,17 +25,37 @@ import {
 } from "@/components/ui/select";
 import SubscriptionsTab from '../components/cashflow/SubscriptionsTab';
 import TransactionModal from '../components/cashflow/TransactionModal';
+import { OverviewChart } from '../components/cashflow/OverviewChart';
 import { Separator } from "@/components/ui/separator";
+import { useTheme } from "@/components/theme-provider";
 
 const RATE = 16000;
 
 const Cashflow = () => {
     const { transactions, fetchTransactions, currency, setCurrency } = useStore();
+    const { theme } = useTheme();
     const [period, setPeriod] = useState<'Weekly' | 'Monthly' | 'Yearly'>('Yearly');
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
         fetchTransactions();
+    }, []);
+
+    // Keyboard Shortcut: Ctrl+N to open Add Transaction modal
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const cmdKey = isMac ? e.metaKey : e.ctrlKey;
+
+            // Ctrl + N: Add Transaction
+            if (cmdKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                setIsModalOpen(true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
     const formatMoney = (amountIDR: number) => {
@@ -77,33 +97,45 @@ const Cashflow = () => {
     }, [transactions]);
 
     const financialData = useMemo(() => {
+        const now = new Date();
         if (period === 'Yearly') {
             const start = new Date(currentMonthDate.getFullYear(), 0, 1);
             const end = new Date(currentMonthDate.getFullYear(), 11, 31);
             const months = eachDayOfInterval({ start, end }).filter(d => d.getDate() === 1);
             return months.map(monthStart => {
                 const monthName = format(monthStart, 'MMM');
+                if (monthStart > now) {
+                    return { name: monthName, income: 0, expense: 0, balance: null };
+                }
                 const monthTx = transactions.filter(t => isSameMonth(new Date(t.date), monthStart));
                 const inc = monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
                 const exp = monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-                return { name: monthName, income: inc, expense: exp, balance: inc - exp };
+                // Balance is sum of income and expense (since expense is stored as negative)
+                return { name: monthName, income: inc, expense: exp, balance: inc + exp };
             });
         } else if (period === 'Monthly') {
             const startOfMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth(), 1);
             const endOfCurrentMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 0);
+
             const weeks = [];
             let currentStart = startOfMonth;
             let weekCount = 1;
             while (currentStart <= endOfCurrentMonth) {
                 const currentEnd = endOfWeek(currentStart, { weekStartsOn: 1 });
                 const actualEnd = currentEnd > endOfCurrentMonth ? endOfCurrentMonth : currentEnd;
-                const weekTx = transactions.filter(t => {
-                    const d = new Date(t.date);
-                    return d >= currentStart && d <= actualEnd;
-                });
-                const inc = weekTx.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-                const exp = weekTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-                weeks.push({ name: `Week ${weekCount}`, income: inc, expense: exp, balance: inc - exp });
+
+                if (currentStart > now) {
+                    weeks.push({ name: `Week ${weekCount}`, income: 0, expense: 0, balance: null });
+                } else {
+                    const weekTx = transactions.filter(t => {
+                        const d = new Date(t.date);
+                        return d >= currentStart && d <= actualEnd;
+                    });
+                    const inc = weekTx.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
+                    const exp = weekTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
+                    weeks.push({ name: `Week ${weekCount}`, income: inc, expense: exp, balance: inc + exp });
+                }
+
                 currentStart = new Date(currentEnd);
                 currentStart.setDate(currentStart.getDate() + 1);
                 weekCount++;
@@ -115,23 +147,102 @@ const Cashflow = () => {
             const days = eachDayOfInterval({ start, end });
             return days.map(d => {
                 const dayName = format(d, 'EEE');
+                if (d > now) {
+                    return { name: dayName, income: 0, expense: 0, balance: null };
+                }
                 const dayTx = transactions.filter(t => isSameDay(new Date(t.date), d));
                 const inc = dayTx.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
                 const exp = dayTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-                return { name: dayName, income: inc, expense: exp, balance: inc - exp };
+                return { name: dayName, income: inc, expense: exp, balance: inc + exp };
             });
         }
     }, [period, transactions, currentMonthDate]);
 
+    const overviewChartData = useMemo(() => {
+        const now = new Date();
+        // Sort ascending for balance calculation
+        const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        let buckets = [];
+
+        if (period === 'Yearly') {
+            const startOfYear = new Date(currentMonthDate.getFullYear(), 0, 1);
+            const endOfYear = new Date(currentMonthDate.getFullYear(), 11, 31);
+            const months = eachDayOfInterval({ start: startOfYear, end: endOfYear }).filter(d => d.getDate() === 1);
+            buckets = months.map(d => {
+                const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+                return { start: d, end, name: format(d, 'MMM'), isFuture: d > now };
+            });
+        } else if (period === 'Monthly') {
+            const startOfMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth(), 1);
+            const endOfCurrentMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 0, 23, 59, 59);
+
+            let currentStart = startOfMonth;
+            let weekCount = 1;
+            while (currentStart <= endOfCurrentMonth) {
+                const currentEnd = endOfWeek(currentStart, { weekStartsOn: 1 });
+                const actualEnd = currentEnd > endOfCurrentMonth ? endOfCurrentMonth : currentEnd;
+                actualEnd.setHours(23, 59, 59);
+
+                buckets.push({
+                    start: new Date(currentStart),
+                    end: new Date(actualEnd),
+                    name: `Week ${weekCount}`,
+                    isFuture: currentStart > now
+                });
+                currentStart = new Date(currentEnd);
+                currentStart.setDate(currentStart.getDate() + 1);
+                weekCount++;
+            }
+        } else {
+            const start = startOfWeek(currentMonthDate, { weekStartsOn: 1 });
+            const end = endOfWeek(currentMonthDate, { weekStartsOn: 1 });
+            const days = eachDayOfInterval({ start, end });
+            buckets = days.map(d => {
+                const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+                return { start: d, end: dayEnd, name: format(d, 'EEE'), isFuture: d > now };
+            });
+        }
+
+        const firstBucketStart = buckets.length > 0 ? buckets[0].start : new Date();
+
+        // Helper to handle legacy positive expenses
+        const getEffectiveAmount = (tx: any) => {
+            const val = Number(tx.amount);
+            return (tx.type === 'expense' && val > 0) ? -val : val;
+        };
+
+        let currentBalance = sorted.reduce((acc, tx) => {
+            if (new Date(tx.date) < firstBucketStart) return acc + getEffectiveAmount(tx);
+            return acc;
+        }, 0);
+
+        const results = [];
+        for (const bucket of buckets) {
+            if (bucket.isFuture) {
+                results.push({ name: bucket.name, balance: null, val: null });
+                continue;
+            }
+
+            let peak = currentBalance;
+            const bucketTx = sorted.filter(tx => {
+                const d = new Date(tx.date);
+                return d >= bucket.start && d <= bucket.end;
+            });
+
+            bucketTx.forEach(tx => {
+                currentBalance += getEffectiveAmount(tx);
+                peak = Math.max(peak, currentBalance);
+            });
+
+            results.push({ name: bucket.name, balance: peak, val: peak });
+        }
+        return results;
+
+    }, [period, transactions, currentMonthDate]);
+
     const dataIncome = useMemo(() => financialData.map(d => ({ name: d.name, val: d.income })), [financialData]);
     const dataExpense = useMemo(() => financialData.map(d => ({ name: d.name, val: d.expense })), [financialData]);
-    const dataBalance = useMemo(() => {
-        let running = 0;
-        return financialData.map(d => {
-            running += d.balance;
-            return { name: d.name, val: running };
-        });
-    }, [financialData]);
 
     const getIcon = (category: string) => {
         switch (category.toLowerCase()) {
@@ -183,7 +294,7 @@ const Cashflow = () => {
                                         <div className="text-2xl font-bold">{formatMoney(totalBalance)}</div>
                                         <div className="h-[40px] mt-2">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={dataBalance}>
+                                                <AreaChart data={overviewChartData}>
                                                     <defs>
                                                         <linearGradient id="colorBalanceSmall" x1="0" y1="0" x2="0" y2="1">
                                                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
@@ -281,9 +392,10 @@ const Cashflow = () => {
                         <div className="flex flex-col lg:flex-row">
                             {/* Left: Overview */}
                             <div className="flex-[4] flex flex-col min-w-0">
-                                <CardHeader>
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle>Overview</CardTitle>
+                                <OverviewChart
+                                    data={overviewChartData}
+                                    period={period}
+                                    headerAction={
                                         <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
                                             <SelectTrigger className="w-[120px]">
                                                 <SelectValue />
@@ -294,50 +406,8 @@ const Cashflow = () => {
                                                 <SelectItem value="Yearly">Yearly</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="pl-2 pb-6">
-                                    <div className="h-[350px] w-full">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={dataBalance}>
-                                                <defs>
-                                                    <linearGradient id="colorOverview" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                                                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
-                                                <XAxis
-                                                    dataKey="name"
-                                                    stroke="#888888"
-                                                    fontSize={12}
-                                                    tickLine={false}
-                                                    axisLine={false}
-                                                />
-                                                <YAxis
-                                                    stroke="#888888"
-                                                    fontSize={12}
-                                                    tickLine={false}
-                                                    axisLine={false}
-                                                    tickFormatter={(value) => `${value / 1000}k`}
-                                                />
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
-                                                <Tooltip
-                                                    contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: 'var(--radius)' }}
-                                                    itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
-                                                    formatter={(value: number) => [formatMoney(value), 'Balance']}
-                                                />
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="val"
-                                                    stroke="hsl(var(--primary))"
-                                                    strokeWidth={2}
-                                                    fillOpacity={1}
-                                                    fill="url(#colorOverview)"
-                                                />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </CardContent>
+                                    }
+                                />
                             </div>
 
                             <Separator orientation="vertical" className="hidden lg:block h-auto w-[1px]" />
@@ -369,7 +439,7 @@ const Cashflow = () => {
                                                                 <p className="text-xs text-muted-foreground">{tx.category} • {format(new Date(tx.date), 'MMM d')}</p>
                                                             </div>
                                                         </div>
-                                                        <div className={cn("font-medium text-sm", isIncome ? "text-emerald-500" : "")}>
+                                                        <div className={cn("font-medium text-sm", isIncome ? "text-emerald-500" : "text-rose-500")}>
                                                             {isIncome ? "+" : "-"}{formatMoney(Math.abs(tx.amount))}
                                                         </div>
                                                     </div>
@@ -382,7 +452,7 @@ const Cashflow = () => {
                                         <Button variant="outline" className="w-full" onClick={(e) => {
                                             e.preventDefault();
                                             // @ts-ignore
-                                            if (window.electronAPI) window.electronAPI.openWindow('/history', 900, 600);
+                                            if (window.electronAPI) window.electronAPI.openWindow(`/history?theme=${theme}`, 900, 600);
                                         }}>
                                             View Full History
                                         </Button>

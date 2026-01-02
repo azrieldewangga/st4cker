@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -65,7 +66,7 @@ const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => {
         onClose();
     };
 
-    const categories = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Bills', 'Others', 'Transfer', 'Salary'];
+    const categories = ['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary'];
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -109,10 +110,9 @@ const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => {
                     {/* Date */}
                     <div className="space-y-2">
                         <Label>Date</Label>
-                        <Input
-                            type="date"
-                            value={formData.date ? format(formData.date, "yyyy-MM-dd") : ''}
-                            onChange={(e) => setFormData({ ...formData, date: new Date(e.target.value) })}
+                        <DatePicker
+                            date={formData.date}
+                            setDate={(date) => date && setFormData({ ...formData, date: date })}
                         />
                     </div>
 
