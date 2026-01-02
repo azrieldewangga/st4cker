@@ -23,6 +23,23 @@ const subscriptions_cjs_1 = require("./db/subscriptions.cjs");
 // JSON store deprecated — migrated to SQLite
 // SimpleStore removed.
 // Startup handled by Electron
+// Single Instance Lock - Prevent multiple instances
+const gotTheLock = electron_1.app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    // Another instance is already running, quit this one
+    electron_1.app.quit();
+}
+else {
+    // This is the first instance, set up second-instance handler
+    electron_1.app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Someone tried to run a second instance, focus our window instead
+        if (mainWindow) {
+            if (mainWindow.isMinimized())
+                mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+}
 let mainWindow = null;
 let driveService; // Dynamically loaded
 const createWindow = () => {
