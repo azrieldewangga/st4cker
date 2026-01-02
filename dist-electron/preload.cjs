@@ -74,7 +74,10 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     },
     utils: {
         openExternal: (url) => electron_1.ipcRenderer.invoke('utils:openExternal', url),
-        openPath: (path) => electron_1.ipcRenderer.invoke('utils:openPath', path)
+        openPath: (path) => electron_1.ipcRenderer.invoke('utils:openPath', path),
+        saveFile: (content, defaultName, extensions) => electron_1.ipcRenderer.invoke('utils:saveFile', content, defaultName, extensions),
+        // @ts-ignore
+        getPathForFile: (file) => electron_1.webUtils.getPathForFile(file)
     },
     notifications: {
         send: (title, body) => electron_1.ipcRenderer.invoke('notifications:send', title, body)

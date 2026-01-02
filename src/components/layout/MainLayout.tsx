@@ -8,13 +8,27 @@ import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils'; // Assuming cn is available
 import { TipBanner } from '@/components/ui/tip-banner';
+import { GlobalSearchDialog } from '@/components/shared/GlobalSearchDialog';
+import { useTheme } from '@/components/theme-provider';
 
 interface MainLayoutProps {
     children: ReactNode;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
-    const { notification } = useStore();
+    const { notification, isSearchOpen, setSearchOpen } = useStore();
+
+    // Global Search Shortcut (Ctrl+F or Cmd+F)
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                setSearchOpen(true);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // Notification Listener
     React.useEffect(() => {
@@ -24,10 +38,67 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         }
     }, [notification]);
 
+    // Theme Logic (Auto Switch & Sync)
+    const { theme, setTheme } = useTheme();
+    const { autoTheme, themeSchedule, theme: storeTheme } = useStore();
+
+    // 1. Sync Manual Changes: Store -> NextThemes
+    React.useEffect(() => {
+        if (!autoTheme && storeTheme !== theme) {
+            // @ts-ignore
+            setTheme(storeTheme);
+        }
+    }, [storeTheme, autoTheme]);
+
+    // 2. Auto Switch Logic
+    React.useEffect(() => {
+        if (!autoTheme) return;
+
+        const checkTheme = () => {
+            const now = new Date();
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+            const [startH, startM] = themeSchedule.start.split(':').map(Number);
+            const [endH, endM] = themeSchedule.end.split(':').map(Number);
+
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+
+            let isDarkTime = false;
+
+            if (startMinutes < endMinutes) {
+                // e.g. 18:00 to 22:00 (Dark only in evening)
+                isDarkTime = currentMinutes >= startMinutes && currentMinutes < endMinutes;
+            } else {
+                // e.g. 18:00 to 06:00 (Overnight)
+                isDarkTime = currentMinutes >= startMinutes || currentMinutes < endMinutes;
+            }
+
+            const targetTheme = isDarkTime ? 'dark' : 'light';
+            if (theme !== targetTheme) {
+                // @ts-ignore
+                setTheme(targetTheme);
+                // We DON'T update store 'theme' here to avoid infinite loops or overwriting manual pref if user toggles auto off momentarily
+                // But for consistency let's silently update local store state without triggering listeners? 
+                // Actually, let's leave store.theme as "last manually selected" or "system", and just let view override.
+                // But Settings UI uses store.theme to highlight buttons.
+                // Let's allow effective theme.
+            }
+        };
+
+        checkTheme(); // Initial check
+        const interval = setInterval(checkTheme, 60000); // Check every minute
+        return () => clearInterval(interval);
+    }, [autoTheme, themeSchedule, theme]);
+
     // Window Controls
     const handleMinimize = () => window.electronAPI.minimize();
     const handleMaximize = () => window.electronAPI.maximize();
-    const handleClose = () => window.electronAPI.close();
+    const handleClose = () => {
+        // Close search if open, else close window
+        if (isSearchOpen) setSearchOpen(false);
+        else window.electronAPI.close();
+    };
 
     // Child Window Blur Effect
     const [isChildWindowOpen, setIsChildWindowOpen] = React.useState(false);
@@ -80,7 +151,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
                         {/* Right: Search & User & Window Controls */}
                         <div className="no-drag flex items-center space-x-4">
-                            <Search />
+                            <Search onClick={() => setSearchOpen(true)} />
                             <UserNav />
 
                             {/* Window Actions */}
@@ -102,8 +173,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
             </div>
 
-            <Toaster />
+            <Toaster duration={8000} />
             <TipBanner />
+            <GlobalSearchDialog
+                isOpen={isSearchOpen}
+                onClose={() => setSearchOpen(false)}
+            />
         </div>
     );
 };

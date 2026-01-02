@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
 import { Calendar, Clock, Search, X, MapPin, User as UserIcon, RefreshCw, Trash2, Edit2, Link as LinkIcon, FileText, ExternalLink, Plus } from 'lucide-react';
@@ -251,6 +251,76 @@ const Schedule = () => {
         }
     };
 
+    // Drag & Drop State
+    const [isDragging, setIsDragging] = useState(false);
+
+    // Use Callback Ref to ensure listeners attach when Dialog mounts
+    const dropRef = useCallback((node: HTMLDivElement | null) => {
+        if (!node) return;
+
+        const handleEnter = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragging(true);
+        };
+
+        const handleOver = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = 'copy';
+            }
+            setIsDragging(true);
+        };
+
+        const handleLeave = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (node.contains(e.relatedTarget as Node)) return;
+            setIsDragging(false);
+        };
+
+        const handleDropNative = async (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragging(false);
+
+            if (!detailSlot || !e.dataTransfer?.files || e.dataTransfer.files.length === 0) return;
+
+            const files = Array.from(e.dataTransfer.files);
+            for (const file of files) {
+                // @ts-ignore
+                let path = file.path;
+                // @ts-ignore
+                if (!path && window.electronAPI?.utils?.getPathForFile) {
+                    // @ts-ignore
+                    path = window.electronAPI.utils.getPathForFile(file);
+                }
+
+                if (path) {
+                    await addMaterial(detailSlot.data.course.id, 'file', file.name, path);
+                    toast("File Added", { description: file.name });
+                } else {
+                    toast.error("Path missing. Try a local file.");
+                }
+            }
+        };
+
+        node.addEventListener('dragenter', handleEnter);
+        node.addEventListener('dragover', handleOver);
+        node.addEventListener('dragleave', handleLeave);
+        node.addEventListener('drop', handleDropNative);
+
+        return () => {
+            node.removeEventListener('dragenter', handleEnter);
+            node.removeEventListener('dragover', handleOver);
+            node.removeEventListener('dragleave', handleLeave);
+            node.removeEventListener('drop', handleDropNative);
+        };
+    }, [detailSlot]);
+
+
+
     const handleUpdateMaterial = async () => {
         if (!detailSlot || !editingMaterialId || !editMaterialForm.title || !editMaterialForm.url) return;
 
@@ -398,9 +468,17 @@ const Schedule = () => {
                                 <div className="flex items-center justify-between">
                                     <Label className="text-muted-foreground text-xs uppercase">Materials</Label>
                                 </div>
-                                <div className="rounded-md border p-2 space-y-2 max-h-[150px] overflow-auto">
+                                <div
+                                    ref={dropRef}
+                                    className={cn(
+                                        "rounded-md border p-2 space-y-2 max-h-[150px] min-h-[100px] overflow-auto transition-colors flex flex-col justify-center select-text no-drag",
+                                        isDragging ? "border-primary bg-primary/10 border-dashed" : "border-transparent"
+                                    )}
+                                >
                                     {((detailSlot && materials[detailSlot.data.course.id]) || []).length === 0 ? (
-                                        <p className="text-sm text-muted-foreground italic p-2">No materials added.</p>
+                                        <p className="text-sm text-muted-foreground italic p-2 text-center pointer-events-none">
+                                            No materials added yet. <span className="text-xs opacity-70 block mt-1">(Drag files here to add)</span>
+                                        </p>
                                     ) : (
                                         (materials[detailSlot!.data.course.id] || []).map(m => (
                                             <div key={m.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted rounded group">
@@ -477,9 +555,19 @@ const Schedule = () => {
                                 )}
 
                                 {/* Show Materials List in Edit Mode with Edit and Delete Buttons */}
-                                <div className="rounded-md border p-2 space-y-2 max-h-[150px] overflow-auto mt-2">
+                                <div
+                                    ref={dropRef}
+                                    className={cn(
+                                        "rounded-md border p-2 space-y-2 max-h-[150px] min-h-[100px] overflow-auto mt-2 transition-colors flex flex-col justify-center select-text no-drag",
+                                        isDragging ? "border-primary bg-primary/10 border-dashed" : "border-border"
+                                    )}
+                                >
                                     {((detailSlot && materials[detailSlot.data.course.id]) || []).length === 0 ? (
-                                        <p className="text-sm text-muted-foreground italic p-2">No materials added yet.</p>
+                                        <p className="text-sm text-muted-foreground italic p-2 text-center pointer-events-none">
+                                            {isDragging ? "!!! DROP FILES NOW !!!" : (
+                                                <>No materials added yet. <span className="text-xs opacity-70 block mt-1">(Drag files here to add)</span></>
+                                            )}
+                                        </p>
                                     ) : (
                                         (materials[detailSlot!.data.course.id] || []).map(m => (
                                             editingMaterialId === m.id ? (

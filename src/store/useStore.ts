@@ -61,10 +61,19 @@ interface AppState {
     isHistoryWindowOpen: boolean;
     setHistoryWindowOpen: (isOpen: boolean) => void;
 
+    isSearchOpen: boolean;
+    setSearchOpen: (isOpen: boolean) => void;
+
     currency: 'IDR' | 'USD';
     setCurrency: (currency: 'IDR' | 'USD') => void;
 
     theme: string;
+
+    // Auto Theme
+    autoTheme: boolean;
+    setAutoTheme: (enabled: boolean) => void;
+    themeSchedule: { start: string; end: string }; // HH:mm format
+    setThemeSchedule: (schedule: { start: string; end: string }) => void;
     setTheme: (theme: string) => void;
 
     monthlyLimit: number;
@@ -214,18 +223,36 @@ export const useStore = create<AppState>((set, get) => ({
     isHistoryWindowOpen: false,
     setHistoryWindowOpen: (isOpen) => set({ isHistoryWindowOpen: isOpen }),
 
+    isSearchOpen: false,
+    setSearchOpen: (isOpen) => set({ isSearchOpen: isOpen }),
+
     // ... rest ...
 
     currency: 'IDR',
     setCurrency: (currency) => set({ currency }),
 
     // Theme State - migrate old themes to new ones
-    theme: 'dark',
+    // Theme State
+    theme: localStorage.getItem('theme') || 'system',
+    autoTheme: localStorage.getItem('auto-theme') === 'true',
+    themeSchedule: JSON.parse(localStorage.getItem('theme-schedule') || '{"start":"18:00","end":"06:00"}'),
+
     setTheme: (theme: string) => {
-        // Enforce dark mode
-        localStorage.setItem('theme', 'dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-        set({ theme: 'dark' });
+        localStorage.setItem('theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        set({ theme });
+    },
+
+    setAutoTheme: (enabled: boolean) => {
+        set({ autoTheme: enabled });
+        localStorage.setItem('auto-theme', String(enabled));
+    },
+
+    setThemeSchedule: (schedule: { start: string; end: string }) => {
+        set({ themeSchedule: schedule });
+        localStorage.setItem('theme-schedule', JSON.stringify(schedule));
     },
 
     // Monthly Limit

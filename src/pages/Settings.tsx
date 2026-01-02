@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { User, Save, Cloud, CheckCircle, RefreshCw, Trash2, Clock, Upload, RotateCcw } from 'lucide-react';
+import { User, Save, Cloud, CheckCircle, RefreshCw, Trash2, Clock, Upload, RotateCcw, Moon, Sun, Laptop } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 // Shadcn Components
@@ -181,7 +181,8 @@ const GoogleDriveCard = () => {
 };
 
 const Settings = () => {
-    const { userProfile, updateUserProfile, showNotification } = useStore();
+    // Hoist Hooks
+    const { userProfile, updateUserProfile, showNotification, autoTheme, setAutoTheme, theme, setTheme, themeSchedule, setThemeSchedule } = useStore();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchParams] = useSearchParams();
     const view = searchParams.get('view') || 'preferences'; // Default to preferences if null
@@ -406,6 +407,81 @@ const Settings = () => {
             ) : (
                 // --- PREFERENCES VIEW ---
                 <>
+                    {/* Appearance Settings */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Appearance</CardTitle>
+                            <CardDescription>Manage application theme and auto-switching.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base">Auto-switch Theme</Label>
+                                    <p className="text-sm text-muted-foreground">Automatically switch between light and dark mode based on time</p>
+                                </div>
+                                <Switch
+                                    checked={autoTheme}
+                                    onCheckedChange={setAutoTheme}
+                                />
+                            </div>
+
+                            {/* Auto Theme Schedule */}
+                            {autoTheme ? (
+                                <div className="grid grid-cols-2 gap-4 animate-fade-in pl-1">
+                                    <div className="space-y-2">
+                                        <Label>Dark Mode Starts</Label>
+                                        <div className="relative">
+                                            <Moon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                type="time"
+                                                className="pl-9"
+                                                value={themeSchedule.start}
+                                                onChange={(e) => setThemeSchedule({ ...themeSchedule, start: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Light Mode Starts</Label>
+                                        <div className="relative">
+                                            <Sun className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                type="time"
+                                                className="pl-9"
+                                                value={themeSchedule.end}
+                                                onChange={(e) => setThemeSchedule({ ...themeSchedule, end: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Manual Theme Selection */
+                                <div className="grid grid-cols-3 gap-2 animate-fade-in">
+                                    <Button
+                                        variant={theme === 'light' ? 'default' : 'outline'}
+                                        onClick={() => setTheme('light')}
+                                        className="w-full justify-start"
+                                    >
+                                        <Sun className="mr-2 h-4 w-4" /> Light
+                                    </Button>
+                                    <Button
+                                        variant={theme === 'dark' ? 'default' : 'outline'}
+                                        onClick={() => setTheme('dark')}
+                                        className="w-full justify-start"
+                                    >
+                                        <Moon className="mr-2 h-4 w-4" /> Dark
+                                    </Button>
+                                    <Button
+                                        variant={theme === 'system' ? 'default' : 'outline'}
+                                        onClick={() => setTheme('system')}
+                                        className="w-full justify-start"
+                                    >
+                                        <Laptop className="mr-2 h-4 w-4" /> System
+                                    </Button>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
                     {/* App Preferences */}
                     <Card>
                         <CardHeader>

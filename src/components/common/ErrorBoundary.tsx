@@ -1,8 +1,10 @@
-import React from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 
 interface Props {
-    children: React.ReactNode;
+    children?: ReactNode;
 }
 
 interface State {
@@ -10,29 +12,67 @@ interface State {
     error: Error | null;
 }
 
-class ErrorBoundary extends React.Component<Props, State> {
-    constructor(props: Props) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
+class ErrorBoundary extends Component<Props, State> {
+    public state: State = {
+        hasError: false,
+        error: null
+    };
 
-    static getDerivedStateFromError(error: Error) {
+    public static getDerivedStateFromError(error: Error): State {
         return { hasError: true, error };
     }
 
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-        console.error("Uncaught error:", error, errorInfo);
+    public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        console.error('Uncaught error:', error, errorInfo);
     }
 
-    render() {
+    public handleReload = () => {
+        window.location.reload();
+    };
+
+    public handleReset = () => {
+        this.setState({ hasError: false, error: null });
+    };
+
+    public render() {
         if (this.state.hasError) {
             return (
-                <div className="min-h-screen w-full flex items-center justify-center bg-background p-4">
-                    <div className="rounded-xl bg-card shadow-2xl max-w-lg w-full border border-border">
-                        <div className="p-6 flex flex-col items-center text-center">
-                            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-2">
-                                <AlertTriangle className="w-8 h-8 text-destructive" />
+                <div className="flex items-center justify-center min-h-screen p-6 bg-background">
+                    <Card className="w-full max-w-md border-destructive/50 shadow-lg animate-in fade-in zoom-in-95 duration-200">
+                        <CardHeader>
+                            <div className="flex items-center gap-2 text-destructive mb-2">
+                                <AlertCircle className="h-6 w-6" />
+                                <CardTitle className="text-xl">Something went wrong</CardTitle>
                             </div>
+                            <CardDescription>
+                                We encountered an unexpected error. This might be a temporary issue.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="rounded-md bg-muted p-4 font-mono text-xs text-destructive break-words max-h-40 overflow-auto">
+                                {this.state.error?.message || "Unknown error occurred"}
+                            </div>
+                        </CardContent>
+                        <CardFooter className="gap-2 justify-end">
+                            <Button variant="outline" onClick={this.handleReload}>
+                                <RefreshCw className="mr-2 h-4 w-4" /> Reload App
+                            </Button>
+                            <Button variant="default" onClick={this.handleReset}>
+                                <RotateCcw className="mr-2 h-4 w-4" /> Try Again
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
+export default ErrorBoundary;
+
+                            </div >
                             <h2 className="text-2xl font-bold text-card-foreground">Oops! Something went wrong.</h2>
                             <p className="opacity-70 mt-2">
                                 We encountered an unexpected error. Please try reloading the application.
@@ -53,13 +93,13 @@ class ErrorBoundary extends React.Component<Props, State> {
                                     Reload Application
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
+                        </div >
+                    </div >
+                </div >
             );
         }
 
-        return this.props.children;
+return this.props.children;
     }
 }
 

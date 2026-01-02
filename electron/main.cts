@@ -54,7 +54,7 @@ const createWindow = () => {
         backgroundMaterial: 'none', // EXPLICITLY DISABLE to prevent gray box in prod
         backgroundColor: '#00000000', // Start fully transparent
         webPreferences: {
-            preload: path.join(__dirname, 'preload.cjs'), // Back to .js to match tsc output
+            preload: path.join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: true,
@@ -290,10 +290,33 @@ app.on('ready', async () => {
         return result;
     });
 
-    // Utilities (Shell)
+    // Utilities (Shell & File System)
     const { shell } = require('electron');
     ipcMain.handle('utils:openExternal', (_, url) => shell.openExternal(url));
     ipcMain.handle('utils:openPath', (_, path) => shell.openPath(path));
+    ipcMain.handle('utils:saveFile', async (_, content, defaultName, extensions = ['csv']) => {
+        const win = BrowserWindow.getFocusedWindow();
+        if (!win) return { success: false, error: 'No focused window' };
+
+        const { dialog } = require('electron');
+        const fs = require('fs/promises');
+
+        try {
+            const { filePath } = await dialog.showSaveDialog(win, {
+                title: 'Save File',
+                defaultPath: defaultName,
+                filters: [{ name: 'Export File', extensions }]
+            });
+
+            if (!filePath) return { success: false, canceled: true };
+
+            await fs.writeFile(filePath, content, 'utf-8');
+            return { success: true, filePath };
+        } catch (error: any) {
+            console.error('File Save Error:', error);
+            return { success: false, error: error.message };
+        }
+    });
 
     // Toggle DevTools for debugging in production
     const { globalShortcut } = require('electron');
@@ -304,12 +327,28 @@ app.on('ready', async () => {
 
     createWindow();
 
-    // Check Auto-Backup (After a short delay to let things settle, and confirm driveService exists)
+    // Check Auto-Backup & Subscriptions (After a short delay to let things settle)
     setTimeout(() => {
+        // 1. Auto Backup
         if (driveService) {
             driveService.checkAndRunAutoBackup().catch((err: any) => console.error('Auto-backup check failed:', err));
         } else {
             console.log('[Main] driveService not available for auto-backup check.');
+        }
+
+        // 2. Check Subscriptions & Recurring Transactions
+        try {
+            console.log('[Main] Checking for due subscriptions...');
+            const result = subscriptions.checkAndProcessDeductions();
+            if (result.deductionsMade > 0) {
+                console.log(`[Main] Processed ${result.deductionsMade} recurring transactions.`);
+                // Notify windows to refresh data
+                BrowserWindow.getAllWindows().forEach(win => {
+                    win.webContents.send('refresh-data');
+                });
+            }
+        } catch (err) {
+            console.error('[Main] Failed to process subscriptions:', err);
         }
     }, 5000);
 

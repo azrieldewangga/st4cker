@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Download } from 'lucide-react';
+import { exportToCSV } from '../utils/export';
+import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -107,10 +109,40 @@ const Performance = () => {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-                <GraduationCap />
-                Prestasi Akademik
-            </h1>
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold flex items-center gap-2">
+                    <GraduationCap />
+                    Prestasi Akademik
+                </h1>
+                <Button variant="outline" size="sm" onClick={async () => {
+                    // Flatten grade data for export
+                    const data = [];
+                    const currentSem = userProfile?.semester ? parseInt(userProfile.semester.toString()) : 1;
+
+                    for (let i = 1; i <= currentSem; i++) {
+                        const courses = getSemesterCourses(i);
+                        courses.forEach(c => {
+                            data.push({
+                                Semester: i,
+                                Course: c.name,
+                                SKS: c.sks,
+                                Grade: grades[c.id] || '-'
+                            });
+                        });
+                    }
+
+                    const { success, filePath, error } = await exportToCSV(data, `Academic_Performance_${new Date().toISOString().split('T')[0]}.csv`);
+
+                    if (success) {
+                        toast("Export Successful", {
+                            description: `File saved to: ${filePath}`,
+                        });
+                    }
+                    else if (error) toast.error(`Export failed: ${error}`);
+                }}>
+                    <Download className="mr-2 h-4 w-4" /> Export CSV
+                </Button>
+            </div>
 
             {/* IPS Trend Chart */}
             {/* IPS Trend Chart */}

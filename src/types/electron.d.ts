@@ -74,6 +74,8 @@ export interface IElectronAPI {
     utils: {
         openExternal: (url: string) => Promise<void>;
         openPath: (path: string) => Promise<void>;
+        saveFile: (content: string, defaultName: string, extensions: string[]) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+        getPathForFile: (file: File) => string;
     };
 
     notifications: {

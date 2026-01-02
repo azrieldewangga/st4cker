@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
     // Window Controls
@@ -85,7 +85,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     utils: {
         openExternal: (url: string) => ipcRenderer.invoke('utils:openExternal', url),
-        openPath: (path: string) => ipcRenderer.invoke('utils:openPath', path)
+        openPath: (path: string) => ipcRenderer.invoke('utils:openPath', path),
+        saveFile: (content: string, defaultName: string, extensions: string[]) => ipcRenderer.invoke('utils:saveFile', content, defaultName, extensions),
+        // @ts-ignore
+        getPathForFile: (file: File) => webUtils.getPathForFile(file)
     },
 
     notifications: {

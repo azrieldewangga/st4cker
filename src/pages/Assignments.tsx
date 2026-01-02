@@ -74,6 +74,8 @@ interface SortableRowProps {
     duplicateAssignment: (id: string) => Promise<void>;
     onDeleteClick: (id: string) => void;
     isFiltered: boolean;
+    isSelected: boolean;
+    onToggleSelect: (id: string) => void;
 }
 
 const SortableRow = ({
@@ -82,7 +84,9 @@ const SortableRow = ({
     onEditClick,
     duplicateAssignment,
     onDeleteClick,
-    isFiltered
+    isFiltered,
+    isSelected,
+    onToggleSelect
 }: SortableRowProps) => {
     const {
         attributes,
@@ -107,17 +111,28 @@ const SortableRow = ({
                 isDragging && "opacity-50 bg-muted/50 z-10 relative"
             )}
         >
-            {/* Drag Grip */}
+            {/* Drag Grip & Checkbox */}
             <TableCell className="w-[50px] p-2">
-                {!isFiltered && (
-                    <div
-                        {...attributes}
-                        {...listeners}
-                        className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded opacity-0 group-hover:opacity-100 transition-opacity flex justify-center"
-                    >
-                        <GripVertical size={16} className="text-muted-foreground" />
-                    </div>
-                )}
+                <div className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                            e.stopPropagation(); // prevent row click interactions if any
+                            onToggleSelect(assignment.id);
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    {!isFiltered && (
+                        <div
+                            {...attributes}
+                            {...listeners}
+                            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded opacity-0 group-hover:opacity-100 transition-opacity flex justify-center"
+                        >
+                            <GripVertical size={16} className="text-muted-foreground" />
+                        </div>
+                    )}
+                </div>
             </TableCell>
 
             {/* Deadline */}
@@ -284,16 +299,61 @@ const Assignments = () => {
     // Delete confirmation modal state
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [assignmentToDelete, setAssignmentToDelete] = useState<string | null>(null);
+    const [isBulkDelete, setIsBulkDelete] = useState(false);
+
+    // Selection State
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const toggleSelection = (id: string) => {
+        const newSelected = new Set(selectedIds);
+        if (newSelected.has(id)) {
+            newSelected.delete(id);
+        } else {
+            newSelected.add(id);
+        }
+        setSelectedIds(newSelected);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredAssignments.length && filteredAssignments.length > 0) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredAssignments.map(a => a.id)));
+        }
+    };
+
+    const handleBulkDelete = () => {
+        setIsBulkDelete(true);
+        setDeleteModalOpen(true);
+    };
+
+    const handleBulkStatus = async (status: AssignmentStatus) => {
+        const ids = Array.from(selectedIds);
+        for (const id of ids) {
+            await updateAssignment(id, { status });
+        }
+        setSelectedIds(new Set());
+        // Neutral toast color
+        toast(`Updated ${ids.length} assignments to ${status}`);
+    };
 
     const handleDeleteClick = (id: string) => {
+        setIsBulkDelete(false);
         setAssignmentToDelete(id);
         setDeleteModalOpen(true);
     };
 
-    const handleConfirmDelete = () => {
-        if (assignmentToDelete) {
+    const handleConfirmDelete = async () => {
+        if (isBulkDelete) {
+            const ids = Array.from(selectedIds);
+            for (const id of ids) {
+                await deleteAssignment(id);
+            }
+            setSelectedIds(new Set());
+            toast(`Deleted ${ids.length} assignments`);
+        } else if (assignmentToDelete) {
             const assignment = assignments.find(a => a.id === assignmentToDelete);
-            deleteAssignment(assignmentToDelete);
+            await deleteAssignment(assignmentToDelete);
             toast("Assignment has been deleted", {
                 description: assignment?.title || "Untitled Assignment",
                 action: {
@@ -304,6 +364,7 @@ const Assignments = () => {
         }
         setDeleteModalOpen(false);
         setAssignmentToDelete(null);
+        setIsBulkDelete(false);
     };
 
     useEffect(() => {
@@ -474,7 +535,14 @@ const Assignments = () => {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[50px]"></TableHead>
+                                <TableHead className="w-[50px]">
+                                    <input
+                                        type="checkbox"
+                                        checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
+                                        onChange={toggleSelectAll}
+                                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                                    />
+                                </TableHead>
                                 <TableHead>Deadline</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Course</TableHead>
@@ -511,6 +579,8 @@ const Assignments = () => {
                                             duplicateAssignment={duplicateAssignment}
                                             onDeleteClick={handleDeleteClick}
                                             isFiltered={isFiltered}
+                                            isSelected={selectedIds.has(assignment.id)}
+                                            onToggleSelect={toggleSelection}
                                         />
                                     ))
                                 )}
@@ -520,18 +590,48 @@ const Assignments = () => {
                 </DndContext>
             </div>
 
+            {/* Bulk Action Toolbar */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-popover border shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-bottom-5 z-50">
+                    <span className="text-sm font-medium mr-2">{selectedIds.size} selected</span>
+                    <div className="h-4 w-px bg-border mx-1" />
+                    <Button variant="ghost" size="sm" onClick={() => handleBulkStatus('done')} className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8">
+                        Mark Done
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleBulkStatus('to-do')} className="h-8">
+                        Mark To Do
+                    </Button>
+                    <div className="h-4 w-px bg-border mx-1" />
+                    <Button variant="ghost" size="sm" onClick={handleBulkDelete} className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-8">
+                        Delete
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => setSelectedIds(new Set())} className="h-6 w-6 rounded-full ml-1">
+                        <span className="sr-only">Close</span>
+                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-3 w-3"><path d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.1929 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.1929 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+                    </Button>
+                </div>
+            )}
+
             {/* Alert Dialog for Delete */}
             <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the assignment.
+                            {isBulkDelete
+                                ? `This will permanently delete ${selectedIds.size} selected assignments. This action cannot be undone.`
+                                : "This action cannot be undone. This will permanently delete the assignment."
+                            }
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleConfirmDelete}>Delete</AlertDialogAction>
+                        <AlertDialogAction
+                            className="bg-red-600 hover:bg-red-700 text-white border-0"
+                            onClick={handleConfirmDelete}
+                        >
+                            Delete
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

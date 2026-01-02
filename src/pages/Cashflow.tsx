@@ -3,9 +3,11 @@ import { useStore } from '../store/useStore';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts';
-import { Wallet, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight, ShoppingBag, Music, Coffee, Zap, Home, GraduationCap, Smartphone, MoreHorizontal, Plus } from 'lucide-react';
+import { Wallet, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight, ShoppingBag, Music, Coffee, Zap, Home, GraduationCap, Smartphone, MoreHorizontal, Plus, Download } from 'lucide-react';
 import { format, isSameMonth, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { cn } from "@/lib/utils";
+import { exportToCSV } from '../utils/export';
+import { toast } from "sonner";
 
 // Shadcn Components
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,17 @@ const Cashflow = () => {
     useEffect(() => {
         fetchTransactions();
     }, []);
+
+    const handleExport = async () => {
+        const { success, filePath, error } = await exportToCSV(transactions, `Cashflow_Export_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+        if (success) {
+            toast("Export Successful", {
+                description: `File saved to: ${filePath}`,
+            });
+        } else if (error) {
+            toast.error(`Export failed: ${error}`);
+        }
+    };
 
     // Keyboard Shortcut: Ctrl+N to open Add Transaction modal
     useEffect(() => {
@@ -268,6 +281,9 @@ const Cashflow = () => {
                     <p className="text-muted-foreground">Monitor financial health and subscriptions.</p>
                 </div>
                 <div className="flex items-center space-x-2">
+                    <Button onClick={handleExport} variant="outline" size="icon" title="Export to CSV">
+                        <Download className="h-4 w-4" />
+                    </Button>
                     <Button onClick={() => setCurrency(currency === 'IDR' ? 'USD' : 'IDR')} variant="outline">
                         {currency} Mode
                     </Button>

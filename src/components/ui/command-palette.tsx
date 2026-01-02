@@ -18,6 +18,7 @@ interface CommandPaletteProps {
     onToggleTheme?: () => void;
     onUndo?: () => void;
     onRedo?: () => void;
+    onSearch?: () => void;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -26,6 +27,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     onToggleTheme,
     onUndo,
     onRedo,
+    onSearch,
 }) => {
     const [search, setSearch] = useState('');
 
@@ -62,6 +64,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             category: 'General',
             keys: ['Ctrl', 'K'],
             description: 'Open Command Palette (this)',
+        },
+        {
+            id: 'global-search',
+            category: 'General',
+            keys: ['Ctrl', 'F'],
+            description: 'Global Search',
+            action: onSearch,
         },
         {
             id: 'close-window',
