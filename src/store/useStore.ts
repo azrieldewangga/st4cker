@@ -1,8 +1,18 @@
 import { create } from 'zustand';
 import { Assignment, Course, UserProfile, Transaction, CourseMaterial, Subscription } from '../types/models';
 import { NotificationService } from '../services/NotificationService';
-// @ts-ignore
-import curriculumData from '../lib/curriculum.json';
+import {
+    validateData,
+    AssignmentSchema,
+    TransactionSchema,
+    UserProfileSchema,
+    CourseSchema,
+    SubscriptionSchema,
+    CourseMaterialSchema
+} from '../lib/validation';
+import curriculumDataJson from '../lib/curriculum.json';
+
+const curriculumData = curriculumDataJson as Record<string, { sks: number; name: string; id?: string }[]>;
 
 
 type UndoOp =
@@ -27,7 +37,7 @@ type UndoOp =
     }
     | {
         type: 'DELETE_ASSIGNMENT';
-        payload: { id: string; data: Assignment } // Redo: delete again, Undo: restore
+        payload: { id: string; data: Assignment } // Restore assignment
     }
     | {
         type: 'ADD_TRANSACTION';
@@ -96,6 +106,11 @@ interface AppState {
     fetchCourses: () => Promise<void>;
     fetchGrades: () => Promise<void>;
     updateGrade: (courseId: string, grade: string) => Promise<void>;
+    addCourse: (semester: number) => Promise<void>;
+    updateCourse: (course: Course) => Promise<void>;
+    deleteCourse: (id: string) => Promise<void>;
+
+    // --- Materials ---
 
     fetchSchedule: () => Promise<void>;
     setScheduleItem: (day: string, time: string, courseId: string, color?: string, room?: string, lecturer?: string, skipLog?: boolean) => Promise<void>;
@@ -159,13 +174,7 @@ export const useStore = create<AppState>((set, get) => ({
                 await get().deleteAssignment(op.payload.id, true);
                 break;
             case 'DELETE_ASSIGNMENT':
-                // Temporarily re-add with raw call or specific restore method
-                // reusing addAssignment might generate new ID if not careful. 
-                // We need a way to restore with exact ID.
-                // For now, let's assume valid ID restoration is handled or we add 'restoreAssignment'.
-                // Ideally, insert directly via API. 
-                // Let's implement restoreAssignment or use a hacked addAssignment.
-                // Hack: We'll modify addAssignment to accept ID or just call API directly here for safety.
+                // Restore deleted assignment by recreating it
                 await window.electronAPI.assignments.create(op.payload.data);
                 await get().fetchAssignments();
                 break;
@@ -303,22 +312,12 @@ export const useStore = create<AppState>((set, get) => ({
                 set({ userProfile: profile });
                 get().fetchCourses();
             } else {
-                // If null, we might want to trigger a create or default
-                // But migration should have handled it.
-                console.log('[useStore] No profile returned.');
-                // Fallback default for UI safety
-                const defaultProfile = {
-                    id: 'user-default-1',
-                    name: 'Student',
-                    semester: 1,
-                    avatar: 'https://ui-avatars.com/api/?name=Student&background=random',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                };
-                // Try to save this default to DB?
-                // await window.electronAPI.userProfile.update(defaultProfile);
-                set({ userProfile: defaultProfile });
-                get().fetchCourses();
+                // No profile found = Fresh Install
+                // Leave userProfile as null. The specific routing gate (App.tsx) or Onboarding logic
+                // will handle the redirection.
+                console.log('[useStore] No profile returned. Waiting for Onboarding.');
+                set({ userProfile: null });
+                // Don't fetch courses yet if we don't know the semester
             }
         } catch (err: any) {
             console.error('[useStore] Error fetching profile:', err);
@@ -326,8 +325,13 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     updateUserProfile: async (data) => {
-        const { userProfile } = get();
-        if (!userProfile) return;
+        const validation = validateData(UserProfileSchema.partial(), data);
+        if (!validation.success) {
+            console.error('[Store] Validation Failed:', validation.errors);
+            set({ error: validation.errors.join(', ') });
+            throw new Error(validation.errors[0]);
+        }
+
         try {
             const updated = await window.electronAPI.userProfile.update(data);
             set({ userProfile: updated });
@@ -359,6 +363,15 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     addAssignment: async (data, skipLog = false) => {
+        const validation = validateData(AssignmentSchema.omit({ status: true, semester: true }), data); // Allow defaults
+        if (!validation.success) {
+            // Check if it failed only on missing defaults that we fill below
+            // Actually, best to validate the FINAL object or a specific input schema.
+            // We'll validate the input 'data' against a loose schema or the final object.
+            // Let's validate the 'data' known fields.
+            // Note: AssignmentSchema requires status/semester. We fill them below.
+        }
+
         set({ isLoading: true });
         try {
             const { assignments } = get();
@@ -372,8 +385,20 @@ export const useStore = create<AppState>((set, get) => ({
                 updatedAt: new Date().toISOString(),
                 course: data.courseId,
                 semester: get().userProfile?.semester || 1,
-                customOrder: maxOrder + 1
+                customOrder: maxOrder + 1,
+                status: 'to-do' as 'to-do' // Default
             };
+
+            // Validate Final Object
+            const finalValidation = validateData(AssignmentSchema, {
+                ...newItem,
+                courseId: newItem.course // Schema expects courseId
+            });
+            if (!finalValidation.success) {
+                set({ error: finalValidation.errors.join(', '), isLoading: false });
+                throw new Error(finalValidation.errors[0]);
+            }
+
 
             if (!skipLog) {
                 set({ redoStack: [] });
@@ -398,13 +423,17 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     updateAssignment: async (id, data) => {
+        const validation = validateData(AssignmentSchema.partial(), data);
+        if (!validation.success) {
+            set({ error: validation.errors.join(', ') });
+            throw new Error(validation.errors[0]);
+        }
         try {
-            // Map courseId -> course if present
+            // Map course relation
             const updatePayload = { ...data };
             if (updatePayload.courseId) {
-                // @ts-ignore
-                updatePayload.course = updatePayload.courseId;
-                delete updatePayload.courseId; // Remove purely frontend key if any
+                (updatePayload as any).course = updatePayload.courseId;
+                delete updatePayload.courseId;
             }
 
             await window.electronAPI.assignments.update(id, updatePayload);
@@ -496,7 +525,7 @@ export const useStore = create<AppState>((set, get) => ({
         dbCourses.forEach((dbGrade: any) => {
             // ... (keep mapping logic for legacy gradeMap support if needed, or rely on performanceRecords?)
             // We'll keep gradeMap for now as lighter components usage? 
-            // Actually, we can just rebuild gradeMap from the DB List logic I wrote before.
+            // Rebuild grade map from DB
 
             // Re-use logic to map ID
             let mappedId = dbGrade.id;
@@ -504,12 +533,12 @@ export const useStore = create<AppState>((set, get) => ({
                 mappedId = dbGrade.id;
             } else {
                 let found = false;
-                // @ts-ignore
                 for (const semKey of Object.keys(curriculumData)) {
                     if (found) break;
-                    // @ts-ignore
                     const semCourses = curriculumData[semKey];
-                    semCourses.forEach((c: any, idx: number) => {
+                    if (!semCourses) continue;
+
+                    semCourses.forEach((c, idx) => {
                         if (found) return;
                         if (c.name === dbGrade.name || c.name === dbGrade.id) {
                             mappedId = `course-${semKey}-${idx}`;
@@ -535,7 +564,6 @@ export const useStore = create<AppState>((set, get) => ({
         if (parts.length === 3) {
             const sem = parts[1];
             const idx = parseInt(parts[2]);
-            // @ts-ignore
             const cData = curriculumData[sem]?.[idx];
             if (cData) sks = cData.sks;
         }
@@ -593,13 +621,12 @@ export const useStore = create<AppState>((set, get) => ({
                 }
 
                 if (isMatch) {
-                    console.log('[DEBUG] Schedule Match:', item.id, 'Room:', item.location, 'Lecturer:', item.lecturer);
                     const key = `${item.day}-${item.startTime}`; // UI expects simple key
                     scheduleMap[key] = item;
                 }
             });
 
-            console.log('[DEBUG] Final Schedule Map Keys:', Object.keys(scheduleMap));
+
             set({ schedule: scheduleMap });
         } catch (error) {
             console.error('Fetch schedule error:', error);
@@ -608,7 +635,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     setScheduleItem: async (day, time, courseId, color = 'bg-primary', room = '', lecturer = '', skipLog = false) => {
         try {
-            console.log('[DEBUG-STORE] setScheduleItem:', { day, time, courseId, room, lecturer });
+
             const { schedule, userProfile, undoStack } = get();
 
             // Undo Logic
@@ -652,7 +679,7 @@ export const useStore = create<AppState>((set, get) => ({
                 course: courseId,
                 location: room,
                 lecturer: lecturer,
-                note: JSON.stringify({ color }), // Legacy/Backup
+                note: JSON.stringify({ color }),
                 updatedAt: new Date().toISOString()
             });
             get().fetchSchedule();
@@ -675,6 +702,11 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     addTransaction: async (data, skipLog = false) => {
+        const validation = validateData(TransactionSchema.omit({ currency: true }), data);
+        if (!validation.success) {
+            set({ error: validation.errors.join(', ') });
+            throw new Error(validation.errors[0]);
+        }
         try {
             const payload = { ...data, currency: get().currency };
 
@@ -705,6 +737,11 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     updateTransaction: async (id, data) => {
+        const validation = validateData(TransactionSchema.partial(), data);
+        if (!validation.success) {
+            set({ error: validation.errors.join(', ') });
+            throw new Error(validation.errors[0]);
+        }
         try {
             await window.electronAPI.transactions.update(id, data);
             get().fetchTransactions();
@@ -770,8 +807,7 @@ export const useStore = create<AppState>((set, get) => ({
             courses.forEach((c: any, idx: number) => {
                 const id = `course-${semKey}-${idx}`;
                 if (!dbIds.has(id)) {
-                    // Seed this course
-                    console.log(`[Seeder] Inserting missing course: ${c.name}`);
+                    // Seed default course
                     promises.push(window.electronAPI.performance.upsertCourse({
                         id,
                         semester: parseInt(semKey),
@@ -828,71 +864,54 @@ export const useStore = create<AppState>((set, get) => ({
             set({ performanceRecords: currentRecords });
         }
 
-        // --- Grades Seeding: Insert grades for semesters 1-3 ---
-        const gradesData: Record<string, { name: string; grade: string }[]> = {
-            "1": [
-                { name: "Agama", grade: "A-" },
-                { name: "Algoritma dan Struktur Data", grade: "AB" },
-                { name: "Arsitektur Komputer", grade: "BC" },
-                { name: "Elektronika Digital 1", grade: "C" },
-                { name: "Matematika 1", grade: "BC" },
-                { name: "Praktikum Algoritma dan Struktur Data", grade: "A" },
-                { name: "Praktikum Arsitektur Komputer", grade: "B" },
-                { name: "Praktikum Elektronika Digital 1", grade: "B+" },
-                { name: "Praktikum Sistem Komunikasi", grade: "AB" },
-                { name: "Sistem Komunikasi", grade: "C" },
-                { name: "Workshop Teknologi Web dan Aplikasi", grade: "AB" }
-            ],
-            "2": [
-                { name: "Arsitektur Jaringan dan Internet", grade: "B+" },
-                { name: "Dasar Pemrograman", grade: "A-" },
-                { name: "Elektronika Digital 2", grade: "C" },
-                { name: "Komunikasi Data", grade: "AB" },
-                { name: "Kreatifitas Mahasiswa 1", grade: "" },
-                { name: "Matematika 2", grade: "B" },
-                { name: "Pancasila", grade: "A-" },
-                { name: "Praktikum Arsitektur Jaringan dan Internet", grade: "AB" },
-                { name: "Praktikum Dasar Pemrograman", grade: "BC" },
-                { name: "Praktikum Elektronika Digital 2", grade: "B" },
-                { name: "Praktikum Komunikasi Data", grade: "AB" },
-                { name: "Workshop Basis data", grade: "AB" }
-            ],
-            "3": [
-                { name: "Jaringan Nirkabel", grade: "AB" },
-                { name: "Kewarganegaraan", grade: "A" },
-                { name: "Kreatifitas Mahasiswa 2", grade: "" },
-                { name: "Praktikum Jaringan Nirkabel", grade: "AB" },
-                { name: "Praktikum Sistem Komunikasi Nirkabel", grade: "A" },
-                { name: "Praktikum Sistem dan Jaringan Komputer", grade: "B+" },
-                { name: "Sistem Komunikasi Nirkabel", grade: "A-" },
-                { name: "Sistem dan Jaringan Komputer", grade: "B" },
-                { name: "Statistika", grade: "B+" },
-                { name: "Workshop Embedded System", grade: "B+" },
-                { name: "Workshop Pemrograman Lanjut", grade: "A-" }
-            ]
-        };
 
-        // Update grades for courses in semesters 1-3 if empty in DB
-        for (const semKey of Object.keys(gradesData)) {
-            const gradesList = gradesData[semKey];
-            // @ts-ignore
-            const curriculum = curriculumData[semKey] || [];
-            for (let idx = 0; idx < gradesList.length; idx++) {
-                const id = `course-${semKey}-${idx}`;
-                const dbRecord = currentRecords.find((r: any) => r.id === id);
-                const newGrade = gradesList[idx].grade;
-                // Only update if DB has no grade and we have one to insert
-                if (dbRecord && (!dbRecord.grade || dbRecord.grade === '') && newGrade) {
-                    console.log(`[Grades-Seed] Setting grade for ${gradesList[idx].name}: ${newGrade}`);
-                    await window.electronAPI.performance.upsertCourse({
-                        ...dbRecord,
-                        grade: newGrade,
-                        updatedAt: new Date().toISOString()
-                    });
-                }
-            }
+
+    },
+
+    addCourse: async (semester: number) => {
+        try {
+            const newCourse = {
+                id: crypto.randomUUID(),
+                semester,
+                name: 'New Course',
+                sks: 2,
+                grade: '',
+                location: '',
+                lecturer: '',
+                updatedAt: new Date().toISOString()
+            };
+            await window.electronAPI.performance.upsertCourse(newCourse);
+            await get().fetchGrades();
+        } catch (error) {
+            console.error('Add course error:', error);
         }
-        get().fetchGrades(); // Final refresh
+    },
+
+    updateCourse: async (course: Course) => { // Use Course type
+        const validation = validateData(CourseSchema.partial(), course);
+        if (!validation.success) {
+            console.error("Course validation failed", validation.errors);
+            set({ error: validation.errors.join(', ') });
+            throw new Error(validation.errors[0]);
+        }
+        try {
+            await window.electronAPI.performance.upsertCourse({
+                ...course,
+                updatedAt: new Date().toISOString()
+            });
+            await get().fetchGrades();
+        } catch (error) {
+            console.error('Update course error:', error);
+        }
+    },
+
+    deleteCourse: async (id: string) => {
+        try {
+            await window.electronAPI.performance.deleteCourse(id);
+            await get().fetchGrades();
+        } catch (error) {
+            console.error('Delete course error:', error);
+        }
     },
 
     // --- Materials ---
@@ -942,6 +961,11 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     addSubscription: async (data: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>) => {
+        const validation = validateData(SubscriptionSchema, data);
+        if (!validation.success) {
+            set({ error: validation.errors.join(', ') });
+            throw new Error(validation.errors[0]);
+        }
         try {
             await window.electronAPI.subscriptions.create(data);
             get().fetchSubscriptions();
@@ -951,6 +975,11 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     updateSubscription: async (id: string, data: Partial<Subscription>) => {
+        const validation = validateData(SubscriptionSchema.partial(), data);
+        if (!validation.success) {
+            set({ error: validation.errors.join(', ') });
+            throw new Error(validation.errors[0]);
+        }
         try {
             await window.electronAPI.subscriptions.update(id, data);
             get().fetchSubscriptions();

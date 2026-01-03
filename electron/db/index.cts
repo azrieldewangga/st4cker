@@ -27,6 +27,7 @@ export const getDB = () => {
 
         console.log('[DB] Connecting to:', dbPath);
         db = new Database(dbPath);
+        db.pragma('journal_mode = DELETE');
 
         // Initialize Schema
         initSchema(db);

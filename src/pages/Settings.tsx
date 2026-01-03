@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { User, Save, Cloud, CheckCircle, RefreshCw, Trash2, Clock, Upload, RotateCcw, Moon, Sun, Laptop } from 'lucide-react';
@@ -75,7 +76,7 @@ const GoogleDriveCard = () => {
             const success = await window.electronAPI.drive.authenticate();
             if (success) {
                 setIsAuthenticated(true);
-                showNotification('Connected to Google Drive!', 'success');
+                toast('Connected to Google Drive!', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
             } else {
                 showNotification('Connection flow cancelled or failed.', 'warning');
             }
@@ -100,7 +101,7 @@ const GoogleDriveCard = () => {
         try {
             // @ts-ignore
             await window.electronAPI.drive.upload();
-            showNotification('Backup uploaded successfully!', 'success');
+            toast('Backup uploaded successfully!', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
             checkStatus();
         } catch (e: any) {
             console.error(e);
@@ -187,7 +188,7 @@ const Settings = () => {
     const [searchParams] = useSearchParams();
     const view = searchParams.get('view') || 'preferences'; // Default to preferences if null
 
-    // Local state for form
+    // Form State
     const [formData, setFormData] = useState({
         name: '',
         semester: 1,
@@ -204,16 +205,14 @@ const Settings = () => {
             setFormData({
                 name: userProfile.name,
                 semester: userProfile.semester,
-                avatar: userProfile.avatar,
+                avatar: userProfile.avatar || '',
                 cardLast4: userProfile.cardLast4 || '',
                 major: userProfile.major || ''
             });
         }
     }, [userProfile?.id]);
 
-    // Polling removed - using integrated modal now
-
-    // Startup State
+    // App Preferences
     const [runAtStartup, setRunAtStartup] = useState(false);
     const [showTips, setShowTips] = useState(true);
 
@@ -224,7 +223,7 @@ const Settings = () => {
             window.electronAPI.settings.getStartupStatus().then(setRunAtStartup);
         }
 
-        // Load tips & notification preference
+        // Load preferences
         const tipsEnabled = localStorage.getItem('tips-enabled');
         setShowTips(tipsEnabled !== 'false'); // Default to true
 
@@ -238,7 +237,7 @@ const Settings = () => {
         setNotificationsEnabled(val);
         localStorage.setItem('notifications-enabled', String(val));
         if (val) {
-            showNotification('Desktop notifications enabled', 'success');
+            toast('Desktop notifications enabled', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
             // @ts-ignore
             if (window.electronAPI?.notifications) {
                 // @ts-ignore
@@ -255,7 +254,7 @@ const Settings = () => {
             // @ts-ignore
             const newState = await window.electronAPI.settings.toggleStartup(val);
             setRunAtStartup(newState);
-            if (newState) showNotification('App will run at startup', 'success');
+            if (newState) toast('App will run at startup', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
             else showNotification('App will not run at startup', 'info');
         }
     };
@@ -265,7 +264,7 @@ const Settings = () => {
         localStorage.setItem('tips-enabled', String(val));
         if (val) {
             localStorage.removeItem('tips-dismissed'); // Reset dismissed state
-            showNotification('Tips enabled', 'success');
+            toast('Tips enabled', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
         } else {
             showNotification('Tips disabled', 'info');
         }
@@ -275,7 +274,7 @@ const Settings = () => {
         e.preventDefault();
         await updateUserProfile(formData);
         useStore.getState().fetchUserProfile();
-        showNotification('Profile saved successfully!', 'success');
+        toast('Profile saved successfully!', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
     };
 
     const handleInitialChange = () => {
@@ -405,9 +404,9 @@ const Settings = () => {
                     </Card>
                 </>
             ) : (
-                // --- PREFERENCES VIEW ---
+                // Preferences Section
                 <>
-                    {/* Appearance Settings */}
+                    {/* Appearance */}
                     <Card>
                         <CardHeader>
                             <CardTitle>Appearance</CardTitle>
@@ -425,7 +424,7 @@ const Settings = () => {
                                 />
                             </div>
 
-                            {/* Auto Theme Schedule */}
+                            {/* Schedule Config */}
                             {autoTheme ? (
                                 <div className="grid grid-cols-2 gap-4 animate-fade-in pl-1">
                                     <div className="space-y-2">
@@ -492,7 +491,7 @@ const Settings = () => {
                             <div className="flex items-center justify-between rounded-lg border p-4">
                                 <div className="space-y-0.5">
                                     <Label className="text-base">Run at Startup</Label>
-                                    <p className="text-sm text-muted-foreground">Automatically launch CampusDash when you log in</p>
+                                    <p className="text-sm text-muted-foreground">Automatically launch st4cker when you log in</p>
                                 </div>
                                 <Switch checked={runAtStartup} onCheckedChange={toggleStartup} />
                             </div>
@@ -536,7 +535,7 @@ const Settings = () => {
                                         e.preventDefault();
                                         // @ts-ignore
                                         const res = await window.electronAPI.backup.export();
-                                        if (res && res.success) showNotification('Local Backup Successful!', 'success');
+                                        if (res && res.success) toast('Local Backup Successful!', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
                                         else if (res && res.error) showNotification('Backup Failed: ' + res.error, 'error');
                                     }}>
                                         Backup

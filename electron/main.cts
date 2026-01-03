@@ -41,9 +41,36 @@ if (!gotTheLock) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let splashWindow: BrowserWindow | null = null;
 let driveService: any; // Dynamically loaded
 
+const createSplashWindow = () => {
+    splashWindow = new BrowserWindow({
+        width: 600,
+        height: 350,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        resizable: false,
+        center: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false, // For simple splash logic
+        }
+    });
+
+    const splashPath = app.isPackaged
+        ? path.join(__dirname, 'splash.html')
+        : path.join(__dirname, '../electron/splash.html');
+
+    splashWindow.loadFile(splashPath);
+    splashWindow.center();
+};
+
 const createWindow = () => {
+    // Create Splash first
+    createSplashWindow();
+
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
@@ -53,6 +80,7 @@ const createWindow = () => {
         transparent: true, // Enable transparency
         backgroundMaterial: 'none', // EXPLICITLY DISABLE to prevent gray box in prod
         backgroundColor: '#00000000', // Start fully transparent
+        show: false, // Don't show immediately
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
@@ -65,10 +93,24 @@ const createWindow = () => {
         console.log('Loading URL:', process.env.VITE_DEV_SERVER_URL);
         console.log('Preload Path:', path.join(__dirname, 'preload.js'));
         mainWindow?.loadURL(process.env.VITE_DEV_SERVER_URL);
-        mainWindow?.webContents.openDevTools();
+        // mainWindow?.webContents.openDevTools();
     } else {
         mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
     }
+
+    // Wait for main window to be ready
+    // Wait for main window to be ready
+    mainWindow.once('ready-to-show', () => {
+        splashWindow?.webContents.send('splash-progress', { message: 'Ready!', percent: 100 });
+
+        // Short delay to see the 100%
+        setTimeout(() => {
+            splashWindow?.close();
+            splashWindow = null;
+            mainWindow?.show();
+            mainWindow?.focus();
+        }, 500);
+    });
 };
 
 // @ts-ignore
@@ -84,6 +126,8 @@ app.on('ready', async () => {
 
     // 0. Load ESM Modules
     try {
+        splashWindow?.webContents.send('splash-progress', { message: 'Loading modules...', percent: 10 });
+
         // Use pathToFileURL for robust Windows/ASAR handling
         const drivePath = path.join(__dirname, 'services/drive.js');
         const driveUrl = pathToFileURL(drivePath).href;
@@ -92,6 +136,7 @@ app.on('ready', async () => {
         const driveModule = await import(driveUrl);
         driveService = driveModule.driveService;
         console.log('[Main] driveService loaded dynamically.');
+        splashWindow?.webContents.send('splash-progress', { message: 'Modules loaded', percent: 30 });
     } catch (e) {
         console.error('[Main] Failed to load driveService:', e);
         log.error('[Main] Failed to load driveService:', e);
@@ -99,11 +144,13 @@ app.on('ready', async () => {
 
     // 1. Init DB
     try {
+        splashWindow?.webContents.send('splash-progress', { message: 'Initializing Database...', percent: 40 });
         getDB(); // This runs schema init
 
         // 2. Run Migration (if needed)
         console.log('[DEBUG] Main: Calling runMigration()...');
         try {
+            splashWindow?.webContents.send('splash-progress', { message: 'Checking migrations...', percent: 60 });
             runMigration();
             console.log('[DEBUG] Main: runMigration() returned.');
         } catch (migErr) {
@@ -111,9 +158,18 @@ app.on('ready', async () => {
         }
 
         // 3. Verify Content (Temporary Debug)
+        splashWindow?.webContents.send('splash-progress', { message: 'Verifying data...', percent: 70 });
         const db = getDB();
+        const dbPath = process.env.VITE_DEV_SERVER_URL ? path.join(process.cwd(), 'campusdash.db') : path.join(app.getPath('userData'), 'campusdash.db');
+        console.log('--------------------------------------------------');
+        console.log('[DEBUG-CRITICAL] DB PATH DETECTED:', dbPath);
+
         const meta = db.prepare('SELECT * FROM meta').all();
-        console.log('[DEBUG] Meta Table Content:', meta);
+        console.log('[DEBUG-CRITICAL] META TABLE RAW CONTENT:', JSON.stringify(meta, null, 2));
+
+        const userCheck = userProfile.get();
+        console.log('[DEBUG-CRITICAL] userProfile.get() RESULT:', JSON.stringify(userCheck, null, 2));
+        console.log('--------------------------------------------------');
 
         try {
             // Only try reading if table exists (it should)
@@ -122,6 +178,8 @@ app.on('ready', async () => {
         } catch (err) {
             console.log('[DEBUG] Error reading courses:', err);
         }
+
+        splashWindow?.webContents.send('splash-progress', { message: 'Starting Application...', percent: 90 });
 
     } catch (e) {
         console.error('Failed to initialize database:', e);
@@ -167,6 +225,7 @@ app.on('ready', async () => {
     ipcMain.handle('performance:getCourses', (_, sem) => performance.getCourses(sem));
     ipcMain.handle('performance:upsertCourse', (_, c) => performance.upsertCourse(c));
     ipcMain.handle('performance:updateSksOnly', (_, id, sks) => performance.updateSksOnly(id, sks));
+    ipcMain.handle('performance:deleteCourse', (_, id) => performance.deleteCourse(id));
 
     // Schedule
     ipcMain.handle('schedule:getAll', () => schedule.getAll());

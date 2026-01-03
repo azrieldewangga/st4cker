@@ -60,6 +60,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             description: 'New Assignment (Assignments) / Add Transaction (Cashflow)',
         },
         {
+            id: 'refresh',
+            category: 'General',
+            keys: ['Ctrl', 'R'],
+            description: 'Refresh Application',
+            action: () => window.location.reload(),
+        },
+        {
             id: 'command-palette',
             category: 'General',
             keys: ['Ctrl', 'K'],

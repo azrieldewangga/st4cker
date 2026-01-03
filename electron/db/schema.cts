@@ -1,8 +1,7 @@
 import Database from 'better-sqlite3';
 
 export const initSchema = (db: Database.Database) => {
-    // Enable WAL mode for better concurrency/performance
-    db.pragma('journal_mode = WAL');
+
 
     const schema = `
     CREATE TABLE IF NOT EXISTS meta (

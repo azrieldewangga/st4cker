@@ -8,6 +8,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -91,26 +92,31 @@ const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) =
         const courseNameForTitle = courses.find(c => c.id === formData.courseName)?.name || formData.courseName;
         const finalTitle = `${formData.type} - ${courseNameForTitle}`;
 
-        if (editingId) {
-            await updateAssignment(editingId, {
-                courseId: formData.courseName,
-                title: finalTitle,
-                type: formData.type,
-                deadline: format(formData.deadline, "yyyy-MM-dd'T'HH:mm"),
-                note: formData.note
-            });
-        } else {
-            await addAssignment({
-                courseId: formData.courseName,
-                title: finalTitle,
-                type: formData.type,
-                deadline: format(formData.deadline, "yyyy-MM-dd'T'HH:mm"),
-                status: 'to-do',
-                note: formData.note
-            });
+        try {
+            if (editingId) {
+                await updateAssignment(editingId, {
+                    courseId: formData.courseName,
+                    title: finalTitle,
+                    type: formData.type,
+                    deadline: formData.deadline.toISOString(),
+                    note: formData.note
+                });
+                toast("Assignment updated");
+            } else {
+                await addAssignment({
+                    courseId: formData.courseName,
+                    title: finalTitle,
+                    type: formData.type,
+                    deadline: formData.deadline.toISOString(),
+                    status: 'to-do',
+                    note: formData.note
+                });
+                toast("Assignment created");
+            }
+            onClose();
+        } catch (error: any) {
+            toast.error(error.message || "Failed to save assignment");
         }
-
-        onClose();
     };
 
     const assignmentTypes: AssignmentType[] = ['Tugas', 'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'];
@@ -180,9 +186,15 @@ const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) =
                     <div className="space-y-2">
                         <Label>Note</Label>
                         <Textarea
-                            placeholder="Additional notes..."
+                            placeholder="Additional notes... (Press Enter to save, Shift+Enter for new line)"
                             value={formData.note}
                             onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSubmit(e);
+                                }
+                            }}
                             className="h-24"
                         />
                     </div>

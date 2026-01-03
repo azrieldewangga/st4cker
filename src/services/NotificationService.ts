@@ -79,7 +79,7 @@ export const NotificationService = {
     // Allow manual test triggering
     testNotification() {
         if (window.electronAPI?.notifications) {
-            window.electronAPI.notifications.send("Test Notification 🔔", "This is a test notification from CampusDash.");
+            window.electronAPI.notifications.send("Test Notification 🔔", "This is a test notification from st4cker.");
         } else {
             console.warn("Notification API not available");
         }

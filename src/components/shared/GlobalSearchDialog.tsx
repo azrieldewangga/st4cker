@@ -31,7 +31,17 @@ export const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({
         if (!search || search.length < 2) return [];
 
         const lowerSearch = search.toLowerCase();
-        const allResults = [];
+
+        interface SearchResult {
+            id: string;
+            type: 'assignment' | 'transaction' | 'course';
+            title: string;
+            subtitle: string;
+            icon: React.ElementType;
+            url: string;
+        }
+
+        const allResults: SearchResult[] = [];
 
         // Pre-calculate course map for name lookup
         const courseMap: Record<string, string> = {};

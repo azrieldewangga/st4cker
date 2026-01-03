@@ -23,10 +23,11 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Shadcn UI Components
+// UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Table,
     TableBody,
@@ -65,7 +66,7 @@ import AssignmentModal from '../components/assignments/AssignmentModal';
 import { SkeletonTable } from '../components/shared/Skeleton';
 import { EmptyState } from '../components/shared/EmptyState';
 
-// --- Sortable Row Component ---
+// Sortable Row
 interface SortableRowProps {
     assignment: Assignment;
     index: number;
@@ -114,14 +115,14 @@ const SortableRow = ({
             {/* Drag Grip & Checkbox */}
             <TableCell className="w-[50px] p-2">
                 <div className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         checked={isSelected}
-                        onChange={(e) => {
-                            e.stopPropagation(); // prevent row click interactions if any
+                        onCheckedChange={(checked) => {
+                            // Event handling for row selection
                             onToggleSelect(assignment.id);
                         }}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                        onClick={(e) => e.stopPropagation()} // Prevent row click
+                        className="translate-y-[2px]"
                     />
                     {!isFiltered && (
                         <div
@@ -372,7 +373,7 @@ const Assignments = () => {
         fetchCourses();
     }, [fetchAssignments, fetchCourses]);
 
-    // Keyboard Shortcut: Ctrl+N to open New Assignment modal
+    // Keyboard Shortcut: Ctrl+N to open New Assignment, ESC to deselect
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -383,6 +384,11 @@ const Assignments = () => {
                 e.preventDefault();
                 setEditingId(null);
                 setIsModalOpen(true);
+            }
+
+            // ESC: Deselect All
+            if (e.key === 'Escape') {
+                setSelectedIds(new Set());
             }
         };
 
@@ -536,11 +542,10 @@ const Assignments = () => {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[50px]">
-                                    <input
-                                        type="checkbox"
+                                    <Checkbox
                                         checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
-                                        onChange={toggleSelectAll}
-                                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                                        onCheckedChange={toggleSelectAll}
+                                        className="translate-y-[2px]"
                                     />
                                 </TableHead>
                                 <TableHead>Deadline</TableHead>

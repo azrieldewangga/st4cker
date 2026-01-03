@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>st4cker</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: #09090b;
+            /* Zinc-950 */
+            color: white;
+            display: flex;
+            user-select: none;
+            cursor: default;
+        }
+
+        .left-panel {
+            width: 40%;
+            height: 100%;
+            background: linear-gradient(135deg, #09090b 0%, #18181b 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+            box-sizing: border-box;
+            position: relative;
+            z-index: 2;
+        }
+
+        .right-panel {
+            width: 60%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #splash-bg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+
+        .logo-area {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .app-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            background: linear-gradient(to bottom right, #ffffff, #a1a1aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .app-desc {
+            font-size: 0.875rem;
+            color: #a1a1aa;
+        }
+
+        .loader-area {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .status-text {
+            font-size: 0.75rem;
+            color: #71717a;
+            height: 1rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #27272a;
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #3b82f6;
+            /* Blue-500 */
+            width: 0%;
+            transition: width 0.2s ease-out;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="left-panel">
+        <div class="logo-area">
+            <div class="app-name">st4cker</div>
+            <div class="app-desc">Student Productivity Suite</div>
+        </div>
+
+        <div class="loader-area">
+            <div class="status-text" id="status">Initializing...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <img id="splash-bg" alt="" />
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        // Logic to pick random image
+        const images = ['splash - (1).jpg', 'splash - (2).jpg', 'splash - (3).jpg'];
+        const randomImage = images[Math.floor(Math.random() * images.length)];
+
+        const imgElement = document.getElementById('splash-bg');
+
+        // Try to load image, fallback if missing
+        imgElement.src = `../public/assets/splash/${randomImage}`;
+        imgElement.onerror = () => {
+            // Fallback to a solid color or gradient if image missing
+            imgElement.style.display = 'none';
+            document.querySelector('.right-panel').style.background = '#18181b';
+        };
+        imgElement.onload = () => {
+            imgElement.style.opacity = 1;
+        };
+
+        ipcRenderer.on('splash-progress', (_, data) => {
+            const { message, percent } = data;
+            if (message) document.getElementById('status').innerText = message;
+            if (percent !== undefined) document.getElementById('progress').style.width = `${percent}%`;
+        });
+    </script>
+</body>
+
+</html>

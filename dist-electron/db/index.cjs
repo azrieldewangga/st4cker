@@ -31,6 +31,7 @@ const getDB = () => {
         catch { }
         console.log('[DB] Connecting to:', dbPath);
         db = new better_sqlite3_1.default(dbPath);
+        db.pragma('journal_mode = DELETE');
         // Initialize Schema
         (0, schema_cjs_1.initSchema)(db);
     }

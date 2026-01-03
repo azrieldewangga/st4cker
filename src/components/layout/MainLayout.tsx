@@ -11,14 +11,17 @@ import { TipBanner } from '@/components/ui/tip-banner';
 import { GlobalSearchDialog } from '@/components/shared/GlobalSearchDialog';
 import { useTheme } from '@/components/theme-provider';
 
+import { useNotifications } from '@/hooks/useNotifications';
+
 interface MainLayoutProps {
     children: ReactNode;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
+    useNotifications(); // Desktop Notifications Logic
     const { notification, isSearchOpen, setSearchOpen } = useStore();
 
-    // Global Search Shortcut (Ctrl+F or Cmd+F)
+    // Search Shortcut
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -38,7 +41,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         }
     }, [notification]);
 
-    // Theme Logic (Auto Switch & Sync)
+    // Theme Management
     const { theme, setTheme } = useTheme();
     const { autoTheme, themeSchedule, theme: storeTheme } = useStore();
 
@@ -50,7 +53,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         }
     }, [storeTheme, autoTheme]);
 
-    // 2. Auto Switch Logic
+    // Auto-switch logic
     React.useEffect(() => {
         if (!autoTheme) return;
 
@@ -91,11 +94,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         return () => clearInterval(interval);
     }, [autoTheme, themeSchedule, theme]);
 
-    // Window Controls
+    // Window actions
     const handleMinimize = () => window.electronAPI.minimize();
     const handleMaximize = () => window.electronAPI.maximize();
     const handleClose = () => {
-        // Close search if open, else close window
+        // Close search or window
         if (isSearchOpen) setSearchOpen(false);
         else window.electronAPI.close();
     };

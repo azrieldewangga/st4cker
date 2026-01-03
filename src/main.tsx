@@ -4,7 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from "./components/theme-provider"
 
-import ErrorBoundary from './components/common/ErrorBoundary';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

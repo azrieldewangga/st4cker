@@ -237,7 +237,10 @@ export function ReportsTab() {
                                 <span className="font-medium">{transactions?.length || 0} Transactions</span>
                             </div>
                             <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 w-full" style={{ width: '100%' }} />
+                                <div
+                                    className="h-full bg-emerald-500 transition-all duration-500"
+                                    style={{ width: transactions?.length > 0 ? '100%' : '0%' }}
+                                />
                             </div>
                             <p className="text-xs text-muted-foreground">Comprehensive financial records ready for reporting.</p>
                         </div>

@@ -73,15 +73,20 @@ const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => {
             return;
         }
 
-        await addTransaction({
-            title: formData.title,
-            amount: parseFloat(formData.amount) * (formData.type === 'expense' ? -1 : 1),
-            type: formData.type,
-            category: formData.category,
-            date: format(formData.date, "yyyy-MM-dd'T'HH:mm")
-        });
+        try {
+            await addTransaction({
+                title: formData.title,
+                amount: parseFloat(formData.amount) * (formData.type === 'expense' ? -1 : 1),
+                type: formData.type,
+                category: formData.category,
+                date: formData.date.toISOString() // Fix: Use ISO string for Zod validation
+            });
 
-        onClose();
+            onClose();
+        } catch (error) {
+            console.error("Failed to add transaction:", error);
+            // Optionally set error state here if you want to show it in UI
+        }
     };
 
     const categories = ['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary'];

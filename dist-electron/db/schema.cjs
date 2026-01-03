@@ -2,8 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initSchema = void 0;
 const initSchema = (db) => {
-    // Enable WAL mode for better concurrency/performance
-    db.pragma('journal_mode = WAL');
     const schema = `
     CREATE TABLE IF NOT EXISTS meta (
         key TEXT PRIMARY KEY,

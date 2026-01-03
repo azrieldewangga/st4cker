@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import Pencil1Icon from '../components/icons/Pencil1Icon';
 import { useStore } from '../store/useStore';
 import { GraduationCap, Download } from 'lucide-react';
 import { exportToCSV } from '../utils/export';
@@ -28,7 +29,7 @@ import { SkeletonCard, SkeletonTable } from '../components/shared/Skeleton';
 import { EmptyState } from '../components/shared/EmptyState';
 
 const Performance = () => {
-    const { grades, fetchGrades, updateGrade, userProfile, getSemesterCourses } = useStore();
+    const { grades, fetchGrades, updateGrade, userProfile, getSemesterCourses, addCourse, updateCourse, deleteCourse } = useStore();
 
 
 
@@ -37,6 +38,7 @@ const Performance = () => {
     }, [userProfile]);
 
     const [viewSemester, setViewSemester] = useState(1);
+    const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
         if (userProfile?.semester) {
@@ -115,9 +117,11 @@ const Performance = () => {
                     Prestasi Akademik
                 </h1>
                 <Button variant="outline" size="sm" onClick={async () => {
-                    // Flatten grade data for export
-                    const data = [];
-                    const currentSem = userProfile?.semester ? parseInt(userProfile.semester.toString()) : 1;
+                    // Prepare export data
+                    if (!userProfile) return;
+
+                    const data: any[] = [];
+                    const currentSem = userProfile.semester ? parseInt(userProfile.semester.toString()) : 1;
 
                     for (let i = 1; i <= currentSem; i++) {
                         const courses = getSemesterCourses(i);
@@ -193,9 +197,19 @@ const Performance = () => {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                             <CardTitle className="text-base font-bold">Mata Kuliah - Semester {viewSemester}</CardTitle>
-                            <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-md">
-                                {semesterCourses.length} Courses
-                            </span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-md">
+                                    {semesterCourses.length} Courses
+                                </span>
+                                <Button
+                                    variant={isEditing ? "destructive" : "secondary"}
+                                    size="sm"
+                                    onClick={() => setIsEditing(!isEditing)}
+                                    className="h-8 w-8 p-0"
+                                >
+                                    {isEditing ? <span className="text-xs">✕</span> : <Pencil1Icon size={14} color="currentColor" />}
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <Table>
@@ -203,35 +217,82 @@ const Performance = () => {
                                     <TableRow>
                                         <TableHead className="w-[50px]">No</TableHead>
                                         <TableHead>Mata Kuliah</TableHead>
-                                        <TableHead>SKS</TableHead>
-                                        <TableHead className="text-right">Nilai</TableHead>
+                                        <TableHead className="w-[100px]">SKS</TableHead>
+                                        <TableHead className="text-right w-[120px]">Nilai</TableHead>
+                                        {isEditing && <TableHead className="w-[50px]"></TableHead>}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {semesterCourses.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                                            <TableCell colSpan={isEditing ? 5 : 4} className="text-center h-24 text-muted-foreground">
                                                 No courses found for this semester.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         semesterCourses.map((course, idx) => (
-                                            <TableRow key={idx}>
+                                            <TableRow key={course.id || idx}>
                                                 <TableCell>{idx + 1}</TableCell>
-                                                <TableCell className="font-medium">{course.name}</TableCell>
-                                                <TableCell>{course.sks}</TableCell>
+                                                <TableCell className="font-medium">
+                                                    {isEditing ? (
+                                                        <input
+                                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                                            defaultValue={course.name}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                            }}
+                                                            onBlur={async (e) => {
+                                                                if (e.target.value !== course.name && e.target.value.trim() !== "") {
+                                                                    try {
+                                                                        await updateCourse({ ...course, name: e.target.value });
+                                                                    } catch (err: any) {
+                                                                        toast.error(err.message);
+                                                                        e.target.value = course.name; // Revert
+                                                                    }
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : course.name}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {isEditing ? (
+                                                        <input
+                                                            type="number"
+                                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                                            defaultValue={course.sks}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                            }}
+                                                            onBlur={async (e) => {
+                                                                const val = parseInt(e.target.value);
+                                                                if (!isNaN(val) && val !== course.sks) {
+                                                                    try {
+                                                                        await updateCourse({ ...course, sks: val });
+                                                                    } catch (err: any) {
+                                                                        toast.error(err.message);
+                                                                        e.target.value = course.sks?.toString() || ''; // Revert
+                                                                    }
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : course.sks}
+                                                </TableCell>
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="outline" size="sm" className="w-[60px]">
+                                                        <DropdownMenuTrigger asChild disabled={!isEditing}>
+                                                            <Button variant="outline" size="sm" className={`w-[60px] ${!isEditing ? 'opacity-100 cursor-default' : ''}`}>
                                                                 {grades[course.id] || '-'}
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            {['A', 'A-', 'AB', 'B+', 'B', 'BC', 'C', 'D', 'E'].map(g => (
+                                                            {['-', 'A', 'A-', 'AB', 'B+', 'B', 'BC', 'C', 'D', 'E'].map(g => (
                                                                 <DropdownMenuItem
                                                                     key={g}
-                                                                    onClick={() => updateGrade(course.id, g)}
+                                                                    onClick={() => updateGrade(course.id, g === '-' ? '' : g)}
                                                                 >
                                                                     {g}
                                                                 </DropdownMenuItem>
@@ -239,8 +300,50 @@ const Performance = () => {
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </TableCell>
+                                                {isEditing && (
+                                                    <TableCell>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-destructive hover:text-destructive/90"
+                                                            onClick={async () => {
+                                                                if (confirm('Delete this course?')) {
+                                                                    await deleteCourse(course.id);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <span className="text-lg">🗑️</span>
+                                                        </Button>
+                                                    </TableCell>
+                                                )}
                                             </TableRow>
                                         ))
+                                    )}
+                                    {isEditing && (
+                                        <>
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="p-2">
+                                                    <Button variant="outline" className="w-full border-dashed" onClick={() => addCourse(viewSemester)}>
+                                                        + Add Course
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="p-2 pt-0 border-none">
+                                                    <Button
+                                                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                                                        onClick={() => {
+                                                            setIsEditing(false);
+                                                            toast("Changes Saved", {
+                                                                description: `Performance data for Semester ${viewSemester} has been updated.`
+                                                            });
+                                                        }}
+                                                    >
+                                                        Save Changes
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        </>
                                     )}
                                 </TableBody>
                             </Table>

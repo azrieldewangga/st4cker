@@ -39,7 +39,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         upsertSemester: (semester: number, ips: number) => ipcRenderer.invoke('performance:upsertSemester', semester, ips),
         getCourses: (semester?: number) => ipcRenderer.invoke('performance:getCourses', semester),
         upsertCourse: (course: any) => ipcRenderer.invoke('performance:upsertCourse', course),
-        updateSksOnly: (id: string, sks: number) => ipcRenderer.invoke('performance:updateSksOnly', id, sks)
+        updateSksOnly: (id: string, sks: number) => ipcRenderer.invoke('performance:updateSksOnly', id, sks),
+        deleteCourse: (id: string) => ipcRenderer.invoke('performance:deleteCourse', id)
     },
 
     schedule: {

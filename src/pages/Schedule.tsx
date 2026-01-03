@@ -34,7 +34,7 @@ const TIMES = [
     '13:50', '14:00', '14:40', '15:00', '16:00'
 ];
 
-// Tailwind v4 / Shadcn variables for grid colors
+// Grid Colors
 // Dynamic colors that look good in both light and dark themes
 const COLOR_VARIANTS = [
     "bg-blue-500/20 dark:bg-blue-400/20 text-blue-700 dark:text-blue-300 border-blue-500/30 dark:border-blue-400/40",
@@ -63,14 +63,14 @@ const Schedule = () => {
         undo
     } = useStore();
 
-    // Interaction States
+    // UI State
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Selector State (Popover)
+    // Popover State
     const [activeSlot, setActiveSlot] = useState<{ day: string, time: string } | null>(null);
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
-    // Detail State (Dialog)
+    // Dialog State
     const [detailSlot, setDetailSlot] = useState<{ day: string, time: string, data: any } | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -82,12 +82,20 @@ const Schedule = () => {
     const [isAddingLink, setIsAddingLink] = useState(false);
     const [linkForm, setLinkForm] = useState({ title: '', url: '' });
 
-    // Edit Material State
+    // Material State
     const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
     const [editMaterialForm, setEditMaterialForm] = useState({ title: '', url: '', type: 'link' as 'link' | 'file' });
+    const [localMaterials, setLocalMaterials] = useState<any[]>([]); // Deferred materials state
 
-    // Context Menu State (Custom)
+    // Context Menu
     const [contextMenu, setContextMenu] = useState<{ day: string, time: string, x: number, y: number } | null>(null);
+
+    // Sync local materials when entering edit mode
+    useEffect(() => {
+        if (isEditingDetail && detailSlot) {
+            setLocalMaterials([...(materials[detailSlot.data.course.id] || [])]);
+        }
+    }, [isEditingDetail, detailSlot]);
 
     useEffect(() => {
         fetchCourses();
@@ -208,7 +216,7 @@ const Schedule = () => {
         if (!detailSlot) return;
         await setScheduleItem(detailSlot.day, detailSlot.time, detailSlot.data.course.id, 'dynamic', editForm.room, editForm.lecturer);
 
-        // Update upsert
+        // Update Course Info
         if (detailSlot.data.course) {
             const updatedCourse = {
                 ...detailSlot.data.course,
@@ -218,7 +226,41 @@ const Schedule = () => {
             };
             // @ts-ignore
             if (window.electronAPI) await window.electronAPI.performance.upsertCourse(updatedCourse);
-            fetchCourses();
+
+            // --- Save Materials Changes ---
+            const originalMaterials = materials[detailSlot.data.course.id] || [];
+
+            // 1. Find Deletions (In original but not in local)
+            const localIds = new Set(localMaterials.map(m => m.id));
+            const toDelete = originalMaterials.filter(m => !localIds.has(m.id));
+
+            for (const m of toDelete) {
+                await deleteMaterial(m.id, detailSlot.data.course.id);
+            }
+
+            // 2. Find Additions (In local but not in original, OR temp IDs)
+            const originalIds = new Set(originalMaterials.map(m => m.id));
+            const toAdd = localMaterials.filter(m => m.id.startsWith('temp-') || !originalIds.has(m.id));
+
+            for (const m of toAdd) {
+                await addMaterial(detailSlot.data.course.id, m.type, m.title, m.url);
+            }
+
+            // 3. Find Updates
+            const toUpdate = localMaterials.filter(m => {
+                if (m.id.startsWith('temp-')) return false; // Already handled in add
+                const orig = originalMaterials.find(o => o.id === m.id);
+                if (!orig) return false;
+                return orig.title !== m.title || orig.url !== m.url;
+            });
+
+            for (const m of toUpdate) {
+                await deleteMaterial(m.id, detailSlot.data.course.id);
+                await addMaterial(detailSlot.data.course.id, m.type, m.title, m.url);
+            }
+
+            await fetchCourses();
+            await fetchMaterials(detailSlot.data.course.id);
             toast("Details have been updated", {
                 description: detailSlot.data.course.name,
             });
@@ -230,14 +272,26 @@ const Schedule = () => {
 
     const handleAddMaterial = async (type: 'link' | 'file') => {
         if (!detailSlot) return;
+
+        let newItem: any = {
+            id: `temp-${Date.now()}`,
+            courseId: detailSlot.data.course.id,
+            type,
+            title: '',
+            url: ''
+        };
+
         if (type === 'link') {
             if (!linkForm.url || !linkForm.title) return;
-            // Normalize URL - add https:// if missing protocol
+            // Normalize URL
             let normalizedUrl = linkForm.url.trim();
             if (!normalizedUrl.match(/^https?:\/\//i)) {
                 normalizedUrl = 'https://' + normalizedUrl;
             }
-            await addMaterial(detailSlot.data.course.id, 'link', linkForm.title, normalizedUrl);
+            newItem.title = linkForm.title;
+            newItem.url = normalizedUrl;
+
+            setLocalMaterials(prev => [...prev, newItem]);
             setIsAddingLink(false);
             setLinkForm({ title: '', url: '' });
         } else {
@@ -246,15 +300,18 @@ const Schedule = () => {
             if (!result.canceled && result.filePaths.length > 0) {
                 const path = result.filePaths[0];
                 const fileName = path.split('\\').pop() || 'File';
-                await addMaterial(detailSlot.data.course.id, 'file', fileName, path);
+
+                newItem.title = fileName;
+                newItem.url = path;
+                setLocalMaterials(prev => [...prev, newItem]);
             }
         }
     };
 
-    // Drag & Drop State
+    // DnD State
     const [isDragging, setIsDragging] = useState(false);
 
-    // Use Callback Ref to ensure listeners attach when Dialog mounts
+    // Dialog mount listener
     const dropRef = useCallback((node: HTMLDivElement | null) => {
         if (!node) return;
 
@@ -288,6 +345,8 @@ const Schedule = () => {
             if (!detailSlot || !e.dataTransfer?.files || e.dataTransfer.files.length === 0) return;
 
             const files = Array.from(e.dataTransfer.files);
+            const newItems: any[] = [];
+
             for (const file of files) {
                 // @ts-ignore
                 let path = file.path;
@@ -298,11 +357,21 @@ const Schedule = () => {
                 }
 
                 if (path) {
-                    await addMaterial(detailSlot.data.course.id, 'file', file.name, path);
-                    toast("File Added", { description: file.name });
+                    newItems.push({
+                        id: `temp-${Date.now()}-${Math.random()}`,
+                        courseId: detailSlot.data.course.id,
+                        type: 'file',
+                        title: file.name,
+                        url: path
+                    });
                 } else {
                     toast.error("Path missing. Try a local file.");
                 }
+            }
+
+            if (newItems.length > 0) {
+                setLocalMaterials(prev => [...prev, ...newItems]);
+                toast("Files staged for upload", { description: "Don't forget to Save Changes" });
             }
         };
 
@@ -330,17 +399,20 @@ const Schedule = () => {
             normalizedUrl = 'https://' + normalizedUrl;
         }
 
-        // Delete old and create new
-        await deleteMaterial(editingMaterialId, detailSlot.data.course.id);
-        await addMaterial(
-            detailSlot.data.course.id,
-            editMaterialForm.type,
-            editMaterialForm.title,
-            normalizedUrl
-        );
+        // Update Local State
+        setLocalMaterials(prev => prev.map(m => {
+            if (m.id === editingMaterialId) {
+                return { ...m, title: editMaterialForm.title, url: normalizedUrl, type: editMaterialForm.type };
+            }
+            return m;
+        }));
 
         setEditingMaterialId(null);
         setEditMaterialForm({ title: '', url: '', type: 'link' });
+    };
+
+    const handleDeleteMaterial = (id: string) => {
+        setLocalMaterials(prev => prev.filter(m => m.id !== id));
     };
 
     // Filtered courses for selector
@@ -562,14 +634,14 @@ const Schedule = () => {
                                         isDragging ? "border-primary bg-primary/10 border-dashed" : "border-border"
                                     )}
                                 >
-                                    {((detailSlot && materials[detailSlot.data.course.id]) || []).length === 0 ? (
+                                    {localMaterials.length === 0 ? (
                                         <p className="text-sm text-muted-foreground italic p-2 text-center pointer-events-none">
                                             {isDragging ? "!!! DROP FILES NOW !!!" : (
                                                 <>No materials added yet. <span className="text-xs opacity-70 block mt-1">(Drag files here to add)</span></>
                                             )}
                                         </p>
                                     ) : (
-                                        (materials[detailSlot!.data.course.id] || []).map(m => (
+                                        localMaterials.map(m => (
                                             editingMaterialId === m.id ? (
                                                 <div key={m.id} className="p-2 bg-muted/50 rounded space-y-2">
                                                     <Input
@@ -625,7 +697,7 @@ const Schedule = () => {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-6 w-6 text-destructive hover:bg-destructive/10"
-                                                            onClick={() => deleteMaterial(m.id, detailSlot!.data.course.id)}
+                                                            onClick={() => handleDeleteMaterial(m.id)}
                                                         >
                                                             <Trash2 className="w-3 h-3" />
                                                         </Button>

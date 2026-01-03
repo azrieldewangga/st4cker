@@ -50,5 +50,13 @@ export const performance = {
         stmt.run(sks, id);
         console.log(`[DEBUG-DB] updateSksOnly: ${id} -> ${sks} SKS`);
         return { id, sks };
+    },
+
+    deleteCourse: (id: string) => {
+        const db = getDB();
+        const stmt = db.prepare('DELETE FROM performance_courses WHERE id = ?');
+        stmt.run(id);
+        console.log(`[DEBUG-DB] deleteCourse: ${id}`);
+        return true;
     }
 };

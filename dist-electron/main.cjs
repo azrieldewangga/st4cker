@@ -41,8 +41,31 @@ else {
     });
 }
 let mainWindow = null;
+let splashWindow = null;
 let driveService; // Dynamically loaded
+const createSplashWindow = () => {
+    splashWindow = new electron_1.BrowserWindow({
+        width: 600,
+        height: 350,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        resizable: false,
+        center: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false, // For simple splash logic
+        }
+    });
+    const splashPath = electron_1.app.isPackaged
+        ? path_1.default.join(__dirname, 'splash.html')
+        : path_1.default.join(__dirname, '../electron/splash.html');
+    splashWindow.loadFile(splashPath);
+    splashWindow.center();
+};
 const createWindow = () => {
+    // Create Splash first
+    createSplashWindow();
     mainWindow = new electron_1.BrowserWindow({
         width: 1280,
         height: 800,
@@ -52,6 +75,7 @@ const createWindow = () => {
         transparent: true, // Enable transparency
         backgroundMaterial: 'none', // EXPLICITLY DISABLE to prevent gray box in prod
         backgroundColor: '#00000000', // Start fully transparent
+        show: false, // Don't show immediately
         webPreferences: {
             preload: path_1.default.join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
@@ -63,11 +87,23 @@ const createWindow = () => {
         console.log('Loading URL:', process.env.VITE_DEV_SERVER_URL);
         console.log('Preload Path:', path_1.default.join(__dirname, 'preload.js'));
         mainWindow?.loadURL(process.env.VITE_DEV_SERVER_URL);
-        mainWindow?.webContents.openDevTools();
+        // mainWindow?.webContents.openDevTools();
     }
     else {
         mainWindow?.loadFile(path_1.default.join(__dirname, '../dist/index.html'));
     }
+    // Wait for main window to be ready
+    // Wait for main window to be ready
+    mainWindow.once('ready-to-show', () => {
+        splashWindow?.webContents.send('splash-progress', { message: 'Ready!', percent: 100 });
+        // Short delay to see the 100%
+        setTimeout(() => {
+            splashWindow?.close();
+            splashWindow = null;
+            mainWindow?.show();
+            mainWindow?.focus();
+        }, 500);
+    });
 };
 // @ts-ignore
 const main_js_1 = __importDefault(require("electron-log/main.js"));
@@ -80,6 +116,7 @@ electron_1.app.on('ready', async () => {
     main_js_1.default.info('CWD:', process.cwd());
     // 0. Load ESM Modules
     try {
+        splashWindow?.webContents.send('splash-progress', { message: 'Loading modules...', percent: 10 });
         // Use pathToFileURL for robust Windows/ASAR handling
         const drivePath = path_1.default.join(__dirname, 'services/drive.js');
         const driveUrl = (0, url_1.pathToFileURL)(drivePath).href;
@@ -87,6 +124,7 @@ electron_1.app.on('ready', async () => {
         const driveModule = await import(driveUrl);
         driveService = driveModule.driveService;
         console.log('[Main] driveService loaded dynamically.');
+        splashWindow?.webContents.send('splash-progress', { message: 'Modules loaded', percent: 30 });
     }
     catch (e) {
         console.error('[Main] Failed to load driveService:', e);
@@ -94,10 +132,12 @@ electron_1.app.on('ready', async () => {
     }
     // 1. Init DB
     try {
+        splashWindow?.webContents.send('splash-progress', { message: 'Initializing Database...', percent: 40 });
         (0, index_cjs_1.getDB)(); // This runs schema init
         // 2. Run Migration (if needed)
         console.log('[DEBUG] Main: Calling runMigration()...');
         try {
+            splashWindow?.webContents.send('splash-progress', { message: 'Checking migrations...', percent: 60 });
             (0, migration_cjs_1.runMigration)();
             console.log('[DEBUG] Main: runMigration() returned.');
         }
@@ -105,9 +145,16 @@ electron_1.app.on('ready', async () => {
             console.error('[DEBUG] Main: runMigration() CRASHED:', migErr);
         }
         // 3. Verify Content (Temporary Debug)
+        splashWindow?.webContents.send('splash-progress', { message: 'Verifying data...', percent: 70 });
         const db = (0, index_cjs_1.getDB)();
+        const dbPath = process.env.VITE_DEV_SERVER_URL ? path_1.default.join(process.cwd(), 'campusdash.db') : path_1.default.join(electron_1.app.getPath('userData'), 'campusdash.db');
+        console.log('--------------------------------------------------');
+        console.log('[DEBUG-CRITICAL] DB PATH DETECTED:', dbPath);
         const meta = db.prepare('SELECT * FROM meta').all();
-        console.log('[DEBUG] Meta Table Content:', meta);
+        console.log('[DEBUG-CRITICAL] META TABLE RAW CONTENT:', JSON.stringify(meta, null, 2));
+        const userCheck = userProfile_cjs_1.userProfile.get();
+        console.log('[DEBUG-CRITICAL] userProfile.get() RESULT:', JSON.stringify(userCheck, null, 2));
+        console.log('--------------------------------------------------');
         try {
             // Only try reading if table exists (it should)
             const courses = db.prepare('SELECT * FROM performance_courses LIMIT 3').all();
@@ -116,6 +163,7 @@ electron_1.app.on('ready', async () => {
         catch (err) {
             console.log('[DEBUG] Error reading courses:', err);
         }
+        splashWindow?.webContents.send('splash-progress', { message: 'Starting Application...', percent: 90 });
     }
     catch (e) {
         console.error('Failed to initialize database:', e);
@@ -158,6 +206,7 @@ electron_1.app.on('ready', async () => {
     electron_1.ipcMain.handle('performance:getCourses', (_, sem) => performance_cjs_1.performance.getCourses(sem));
     electron_1.ipcMain.handle('performance:upsertCourse', (_, c) => performance_cjs_1.performance.upsertCourse(c));
     electron_1.ipcMain.handle('performance:updateSksOnly', (_, id, sks) => performance_cjs_1.performance.updateSksOnly(id, sks));
+    electron_1.ipcMain.handle('performance:deleteCourse', (_, id) => performance_cjs_1.performance.deleteCourse(id));
     // Schedule
     electron_1.ipcMain.handle('schedule:getAll', () => schedule_cjs_1.schedule.getAll());
     electron_1.ipcMain.handle('schedule:upsert', (_, item) => schedule_cjs_1.schedule.upsert(item));

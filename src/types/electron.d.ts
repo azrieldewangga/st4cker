@@ -31,6 +31,7 @@ export interface IElectronAPI {
         getCourses: (semester?: number) => Promise<any[]>;
         upsertCourse: (course: any) => Promise<any>;
         updateSksOnly: (id: string, sks: number) => Promise<any>;
+        deleteCourse: (id: string) => Promise<boolean>;
     };
     transactions: {
         list: () => Promise<any[]>;

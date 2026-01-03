@@ -27,7 +27,9 @@ import { differenceInDays, isPast, isToday, setDate, addMonths } from "date-fns"
 import { SkeletonCard } from "@/components/shared/Skeleton"
 
 export default function Dashboard() {
-    const { transactions, currency, userProfile, assignments, subscriptions } = useStore();
+    const { transactions, currency, userProfile, assignments, subscriptions, isAppReady } = useStore();
+
+    // Conditional check moved to bottom to fix Hook Error
 
     // Calculate Notification Count
     const notificationCount = useMemo(() => {
@@ -91,6 +93,27 @@ export default function Dashboard() {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     });
+
+    if (!isAppReady && !userProfile) {
+        return (
+            <div className="flex-1 space-y-4 p-4">
+                <div className="flex items-center space-x-4">
+                    <div className="h-10 w-10 bg-muted rounded-full animate-pulse" />
+                    <div className="h-8 w-48 bg-muted rounded animate-pulse" />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                    <div className="col-span-4 h-[300px] bg-muted rounded-xl animate-pulse" />
+                    <div className="col-span-3 h-[300px] bg-muted rounded-xl animate-pulse" />
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="flex-1 space-y-4">

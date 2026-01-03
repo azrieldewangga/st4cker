@@ -67,7 +67,7 @@ function Calendar({
                 ...classNames,
             }}
             components={{
-                CaptionLabel: () => null,
+                CaptionLabel: () => <></>,
 
                 Dropdown: ({ options, value, onChange, ...props }) => {
                     const opts = options as DropdownOption[] | undefined
