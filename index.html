@@ -8,13 +8,18 @@
   <title>st4cker</title>
   <script>
     // Immediately apply theme to avoid flash
-    let savedTheme = localStorage.getItem('theme') || 'dark';
-    // Enforce dark mode if requested or invalid
-    if (savedTheme !== 'dark') savedTheme = 'dark';
+    let savedTheme = localStorage.getItem('theme') || 'system';
 
     localStorage.setItem('theme', savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
-    document.documentElement.classList.add('dark');
+
+    // Apply theme class based on saved preference
+    if (savedTheme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.classList.add(systemTheme);
+    } else {
+      document.documentElement.classList.add(savedTheme);
+    }
   </script>
   <style>
     /* Prevent transparent flash (minimize effect) on reload */
