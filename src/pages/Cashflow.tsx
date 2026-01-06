@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
+    AreaChart, Area, ResponsiveContainer,
 } from 'recharts';
 import { Wallet, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight, ShoppingBag, Music, Coffee, Zap, Home, GraduationCap, Smartphone, MoreHorizontal, Plus, Download } from 'lucide-react';
 import { format, isSameMonth, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
@@ -12,13 +12,13 @@ import { EXCHANGE_RATES } from '@/lib/constants';
 
 // Shadcn Components
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Tabs,
     TabsContent,
-    TabsList,
-    TabsTrigger,
 } from "@/components/ui/tabs";
+import { AnimatedTabsList, AnimatedTabsTrigger } from "@/components/ui/animated/AnimatedTabs";
 import {
     Select,
     SelectContent,
@@ -31,16 +31,13 @@ import TransactionModal from '../components/cashflow/TransactionModal';
 import { OverviewChart } from '../components/cashflow/OverviewChart';
 import { Separator } from "@/components/ui/separator";
 import { useTheme } from "@/components/theme-provider";
-import { SkeletonCard } from '../components/shared/Skeleton';
-import { EmptyState } from '../components/shared/EmptyState';
-
-const RATE = EXCHANGE_RATES.FALLBACK_IDR_TO_USD;
 
 const Cashflow = () => {
     const { transactions, fetchTransactions, currency, setCurrency, exchangeRate } = useStore();
     const { theme } = useTheme();
     const [period, setPeriod] = useState<'Weekly' | 'Monthly' | 'Yearly'>('Yearly');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState("tracker");
 
     useEffect(() => {
         fetchTransactions();
@@ -291,11 +288,11 @@ const Cashflow = () => {
                 </div>
             </div>
 
-            <Tabs defaultValue="tracker" className="space-y-4">
-                <TabsList className="w-fit">
-                    <TabsTrigger value="tracker">Tracker</TabsTrigger>
-                    <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
-                </TabsList>
+            <Tabs defaultValue="tracker" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                <AnimatedTabsList className="w-fit">
+                    <AnimatedTabsTrigger value="tracker" activeTab={activeTab} group="cashflow">Tracker</AnimatedTabsTrigger>
+                    <AnimatedTabsTrigger value="subscriptions" activeTab={activeTab} group="cashflow">Subscriptions</AnimatedTabsTrigger>
+                </AnimatedTabsList>
 
                 <TabsContent value="tracker" className="space-y-4">
                     {/* KPI Cards */}
@@ -440,35 +437,37 @@ const Cashflow = () => {
                                     </Button>
                                 </CardHeader>
                                 <CardContent className="pr-2 flex flex-col flex-1 h-[400px]">
-                                    <div className="space-y-4 flex-1 overflow-y-auto pr-2">
-                                        {sortedTransactions.length === 0 ? (
-                                            <p className="text-sm text-center text-muted-foreground py-10">No transactions recorded.</p>
-                                        ) : (
-                                            sortedTransactions.map((tx) => {
-                                                const Icon = getIcon(tx.category);
-                                                const isIncome = tx.type === 'income';
-                                                return (
-                                                    <div key={tx.id} className="flex items-center justify-between">
-                                                        <div className="flex items-center space-x-4">
-                                                            <div className={cn("p-2 rounded-full bg-muted", isIncome ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10")}>
-                                                                <Icon className="h-4 w-4" />
+                                    <ScrollArea className="flex-1 pr-2 h-full">
+                                        <div className="space-y-4">
+                                            {sortedTransactions.length === 0 ? (
+                                                <p className="text-sm text-center text-muted-foreground py-10">No transactions recorded.</p>
+                                            ) : (
+                                                sortedTransactions.map((tx) => {
+                                                    const Icon = getIcon(tx.category);
+                                                    const isIncome = tx.type === 'income';
+                                                    return (
+                                                        <div key={tx.id} className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-4">
+                                                                <div className={cn("p-2 rounded-full bg-muted", isIncome ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10")}>
+                                                                    <Icon className="h-4 w-4" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-medium leading-none">{tx.title}</p>
+                                                                    <p className="text-xs text-muted-foreground">{tx.category} • {format(new Date(tx.date), 'MMM d')}</p>
+                                                                </div>
                                                             </div>
-                                                            <div>
-                                                                <p className="text-sm font-medium leading-none">{tx.title}</p>
-                                                                <p className="text-xs text-muted-foreground">{tx.category} • {format(new Date(tx.date), 'MMM d')}</p>
+                                                            <div className={cn("font-medium text-sm", isIncome ? "text-emerald-500" : "text-rose-500")}>
+                                                                {isIncome ? "+" : "-"}{formatMoney(Math.abs(tx.amount))}
                                                             </div>
                                                         </div>
-                                                        <div className={cn("font-medium text-sm", isIncome ? "text-emerald-500" : "text-rose-500")}>
-                                                            {isIncome ? "+" : "-"}{formatMoney(Math.abs(tx.amount))}
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })
-                                        )}
-                                    </div>
+                                                    )
+                                                })
+                                            )}
+                                        </div>
+                                    </ScrollArea>
 
                                     <div className="mt-4 pt-4 border-t">
-                                        <Button variant="outline" className="w-full" onClick={(e) => {
+                                        <Button variant="outline" className="w-full" onClick={(e: React.MouseEvent) => {
                                             e.preventDefault();
                                             // @ts-ignore
                                             if (window.electronAPI) window.electronAPI.openWindow(`/history?theme=${theme}`, 900, 600);

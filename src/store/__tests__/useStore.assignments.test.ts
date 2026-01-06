@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+import { useStore } from '../useStore';
+
 describe('useStore - Assignments', () => {
-    const { useStore } = await import('../useStore');
 
     beforeEach(() => {
         // Reset store and mocks
@@ -17,10 +18,12 @@ describe('useStore - Assignments', () => {
             title: 'Test Assignment',
             courseId: 'course-1-0',
             deadline: new Date().toISOString(),
-            description: 'Test description',
-            priority: 'medium' as const,
+            note: 'Test description',
+            type: 'Tugas' as const,
+            status: 'to-do' as const,
         };
 
+        // @ts-ignore
         await store.addAssignment(newAssignment);
 
         // Verify electronAPI.assignments.create was called
@@ -37,8 +40,8 @@ describe('useStore - Assignments', () => {
             courseId: 'course-1-0',
             deadline: new Date().toISOString(),
             status: 'to-do',
-            priority: 'medium',
-            description: '',
+            type: 'Tugas',
+            note: '',
             semester: 1,
             customOrder: 1,
             createdAt: new Date().toISOString(),
@@ -59,8 +62,9 @@ describe('useStore - Assignments', () => {
             courseId: 'course-1-0',
             deadline: new Date().toISOString(),
             status: 'to-do',
-            priority: 'medium',
-            description: '',
+            type: 'Tugas',
+            // priority: 'medium', // Removed
+            note: '',
             semester: 1,
             customOrder: 1,
             createdAt: new Date().toISOString(),
@@ -77,11 +81,11 @@ describe('useStore - Assignments', () => {
             {
                 id: '1',
                 title: 'Assignment 1',
-                course: 'course-1-0',
+                courseId: 'course-1-0', // Fixed
                 deadline: new Date().toISOString(),
                 status: 'to-do',
-                priority: 'high',
-                description: 'Test',
+                type: 'Tugas', // Added
+                note: 'Test',
                 semester: 1,
                 customOrder: 1,
                 createdAt: new Date().toISOString(),
@@ -89,6 +93,7 @@ describe('useStore - Assignments', () => {
             }
         ];
 
+        // @ts-ignore
         vi.mocked(window.electronAPI.assignments.list).mockResolvedValueOnce(mockAssignments);
 
         const store = useStore.getState();

@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
+import { motion, HTMLMotionProps } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
@@ -34,19 +35,41 @@ const buttonVariants = cva(
     }
 )
 
+
 export interface ButtonProps
-    extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onAnimationStart" | "onDragStart" | "onDragEnd" | "onDrag" | "ref">,
     VariantProps<typeof buttonVariants> {
     asChild?: boolean
+    hoverScale?: number
+    tapScale?: number
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant, size, asChild = false, ...props }, ref) => {
-        const Comp = asChild ? Slot : "button"
+const MotionButton = motion.button;
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps & any>(
+    ({ className, variant, size, asChild = false, hoverScale = 1.05, tapScale = 0.95, ...props }, ref) => {
+        const Comp = asChild ? Slot : MotionButton
+
+        // If asChild (e.g. Link), we don't apply motion props directly to avoid conflict
+        // Or we treat it as static. For now, static for asChild.
+        if (asChild) {
+            return (
+                <Comp
+                    className={cn(buttonVariants({ variant, size, className }))}
+                    ref={ref}
+                    {...props}
+                />
+            )
+        }
+
+        // Standard Motion Button
         return (
-            <Comp
+            <MotionButton
                 className={cn(buttonVariants({ variant, size, className }))}
                 ref={ref}
+                whileHover={{ scale: hoverScale }}
+                whileTap={{ scale: tapScale }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
                 {...props}
             />
         )

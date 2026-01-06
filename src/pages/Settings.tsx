@@ -532,12 +532,13 @@ const Settings = () => {
                                         <div className="text-sm font-medium">Backup</div>
                                         <div className="text-xs text-muted-foreground">Save to file</div>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={async (e) => {
+                                    <Button variant="outline" size="sm" onClick={(e: React.MouseEvent) => {
                                         e.preventDefault();
                                         // @ts-ignore
-                                        const res = await window.electronAPI.backup.export();
-                                        if (res && res.success) toast('Local Backup Successful!', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
-                                        else if (res && res.error) showNotification('Backup Failed: ' + res.error, 'error');
+                                        window.electronAPI.backup.export().then((res: any) => {
+                                            if (res && res.success) toast('Local Backup Successful!', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
+                                            else if (res && res.error) showNotification('Backup Failed: ' + res.error, 'error');
+                                        });
                                     }}>
                                         Backup
                                     </Button>
@@ -547,12 +548,13 @@ const Settings = () => {
                                         <div className="text-sm font-medium">Restore</div>
                                         <div className="text-xs text-muted-foreground">Load from file</div>
                                     </div>
-                                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={async (e) => {
+                                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={(e: React.MouseEvent) => {
                                         e.preventDefault();
                                         if (confirm('WARNING: Restoring will OVERWRITE all current data. The app will restart automatically. Continue?')) {
                                             // @ts-ignore
-                                            const res = await window.electronAPI.backup.import();
-                                            if (res && !res.success && res.error) showNotification('Restore Failed: ' + res.error, 'error');
+                                            window.electronAPI.backup.import().then((res: any) => {
+                                                if (res && !res.success && res.error) showNotification('Restore Failed: ' + res.error, 'error');
+                                            });
                                         }
                                     }}>
                                         Restore

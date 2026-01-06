@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { toast } from "sonner";
 
 // Shadcn Components
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -428,7 +429,7 @@ const Schedule = () => {
             </div>
 
             <Card className="flex-1 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-auto">
+                <ScrollArea className="flex-1 h-full">
                     <table className="w-full text-sm border-collapse">
                         <thead className="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
                             <tr>
@@ -478,7 +479,8 @@ const Schedule = () => {
                             ))}
                         </tbody>
                     </table>
-                </div>
+
+                </ScrollArea>
             </Card>
 
             {/* Selector Popover */}
@@ -557,7 +559,7 @@ const Schedule = () => {
                                                 <a
                                                     href="#"
                                                     className="flex items-center gap-2 truncate flex-1"
-                                                    onClick={(e) => {
+                                                    onClick={(e: React.MouseEvent) => {
                                                         e.preventDefault();
                                                         // @ts-ignore
                                                         if (m.type === 'link') window.electronAPI.utils.openExternal(m.url);
@@ -719,37 +721,39 @@ const Schedule = () => {
             </Dialog>
 
             {/* Context Menu (Portal) */}
-            {contextMenu && createPortal(
-                <div
-                    className="fixed inset-0 z-[9999]"
-                    onClick={() => setContextMenu(null)}
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
-                >
+            {
+                contextMenu && createPortal(
                     <div
-                        className="fixed bg-popover text-popover-foreground border border-border shadow-md rounded-md p-1 min-w-[150px] animate-in fade-in zoom-in-95"
-                        style={{ top: contextMenu.y, left: contextMenu.x }}
+                        className="fixed inset-0 z-[9999]"
+                        onClick={() => setContextMenu(null)}
+                        onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
                     >
-                        <Button variant="ghost" className="w-full justify-start h-8 text-sm" onClick={() => {
-                            const data = getCourseForSlot(contextMenu.day, contextMenu.time);
-                            setDetailSlot({ day: contextMenu.day, time: contextMenu.time, data });
-                            setEditForm({ room: data?.room || '', lecturer: data?.lecturer || '' });
-                            setIsEditingDetail(true);
-                            setIsDetailOpen(true);
-                        }}>
-                            <Edit2 className="w-3 h-3 mr-2" /> Edit
-                        </Button>
-                        <div className="h-px bg-border my-1" />
-                        <Button variant="ghost" className="w-full justify-start h-8 text-sm text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => {
-                            setScheduleItem(contextMenu.day, contextMenu.time, '', '', '', '');
-                            setContextMenu(null);
-                        }}>
-                            <Trash2 className="w-3 h-3 mr-2" /> Clear Slot
-                        </Button>
-                    </div>
-                </div>,
-                document.body
-            )}
-        </div>
+                        <div
+                            className="fixed bg-popover text-popover-foreground border border-border shadow-md rounded-md p-1 min-w-[150px] animate-in fade-in zoom-in-95"
+                            style={{ top: contextMenu.y, left: contextMenu.x }}
+                        >
+                            <Button variant="ghost" className="w-full justify-start h-8 text-sm" onClick={() => {
+                                const data = getCourseForSlot(contextMenu.day, contextMenu.time);
+                                setDetailSlot({ day: contextMenu.day, time: contextMenu.time, data });
+                                setEditForm({ room: data?.room || '', lecturer: data?.lecturer || '' });
+                                setIsEditingDetail(true);
+                                setIsDetailOpen(true);
+                            }}>
+                                <Edit2 className="w-3 h-3 mr-2" /> Edit
+                            </Button>
+                            <div className="h-px bg-border my-1" />
+                            <Button variant="ghost" className="w-full justify-start h-8 text-sm text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => {
+                                setScheduleItem(contextMenu.day, contextMenu.time, '', '', '', '');
+                                setContextMenu(null);
+                            }}>
+                                <Trash2 className="w-3 h-3 mr-2" /> Clear Slot
+                            </Button>
+                        </div>
+                    </div>,
+                    document.body
+                )
+            }
+        </div >
     );
 };
 

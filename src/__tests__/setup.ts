@@ -8,7 +8,10 @@ afterEach(() => {
 });
 
 // Mock Electron API (Zustand store depends on window.electronAPI)
-global.window.electronAPI = {
+// @ts-ignore
+(globalThis as any).window = window;
+// @ts-ignore
+(globalThis as any).window.electronAPI = {
     assignments: {
         list: vi.fn().mockResolvedValue([]),
         create: vi.fn(async (data) => ({ ...data, id: `test-${Date.now()}` })),

@@ -25,6 +25,8 @@ import { CSS } from '@dnd-kit/utilities';
 
 // UI Components
 import { Button } from "@/components/ui/button";
+import confetti from 'canvas-confetti';
+import { AnimatedIcon } from "@/components/ui/animated/AnimatedIcon";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -121,8 +123,8 @@ const SortableRow = ({
                             // Event handling for row selection
                             onToggleSelect(assignment.id);
                         }}
-                        onClick={(e) => e.stopPropagation()} // Prevent row click
-                        className="translate-y-[2px]"
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()} // Prevent row click
+                    // Removed translation for better alignment
                     />
                     {!isFiltered && (
                         <div
@@ -229,7 +231,7 @@ const SortableRow = ({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-500 hover:underline cursor-pointer"
-                                onClick={(e) => {
+                                onClick={(e: React.MouseEvent) => {
                                     e.preventDefault(); // Stop default anchor behavior (opening new window)
                                     e.stopPropagation();
                                     // Use Electron to open external link if available, otherwise default
@@ -256,16 +258,20 @@ const SortableRow = ({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
+
+
                         <DropdownMenuItem
                             onClick={() => onEditClick(assignment.id)}
                         >
-                            <Edit className="mr-2 h-4 w-4" />
+                            <AnimatedIcon icon={Edit} className="mr-2 h-4 w-4" />
                             Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={async () => {
-                            await duplicateAssignment(assignment.id);
+                        <DropdownMenuItem onClick={() => {
+                            void (async () => {
+                                await duplicateAssignment(assignment.id);
+                            })();
                         }}>
-                            <Copy className="mr-2 h-4 w-4" />
+                            <AnimatedIcon icon={Copy} className="mr-2 h-4 w-4" />
                             Duplicate
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -273,7 +279,7 @@ const SortableRow = ({
                             className="text-destructive focus:text-destructive font-bold"
                             onClick={() => onDeleteClick(assignment.id)}
                         >
-                            <Trash2 className="mr-2 h-4 w-4" />
+                            <AnimatedIcon icon={Trash2} className="mr-2 h-4 w-4" />
                             Delete
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -285,6 +291,37 @@ const SortableRow = ({
 
 // --- Main Component ---
 const Assignments = () => {
+    // ... hooks ...
+
+    // Confetti Helper
+    const triggerConfetti = () => {
+        const duration = 3000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+        const interval: any = setInterval(function () {
+            const timeLeft = animationEnd - Date.now();
+
+            if (timeLeft <= 0) {
+                return clearInterval(interval);
+            }
+
+            const particleCount = 50 * (timeLeft / duration);
+            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        }, 250);
+    };
+
+
+
+    // Wrap updateAssignment for single row use if needed, passed down
+    const handleSingleStatusUpdate = (id: string, data: Partial<Assignment>) => {
+        updateAssignment(id, data);
+        if (data.status === 'done') triggerConfetti();
+    }
+
     const { assignments, fetchAssignments, updateAssignment, reorderAssignments, courses, fetchCourses, duplicateAssignment, deleteAssignment, userProfile, undo } = useStore();
 
     // Modal State
@@ -332,6 +369,9 @@ const Assignments = () => {
         const ids = Array.from(selectedIds);
         for (const id of ids) {
             await updateAssignment(id, { status });
+        }
+        if (status === 'done') {
+            triggerConfetti();
         }
         setSelectedIds(new Set());
         // Neutral toast color
@@ -579,7 +619,7 @@ const Assignments = () => {
                                             key={assignment.id}
                                             assignment={assignment}
                                             index={index}
-                                            updateAssignment={updateAssignment}
+                                            updateAssignment={(id, data) => handleSingleStatusUpdate(id, data)}
                                             onEditClick={(id) => { setEditingId(id); setIsModalOpen(true); }}
                                             duplicateAssignment={duplicateAssignment}
                                             onDeleteClick={handleDeleteClick}

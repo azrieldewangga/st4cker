@@ -1,7 +1,6 @@
 import * as React from "react"
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
-import { Check } from "lucide-react"
-
+import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 const Checkbox = React.forwardRef<
@@ -18,8 +17,25 @@ const Checkbox = React.forwardRef<
     >
         <CheckboxPrimitive.Indicator
             className={cn("flex items-center justify-center text-current")}
+            asChild
         >
-            <Check className="h-4 w-4" />
+            <motion.svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+            >
+                <motion.path
+                    d="M20 6L9 17l-5-5"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    animate={{ pathLength: 1, opacity: 1 }}
+                    exit={{ pathLength: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                />
+            </motion.svg>
         </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
 ))

@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useStore } from "@/store/useStore";
 import { DollarSign, GraduationCap, BookOpen, Clock } from "lucide-react";
 
+
 export function MetricCards() {
     const { userProfile, assignments, transactions, courses, grades, schedule, currency } = useStore();
 
@@ -90,9 +91,6 @@ export function MetricCards() {
         nextClassName = "Done for today";
         nextClassTime = "Relax!";
     }
-
-    // Attempt to verify "Next Class" name better if it's just an ID
-    // If nextClassName looks like an ID, try to just show "Class"
 
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

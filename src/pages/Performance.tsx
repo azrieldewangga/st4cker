@@ -116,33 +116,35 @@ const Performance = () => {
                     <GraduationCap />
                     Prestasi Akademik
                 </h1>
-                <Button variant="outline" size="sm" onClick={async () => {
-                    // Prepare export data
-                    if (!userProfile) return;
+                <Button variant="outline" size="sm" onClick={() => {
+                    void (async () => {
+                        // Prepare export data
+                        if (!userProfile) return;
 
-                    const data: any[] = [];
-                    const currentSem = userProfile.semester ? parseInt(userProfile.semester.toString()) : 1;
+                        const data: any[] = [];
+                        const currentSem = userProfile.semester ? parseInt(userProfile.semester.toString()) : 1;
 
-                    for (let i = 1; i <= currentSem; i++) {
-                        const courses = getSemesterCourses(i);
-                        courses.forEach(c => {
-                            data.push({
-                                Semester: i,
-                                Course: c.name,
-                                SKS: c.sks,
-                                Grade: grades[c.id] || '-'
+                        for (let i = 1; i <= currentSem; i++) {
+                            const courses = getSemesterCourses(i);
+                            courses.forEach(c => {
+                                data.push({
+                                    Semester: i,
+                                    Course: c.name,
+                                    SKS: c.sks,
+                                    Grade: grades[c.id] || '-'
+                                });
                             });
-                        });
-                    }
+                        }
 
-                    const { success, filePath, error } = await exportToCSV(data, `Academic_Performance_${new Date().toISOString().split('T')[0]}.csv`);
+                        const { success, filePath, error } = await exportToCSV(data, `Academic_Performance_${new Date().toISOString().split('T')[0]}.csv`);
 
-                    if (success) {
-                        toast("Export Successful", {
-                            description: `File saved to: ${filePath}`,
-                        });
-                    }
-                    else if (error) toast.error(`Export failed: ${error}`);
+                        if (success) {
+                            toast("Export Successful", {
+                                description: `File saved to: ${filePath}`,
+                            });
+                        }
+                        else if (error) toast.error(`Export failed: ${error}`);
+                    })();
                 }}>
                     <Download className="mr-2 h-4 w-4" /> Export CSV
                 </Button>
@@ -306,10 +308,12 @@ const Performance = () => {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-8 w-8 text-destructive hover:text-destructive/90"
-                                                            onClick={async () => {
-                                                                if (confirm('Delete this course?')) {
-                                                                    await deleteCourse(course.id);
-                                                                }
+                                                            onClick={() => {
+                                                                void (async () => {
+                                                                    if (confirm('Delete this course?')) {
+                                                                        await deleteCourse(course.id);
+                                                                    }
+                                                                })();
                                                             }}
                                                         >
                                                             <span className="text-lg">🗑️</span>
@@ -358,7 +362,7 @@ const Performance = () => {
                     <PaginationItem>
                         <PaginationPrevious
                             href="#"
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                                 e.preventDefault();
                                 if (viewSemester > 1) setViewSemester(viewSemester - 1);
                             }}
@@ -386,7 +390,7 @@ const Performance = () => {
                                 <PaginationLink
                                     href="#"
                                     isActive={viewSemester === sem}
-                                    onClick={(e) => {
+                                    onClick={(e: React.MouseEvent) => {
                                         e.preventDefault();
                                         setViewSemester(sem);
                                     }}
@@ -400,7 +404,7 @@ const Performance = () => {
                     <PaginationItem>
                         <PaginationNext
                             href="#"
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                                 e.preventDefault();
                                 if (viewSemester < semesterList.length) setViewSemester(viewSemester + 1);
                             }}

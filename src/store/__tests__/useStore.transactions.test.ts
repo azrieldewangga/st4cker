@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
+import { useStore } from '../useStore';
+
 describe('useStore - Transactions', () => {
     // Import after setup to ensure mocks are in place
-    const { useStore } = await import('../useStore');
 
     beforeEach(() => {
         // Reset store state before each test

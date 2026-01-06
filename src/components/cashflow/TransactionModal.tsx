@@ -176,7 +176,7 @@ const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => {
                                     id="amount"
                                     type="text"
                                     placeholder="0"
-                                    className="pl-10"
+                                    className="pl-10 !border !border-input"
                                     value={formData.amount}
                                     onChange={(e) => {
                                         const input = e.target.value;

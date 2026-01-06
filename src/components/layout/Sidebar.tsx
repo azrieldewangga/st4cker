@@ -3,6 +3,7 @@ import { useStore } from '../../store/useStore';
 import { LayoutDashboard, BookOpen, GraduationCap, Calendar, CreditCard } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
+import { ThemeToggler } from '@/components/ui/animated/ThemeToggler';
 
 const Sidebar = () => {
     const { userProfile, fetchUserProfile, theme, setTheme } = useStore();
@@ -17,14 +18,7 @@ const Sidebar = () => {
         document.documentElement.setAttribute('data-theme', theme);
     }, [theme]);
 
-    const toggleBaseTheme = () => {
-        // Simple toggle for the button: if light -> dark (default), if any dark -> light
-        if (theme === 'light') {
-            setTheme('dark');
-        } else {
-            setTheme('light');
-        }
-    };
+
 
     const menus = [
         { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -58,7 +52,7 @@ const Sidebar = () => {
 
                 <div className="p-4 flex flex-col gap-6 items-center w-full">
                     {/* Theme Controller (JS Based) */}
-                    {/* Theme Controller (JS Based) - Removed btn class to fix artifacts */}
+                    <ThemeToggler />
 
 
 

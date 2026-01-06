@@ -22,12 +22,17 @@ import CreditCard from "@/components/dashboard/CreditCard"
 import { AnalyticsTab } from "@/components/dashboard/AnalyticsTab"
 import { ReportsTab } from "@/components/dashboard/ReportsTab"
 import { NotificationsTab } from "@/components/dashboard/NotificationsTab"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { differenceInDays, isPast, isToday, setDate, addMonths } from "date-fns"
 import { SkeletonCard } from "@/components/shared/Skeleton"
+import { TextGenerateEffect } from "@/components/ui/animated/TextGenerateEffect"
+import { FadeIn } from "@/components/ui/animated/FadeIn"
+
+import { AnimatedTabsList, AnimatedTabsTrigger } from "@/components/ui/animated/AnimatedTabs"
 
 export default function Dashboard() {
     const { transactions, currency, userProfile, assignments, subscriptions, isAppReady } = useStore();
+    const [activeTab, setActiveTab] = useState("overview");
 
     // Conditional check moved to bottom to fix Hook Error
 
@@ -115,102 +120,115 @@ export default function Dashboard() {
         )
     }
 
+
+
+
+
     return (
         <div className="flex-1 space-y-4">
             {/* Header Section */}
             <div>
                 {/* Row 1: Welcome Message */}
-                <h2 className="text-3xl font-bold tracking-tight">Welcome in, {userProfile?.name || 'Student'}</h2>
+                <TextGenerateEffect
+                    words={`Welcome in, ${userProfile?.name || 'Student'}`}
+                    className="text-3xl font-bold tracking-tight mb-2"
+                />
             </div>
 
-            <Tabs defaultValue="overview" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                 {/* Row 2: Dashboard Title + Tabs */}
-                <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-semibold tracking-tight text-muted-foreground">Dashboard</h3>
-                    <TabsList>
-                        <TabsTrigger value="overview">Overview</TabsTrigger>
-                        <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                        <TabsTrigger value="reports">Reports</TabsTrigger>
-                        <TabsTrigger value="notifications" className="relative">
-                            Notifications
-                            {notificationCount > 0 && (
-                                <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-blue-500/20">
-                                    {notificationCount}
-                                </span>
-                            )}
-                        </TabsTrigger>
-                    </TabsList>
-                </div>
+                <FadeIn delay={0.2} direction="down">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-semibold tracking-tight text-muted-foreground">Dashboard</h3>
+                        <AnimatedTabsList>
+                            <AnimatedTabsTrigger value="overview" activeTab={activeTab} group="dashboard">Overview</AnimatedTabsTrigger>
+                            <AnimatedTabsTrigger value="analytics" activeTab={activeTab} group="dashboard">Analytics</AnimatedTabsTrigger>
+                            <AnimatedTabsTrigger value="reports" activeTab={activeTab} group="dashboard">Reports</AnimatedTabsTrigger>
+                            <AnimatedTabsTrigger value="notifications" activeTab={activeTab} group="dashboard" className="relative">
+                                Notifications
+                                {notificationCount > 0 && (
+                                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-blue-500/20">
+                                        {notificationCount}
+                                    </span>
+                                )}
+                            </AnimatedTabsTrigger>
+                        </AnimatedTabsList>
+                    </div>
+                </FadeIn>
 
                 <TabsContent value="overview" className="space-y-4">
-                    <MetricCards />
+                    <FadeIn delay={0.4}>
+                        <MetricCards />
+                    </FadeIn>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <div className="col-span-4">
+                        <FadeIn delay={0.6} className="col-span-4" fullWidth>
                             <CashflowChart />
-                        </div>
-                        <Card className="col-span-3">
-                            <CardHeader>
-                                <CardTitle>Wallet</CardTitle>
-                                <CardDescription>
-                                    Recent transactions and card status.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3 mb-6">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                                                <DollarSign size={16} />
+                        </FadeIn>
+                        <FadeIn delay={0.8} className="col-span-3" fullWidth>
+                            <Card className="h-full">
+                                <CardHeader>
+                                    <CardTitle>Wallet</CardTitle>
+                                    <CardDescription>
+                                        Recent transactions and card status.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3 mb-6">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                                    <DollarSign size={16} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">Current Balance</p>
+                                                    <p className="text-xs text-muted-foreground">Available funds</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="font-medium">Current Balance</p>
-                                                <p className="text-xs text-muted-foreground">Available funds</p>
+                                            <div className="text-right">
+                                                <p className="font-semibold text-lg text-emerald-500">
+                                                    {formatter.format(
+                                                        transactions.reduce((acc, t) => {
+                                                            const val = Number(t.amount);
+                                                            if (val < 0) return acc + val;
+                                                            return t.type === 'income' ? acc + val : acc - val;
+                                                        }, 0)
+                                                    )}
+                                                </p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-semibold text-lg text-emerald-500">
-                                                {formatter.format(
-                                                    transactions.reduce((acc, t) => {
-                                                        const val = Number(t.amount);
-                                                        if (val < 0) return acc + val;
-                                                        return t.type === 'income' ? acc + val : acc - val;
-                                                    }, 0)
-                                                )}
-                                            </p>
+                                        {/* Monthly Summary */}
+                                        <div className="flex items-center justify-center gap-4 text-xs pt-2 border-t border-border/50">
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
+                                                <span className="text-muted-foreground">Income:</span>
+                                                <span className="font-medium text-emerald-500">
+                                                    {formatter.format(
+                                                        transactions
+                                                            .filter(t => {
+                                                                const date = new Date(t.date);
+                                                                return t.type === 'income' && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                                                            })
+                                                            .reduce((acc, t) => acc + t.amount, 0)
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <div className="h-3 w-px bg-border"></div>
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                                                <span className="text-muted-foreground">Expense:</span>
+                                                <span className="font-medium text-red-500">
+                                                    {formatter.format(monthlyExpense)}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                    {/* Monthly Summary */}
-                                    <div className="flex items-center justify-center gap-4 text-xs pt-2 border-t border-border/50">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
-                                            <span className="text-muted-foreground">Income:</span>
-                                            <span className="font-medium text-emerald-500">
-                                                {formatter.format(
-                                                    transactions
-                                                        .filter(t => {
-                                                            const date = new Date(t.date);
-                                                            return t.type === 'income' && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-                                                        })
-                                                        .reduce((acc, t) => acc + t.amount, 0)
-                                                )}
-                                            </span>
-                                        </div>
-                                        <div className="h-3 w-px bg-border"></div>
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="h-2 w-2 rounded-full bg-red-500"></div>
-                                            <span className="text-muted-foreground">Expense:</span>
-                                            <span className="font-medium text-red-500">
-                                                {formatter.format(monthlyExpense)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <div className="w-full aspect-[1.58/1] mt-4">
-                                    <CreditCard />
-                                </div>
-                            </CardContent>
-                        </Card>
+                                    <div className="w-full aspect-[1.58/1] mt-4">
+                                        <CreditCard />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </FadeIn>
                     </div>
                 </TabsContent>
 

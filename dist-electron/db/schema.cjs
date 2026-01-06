@@ -81,6 +81,12 @@ const initSchema = (db) => {
         updatedAt TEXT
     );
 
+    -- Additional Performance Indices (Phase 6)
+    CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+    CREATE INDEX IF NOT EXISTS idx_transactions_date_type ON transactions(date, type);
+    CREATE INDEX IF NOT EXISTS idx_assignments_semester ON assignments(semester);
+    CREATE INDEX IF NOT EXISTS idx_courses_semester ON performance_courses(semester);
+
     `;
     db.exec(schema);
     // Migration: Add semester column to assignments if it doesn't exist
@@ -120,9 +126,25 @@ const initSchema = (db) => {
         console.log('[DEBUG-SCHEMA] schedule_items columns:', cols);
         const courseCols = db.pragma('table_info(performance_courses)');
         console.log('[DEBUG-SCHEMA] performance_courses columns:', courseCols);
+        // VERIFICATION: Check Indices (Phase 6)
+        const indices = db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all();
+        const indexNames = indices.map(i => i.name);
+        const expectedIndices = [
+            'idx_transactions_type',
+            'idx_transactions_date_type',
+            'idx_assignments_semester',
+            'idx_courses_semester'
+        ];
+        const missing = expectedIndices.filter(i => !indexNames.includes(i));
+        if (missing.length === 0) {
+            console.log('✅ [DB-VERIFY] SUCCESS: All optimization indices are present.');
+        }
+        else {
+            console.error('❌ [DB-VERIFY] FAILED: Missing indices:', missing);
+        }
     }
     catch (e) {
-        console.error('[DEBUG-SCHEMA] Error getting table info:', e);
+        console.error('[DEBUG-SCHEMA] Error getting information:', e);
     }
 };
 exports.initSchema = initSchema;

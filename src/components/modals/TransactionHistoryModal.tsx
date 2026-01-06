@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import { Transaction } from '../../types/models';
 import { toast } from "sonner";
 
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -230,7 +231,7 @@ const TransactionHistoryModal = () => {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-auto bg-background p-0">
+            <ScrollArea className="flex-1 bg-background p-0 h-full">
                 <div className="w-full">
                     <table className="w-full text-sm caption-bottom">
                         <thead className="[&_tr]:border-b">
@@ -297,34 +298,36 @@ const TransactionHistoryModal = () => {
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </ScrollArea>
 
             {/* Pagination Footer */}
-            {totalPages > 1 && (
-                <div className="p-2 border-t bg-background flex justify-center items-center gap-2 shrink-0">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xs font-mono opacity-70 mx-2">
-                        Page {currentPage} of {totalPages}
-                    </span>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    >
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
-                </div>
-            )}
+            {
+                totalPages > 1 && (
+                    <div className="p-2 border-t bg-background flex justify-center items-center gap-2 shrink-0">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs font-mono opacity-70 mx-2">
+                            Page {currentPage} of {totalPages}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                )
+            }
 
             {/* Confirm Dialog */}
             <AlertDialog open={confirmState.isOpen} onOpenChange={(open) => !open && setConfirmState(prev => ({ ...prev, isOpen: false }))}>
@@ -429,7 +432,7 @@ const TransactionHistoryModal = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 };
 

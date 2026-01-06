@@ -13,6 +13,7 @@ import { useTheme } from '@/components/theme-provider';
 import { isDev } from '@/lib/constants';
 
 import { useNotifications } from '@/hooks/useNotifications';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -180,11 +181,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 </div>
 
                 {/* Main Content Area */}
-                <div className="flex-1 space-y-4 p-8 pt-6 overflow-y-auto bg-muted/10">
-                    <div className="mx-auto max-w-7xl animate-fade-in text-foreground">
+                <ScrollArea className="flex-1 space-y-4 bg-muted/10 h-full">
+                    <div className="p-8 pt-6 mx-auto max-w-7xl animate-fade-in text-foreground">
                         {children}
                     </div>
-                </div>
+                </ScrollArea>
 
             </div>
 

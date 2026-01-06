@@ -39,17 +39,19 @@ export function NotificationsTab() {
     };
 
     // New function to handle marking subscription as paid
-    const handlePaySubscription = async (e: React.MouseEvent, sub: any) => {
+    const handlePaySubscription = (e: React.MouseEvent, sub: any) => {
         e.stopPropagation(); // Prevent navigation when button is clicked
-        if (window.confirm(`Mark '${sub.name}' as paid? This will create a transaction.`)) {
-            await addTransaction({
-                type: 'expense',
-                amount: sub.cost,
-                category: 'Subscription',
-                title: `Payment for ${sub.name}`,
-                date: new Date().toISOString()
-            });
-        }
+        void (async () => {
+            if (window.confirm(`Mark '${sub.name}' as paid? This will create a transaction.`)) {
+                await addTransaction({
+                    type: 'expense',
+                    amount: sub.cost,
+                    category: 'Subscription',
+                    title: `Payment for ${sub.name}`,
+                    date: new Date().toISOString()
+                });
+            }
+        })();
     };
 
     const notifications = useMemo(() => {
@@ -197,7 +199,7 @@ export function NotificationsTab() {
                                         <Button
                                             size="sm"
                                             className="h-7 text-xs bg-emerald-500 text-white hover:bg-emerald-600"
-                                            onClick={(e) => handlePaySubscription(e, item.metadata)}
+                                            onClick={(e: React.MouseEvent) => handlePaySubscription(e, item.metadata)}
                                         >
                                             Mark as Paid
                                         </Button>
