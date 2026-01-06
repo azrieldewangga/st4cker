@@ -30,11 +30,20 @@ import { FadeIn } from "@/components/ui/animated/FadeIn"
 
 import { AnimatedTabsList, AnimatedTabsTrigger } from "@/components/ui/animated/AnimatedTabs"
 
+import { useSearchParams } from "react-router-dom";
+
 export default function Dashboard() {
     const { transactions, currency, userProfile, assignments, subscriptions, isAppReady } = useStore();
-    const [activeTab, setActiveTab] = useState("overview");
+    const [searchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
 
-    // Conditional check moved to bottom to fix Hook Error
+    // Initial Tab Sync
+    useMemo(() => {
+        const tab = searchParams.get("tab");
+        if (tab && ['overview', 'analytics', 'reports', 'notifications'].includes(tab)) {
+            setActiveTab(tab);
+        }
+    }, [searchParams]);
 
     // Calculate Notification Count
     const notificationCount = useMemo(() => {
@@ -144,13 +153,15 @@ export default function Dashboard() {
                             <AnimatedTabsTrigger value="overview" activeTab={activeTab} group="dashboard">Overview</AnimatedTabsTrigger>
                             <AnimatedTabsTrigger value="analytics" activeTab={activeTab} group="dashboard">Analytics</AnimatedTabsTrigger>
                             <AnimatedTabsTrigger value="reports" activeTab={activeTab} group="dashboard">Reports</AnimatedTabsTrigger>
-                            <AnimatedTabsTrigger value="notifications" activeTab={activeTab} group="dashboard" className="relative">
-                                Notifications
-                                {notificationCount > 0 && (
-                                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-blue-500/20">
-                                        {notificationCount}
-                                    </span>
-                                )}
+                            <AnimatedTabsTrigger value="notifications" activeTab={activeTab} group="dashboard">
+                                <span className="flex items-center gap-2">
+                                    Notifications
+                                    {notificationCount > 0 && (
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-blue-500/20">
+                                            {notificationCount}
+                                        </span>
+                                    )}
+                                </span>
                             </AnimatedTabsTrigger>
                         </AnimatedTabsList>
                     </div>

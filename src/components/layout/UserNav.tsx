@@ -86,33 +86,6 @@ export function UserNav() {
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
 
-                <DropdownMenuSeparator />
-
-                <DropdownMenuGroup>
-                    <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>
-                            <span>Theme</span>
-                            {/* <DropdownMenuShortcut className="ml-auto text-[10px] tracking-tighter opacity-100 bg-muted/50 px-1 rounded border mr-2">Ctrl+Alt+D</DropdownMenuShortcut> */}
-                            <span className="ml-auto text-xs tracking-widest text-muted-foreground mr-2">Ctrl+Alt+D</span>
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuPortal>
-                            <DropdownMenuSubContent>
-                                <DropdownMenuItem onClick={() => setTheme("light")}>
-                                    <Sun className="mr-2 h-4 w-4" />
-                                    <span>Light</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setTheme("dark")}>
-                                    <Moon className="mr-2 h-4 w-4" />
-                                    <span>Dark</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setTheme("system")}>
-                                    <Laptop className="mr-2 h-4 w-4" />
-                                    <span>System</span>
-                                </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                        </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                </DropdownMenuGroup>
 
 
             </DropdownMenuContent>

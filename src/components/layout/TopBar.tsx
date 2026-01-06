@@ -3,6 +3,7 @@ import { useState } from 'react';
 import SearchResults from './SearchResults';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ThemeTogglerButton } from "@/components/animate-ui/components/buttons/theme-toggler";
 
 const TopBar = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +37,10 @@ const TopBar = () => {
 
                     {searchQuery && <SearchResults query={searchQuery} closeSearch={() => setSearchQuery('')} />}
                 </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+                <ThemeTogglerButton modes={['light', 'dark']} />
             </div>
 
             {/* Quick Add Removed as per cleanup request and missing store action */}

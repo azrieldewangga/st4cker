@@ -14,6 +14,7 @@ import { isDev } from '@/lib/constants';
 
 import { useNotifications } from '@/hooks/useNotifications';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ThemeTogglerButton } from "@/components/animate-ui/components/buttons/theme-toggler";
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -22,6 +23,17 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     useNotifications(); // Desktop Notifications Logic
     const { notification, isSearchOpen, setSearchOpen } = useStore();
+    const themeTogglerRef = React.useRef<HTMLButtonElement>(null);
+
+    // Expose theme toggler click to window for keyboard shortcuts
+    React.useEffect(() => {
+        (window as any).triggerThemeToggle = () => {
+            themeTogglerRef.current?.click();
+        };
+        return () => {
+            delete (window as any).triggerThemeToggle;
+        };
+    }, []);
 
     // Search Shortcut
     React.useEffect(() => {
@@ -165,9 +177,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         {/* Spacer */}
                         <div className="flex-1" />
 
-                        {/* Right: Search & User & Window Controls */}
                         <div className="no-drag flex items-center space-x-4">
                             <Search onClick={() => setSearchOpen(true)} />
+                            <ThemeTogglerButton ref={themeTogglerRef} variant="ghost" modes={['light', 'dark']} className="rounded-full w-8 h-8" />
                             <UserNav />
 
                             {/* Window Actions */}

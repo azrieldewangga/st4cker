@@ -53,8 +53,14 @@ const StandaloneRoutes = () => {
       // Ctrl + Alt + D: Toggle Theme
       if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        const newTheme = storeTheme === 'dark' ? 'light' : 'dark';
-        setStoreTheme(newTheme);
+        // Trigger the actual button to get the wipe animation
+        if ((window as any).triggerThemeToggle) {
+          (window as any).triggerThemeToggle();
+        } else {
+          // Fallback if button not mounted yet
+          const newTheme = storeTheme === 'dark' ? 'light' : 'dark';
+          setStoreTheme(newTheme);
+        }
       }
 
       if (cmdKey && e.key.toLowerCase() === 'z') {
