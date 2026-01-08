@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react';
-import { useStore } from '../../store/useStore';
-import { MainNav } from './MainNav';
+import { useStore } from '../../store/useStoreNew';
+import { ResponsiveNav } from './ResponsiveNav';
 import { Search } from './Search';
 import { UserNav } from './UserNav';
 import { SemesterSwitcher } from './SemesterSwitcher';
@@ -22,7 +22,15 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     useNotifications(); // Desktop Notifications Logic
-    const { notification, isSearchOpen, setSearchOpen } = useStore();
+
+    // Use direct store access to prevent object recreation
+    const notification = useStore(state => state.notification);
+    const isSearchOpen = useStore(state => state.isSearchOpen);
+    const setSearchOpen = useStore(state => state.setSearchOpen);
+    const autoTheme = useStore(state => state.autoTheme);
+    const themeSchedule = useStore(state => state.themeSchedule);
+    const storeTheme = useStore(state => state.theme);
+
     const themeTogglerRef = React.useRef<HTMLButtonElement>(null);
 
     // Expose theme toggler click to window for keyboard shortcuts
@@ -57,7 +65,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
     // Theme Management
     const { theme, setTheme } = useTheme();
-    const { autoTheme, themeSchedule, theme: storeTheme } = useStore();
 
     // 1. Sync Manual Changes: Store -> NextThemes
     React.useEffect(() => {
@@ -171,7 +178,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         {/* Left: Switcher & Nav */}
                         <div className="no-drag flex items-center pr-4">
                             <SemesterSwitcher />
-                            <MainNav className="mx-6" />
+                            <ResponsiveNav className="mx-6" />
                         </div>
 
                         {/* Spacer */}
@@ -182,7 +189,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                             <ThemeTogglerButton ref={themeTogglerRef} variant="ghost" modes={['light', 'dark']} className="rounded-full w-8 h-8" />
                             <UserNav />
 
-                            {/* Window Actions */}
+                            {/* Window Actions - Always visible */}
                             <div className="flex gap-2 ml-4">
                                 <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-400 border border-yellow-600/30" />
                                 <button onClick={handleMaximize} className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-400 border border-green-600/30" />
