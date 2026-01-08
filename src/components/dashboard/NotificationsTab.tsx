@@ -4,7 +4,7 @@ import { useStore } from "@/store/useStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bell, Calendar, AlertCircle, CheckCircle2, CreditCard, RefreshCcw } from "lucide-react";
 import { format, differenceInDays, isPast, isToday, isTomorrow, addMonths, setDate } from "date-fns";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
     Empty,
     EmptyContent,
@@ -14,6 +14,16 @@ import {
     EmptyTitle,
 } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type NotificationItem = {
     id: string;
@@ -27,8 +37,14 @@ type NotificationItem = {
 };
 
 export function NotificationsTab() {
-    const { assignments, subscriptions, userProfile, transactions, addTransaction } = useStore(); // Destructured transactions and addTransaction
+    const { assignments, subscriptions, userProfile, transactions, addTransaction, currency } = useStore();
     const navigate = useNavigate();
+
+    // State for confirmation dialog
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        subscription: any | null;
+    }>({ isOpen: false, subscription: null });
 
     const handleNotificationClick = (type: string) => {
         if (type === 'assignment') {
@@ -38,20 +54,35 @@ export function NotificationsTab() {
         }
     };
 
-    // New function to handle marking subscription as paid
+    // Function to show confirmation dialog
     const handlePaySubscription = (e: React.MouseEvent, sub: any) => {
         e.stopPropagation(); // Prevent navigation when button is clicked
-        void (async () => {
-            if (window.confirm(`Mark '${sub.name}' as paid? This will create a transaction.`)) {
-                await addTransaction({
-                    type: 'expense',
-                    amount: sub.cost,
-                    category: 'Subscription',
-                    title: `Payment for ${sub.name}`,
-                    date: new Date().toISOString()
-                });
-            }
-        })();
+        setConfirmDialog({ isOpen: true, subscription: sub });
+    };
+
+    // Function to confirm payment
+    const handleConfirmPay = async () => {
+        const sub = confirmDialog.subscription;
+        if (!sub) return;
+
+        await addTransaction({
+            type: 'expense',
+            amount: sub.cost,
+            category: 'Subscription',
+            title: `Payment for ${sub.name}`,
+            date: new Date().toISOString()
+        });
+
+        setConfirmDialog({ isOpen: false, subscription: null });
+    };
+
+    // Helper to format currency
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat(currency === 'IDR' ? 'id-ID' : 'en-US', {
+            style: 'currency',
+            currency: currency,
+            maximumFractionDigits: 0
+        }).format(amount);
     };
 
     const notifications = useMemo(() => {
@@ -210,6 +241,24 @@ export function NotificationsTab() {
                     </Card>
                 ))}
             </div>
+
+            {/* Custom Confirmation Dialog */}
+            <AlertDialog open={confirmDialog.isOpen} onOpenChange={(open) => !open && setConfirmDialog({ isOpen: false, subscription: null })}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Mark as Paid?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will create a transaction for <span className="font-semibold">{confirmDialog.subscription?.name}</span> ({formatCurrency(confirmDialog.subscription?.cost || 0)}) and remove the notification.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmPay} className="bg-emerald-600 hover:bg-emerald-700">
+                            Mark as Paid
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

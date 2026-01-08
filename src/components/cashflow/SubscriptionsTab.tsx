@@ -22,6 +22,16 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberStepper } from "@/components/ui/number-stepper";
@@ -44,15 +54,36 @@ const SubscriptionsTab: React.FC<SubscriptionsTabProps> = ({ formatMoney }) => {
         date: new Date()
     });
 
+    // State for delete confirmation
+    const [deleteDialog, setDeleteDialog] = useState<{
+        isOpen: boolean;
+        subscription: any | null;
+    }>({ isOpen: false, subscription: null });
+
     const handleAdd = () => {
         if (!newSub.name || !newSub.cost || !newSub.date) return;
         addSubscription({
             name: newSub.name,
-            cost: parseFloat(newSub.cost),
+            cost: parseFloat(newSub.cost.replace(/,/g, '')),
             dueDay: newSub.date.getDate(),
         });
         setIsAddOpen(false);
         setNewSub({ name: '', cost: '', date: new Date() });
+    };
+
+    // Function to show delete confirmation
+    const handleDeleteClick = (e: React.MouseEvent, sub: any) => {
+        e.stopPropagation();
+        setDeleteDialog({ isOpen: true, subscription: sub });
+    };
+
+    // Function to confirm deletion
+    const handleConfirmDelete = () => {
+        const sub = deleteDialog.subscription;
+        if (!sub) return;
+
+        deleteSubscription(sub.id);
+        setDeleteDialog({ isOpen: false, subscription: null });
     };
 
     const totalMonthly = useMemo(() => {
@@ -122,7 +153,7 @@ const SubscriptionsTab: React.FC<SubscriptionsTabProps> = ({ formatMoney }) => {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <Button variant="ghost" size="icon" onClick={() => deleteSubscription(sub.id)}>
+                                            <Button variant="ghost" size="icon" onClick={(e) => handleDeleteClick(e, sub)}>
                                                 <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                                             </Button>
                                         </TableCell>
@@ -169,6 +200,24 @@ const SubscriptionsTab: React.FC<SubscriptionsTabProps> = ({ formatMoney }) => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialog.isOpen} onOpenChange={(open) => !open && setDeleteDialog({ isOpen: false, subscription: null })}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Subscription?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete <span className="font-semibold">{deleteDialog.subscription?.name}</span>? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

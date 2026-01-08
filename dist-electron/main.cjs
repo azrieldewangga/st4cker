@@ -88,7 +88,7 @@ const createWindow = () => {
         console.log('Loading URL:', process.env.VITE_DEV_SERVER_URL);
         console.log('Preload Path:', path_1.default.join(__dirname, 'preload.js'));
         mainWindow?.loadURL(process.env.VITE_DEV_SERVER_URL);
-        // mainWindow?.webContents.openDevTools();
+        mainWindow?.webContents.openDevTools();
     }
     else {
         mainWindow?.loadFile(path_1.default.join(__dirname, '../dist/index.html'));

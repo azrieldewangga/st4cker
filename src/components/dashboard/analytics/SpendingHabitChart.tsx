@@ -78,8 +78,10 @@ export function SpendingHabitChart() {
                         <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
                         <Radar
                             dataKey="amount"
-                            fill="var(--color-amount)"
+                            fill="hsl(var(--chart-1))"
                             fillOpacity={0.6}
+                            stroke="hsl(var(--chart-1))"
+                            strokeWidth={2}
                             dot={{
                                 r: 4,
                                 fillOpacity: 1,
