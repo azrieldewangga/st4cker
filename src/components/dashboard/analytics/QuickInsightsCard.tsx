@@ -1,4 +1,4 @@
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import {
     Card,
     CardContent,
@@ -11,7 +11,7 @@ export function QuickInsightsCard() {
     const assignments = useStore(state => state.assignments);
 
     return (
-        <Card className="flex flex-col">
+        <Card className="flex flex-col h-full">
             <CardHeader>
                 <CardTitle>Quick Insights</CardTitle>
                 <CardDescription>Performance Summary</CardDescription>

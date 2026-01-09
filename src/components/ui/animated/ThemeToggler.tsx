@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { Button } from "@/components/ui/button";
 
 export function ThemeToggler() {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { TrendingUp } from "lucide-react";
 import { CartesianGrid, Dot, Line, LineChart } from "recharts";
 import {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { PolarAngleAxis, PolarRadiusAxis, PolarGrid, Radar, RadarChart } from "recharts";
 import {
     Card,
