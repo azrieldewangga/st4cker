@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore } from '../store/useStoreNew';
 import {
     AreaChart, Area, ResponsiveContainer,
 } from 'recharts';
@@ -33,7 +33,12 @@ import { Separator } from "@/components/ui/separator";
 import { useTheme } from "@/components/theme-provider";
 
 const Cashflow = () => {
-    const { transactions, fetchTransactions, currency, setCurrency, exchangeRate } = useStore();
+    // Use direct store access to prevent object recreation
+    const transactions = useStore(state => state.transactions);
+    const fetchTransactions = useStore(state => state.fetchTransactions);
+    const currency = useStore(state => state.currency);
+    const setCurrency = useStore(state => state.setCurrency);
+    const exchangeRate = useStore(state => state.exchangeRate);
     const { theme } = useTheme();
     const [period, setPeriod] = useState<'Weekly' | 'Monthly' | 'Yearly'>('Yearly');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,7 +46,27 @@ const Cashflow = () => {
 
     useEffect(() => {
         fetchTransactions();
-    }, []);
+
+        // Hot Reload / Real-time updates
+        const handleRefresh = () => {
+            fetchTransactions();
+        };
+
+        // Safe check for Electron API
+        // @ts-ignore
+        const api = window.electronAPI;
+        if (api && typeof api.onRefreshData === 'function') {
+            api.onRefreshData(handleRefresh);
+        }
+
+        return () => {
+            // @ts-ignore
+            const api = window.electronAPI;
+            if (api && typeof api.offRefreshData === 'function') {
+                api.offRefreshData();
+            }
+        }
+    }, [fetchTransactions]);
 
     const handleExport = async () => {
         const { success, filePath, error } = await exportToCSV(transactions, `Cashflow_Export_${format(new Date(), 'yyyy-MM-dd')}.csv`);

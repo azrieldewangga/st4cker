@@ -109,6 +109,16 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
         getStartupStatus: () => electron_1.ipcRenderer.invoke('settings:getStartupStatus'),
         toggleStartup: (openAtLogin) => electron_1.ipcRenderer.invoke('settings:toggleStartup', openAtLogin)
     },
+    telegramSync: {
+        verifyPairingCode: (code) => electron_1.ipcRenderer.invoke('telegram:verify-pairing', code),
+        unpair: () => electron_1.ipcRenderer.invoke('telegram:unpair'),
+        syncNow: () => electron_1.ipcRenderer.invoke('telegram:sync-now'),
+        getPairingStatus: () => electron_1.ipcRenderer.invoke('telegram:get-status'),
+        onStatusChange: (callback) => {
+            electron_1.ipcRenderer.on('telegram:status-change', callback);
+            return () => electron_1.ipcRenderer.removeListener('telegram:status-change', callback);
+        }
+    },
     // Generic Event Listeners
     on: (channel, callback) => electron_1.ipcRenderer.on(channel, (_event, ...args) => callback(...args)),
     off: (channel, callback) => electron_1.ipcRenderer.removeListener(channel, (_event, ...args) => callback(...args)),

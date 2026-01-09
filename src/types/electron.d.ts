@@ -113,6 +113,14 @@ export interface IElectronAPI {
         toggleStartup: (openAtLogin: boolean) => Promise<boolean>;
     };
 
+    telegramSync: {
+        verifyPairingCode: (code: string) => Promise<{ success: boolean; sessionToken?: string; error?: string }>;
+        getPairingStatus: () => Promise<{ paired: boolean; status: 'connected' | 'disconnected' | 'unknown' }>;
+        unpair: () => Promise<void>;
+        syncNow: () => Promise<{ success: boolean; error?: string }>;
+        onStatusChange: (callback: (event: any, status: string) => void) => () => void;
+    };
+
     // Events
     notifyDataChanged: () => void;
     onRefreshData: (callback: () => void) => void;

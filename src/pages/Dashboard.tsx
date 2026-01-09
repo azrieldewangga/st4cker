@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { DollarSign } from "lucide-react"
-import { useStore } from "@/store/useStore"
+import { useStore } from "@/store/useStoreNew"
 import {
     Card,
     CardContent,
@@ -33,7 +33,14 @@ import { AnimatedTabsList, AnimatedTabsTrigger } from "@/components/ui/animated/
 import { useSearchParams } from "react-router-dom";
 
 export default function Dashboard() {
-    const { transactions, currency, userProfile, assignments, subscriptions, isAppReady } = useStore();
+    // Use direct store access to prevent object recreation and modal flickering
+    const transactions = useStore(state => state.transactions);
+    const currency = useStore(state => state.currency);
+    const userProfile = useStore(state => state.userProfile);
+    const assignments = useStore(state => state.assignments);
+    const subscriptions = useStore(state => state.subscriptions);
+    const isAppReady = useStore(state => state.isAppReady);
+
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
 
@@ -98,7 +105,7 @@ export default function Dashboard() {
         })
         .reduce((acc, t) => acc + t.amount, 0);
 
-    const { monthlyLimit } = useStore();
+    const monthlyLimit = useStore(state => state.monthlyLimit);
     const percentage = Math.min(Math.round((monthlyExpense / monthlyLimit) * 100), 100);
 
     const formatter = new Intl.NumberFormat(currency === 'IDR' ? 'id-ID' : 'en-US', {

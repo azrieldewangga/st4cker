@@ -1,10 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { DollarSign, GraduationCap, BookOpen, Clock } from "lucide-react";
 
 
 export function MetricCards() {
-    const { userProfile, assignments, transactions, courses, grades, schedule, currency } = useStore();
+    const userProfile = useStore(state => state.userProfile);
+    const assignments = useStore(state => state.assignments);
+    const transactions = useStore(state => state.transactions);
+    const courses = useStore(state => state.courses);
+    const grades = useStore(state => state.grades);
+    const schedule = useStore(state => state.schedule);
+    const currency = useStore(state => state.currency);
 
     // 1. Total Balance (Matching Cashflow.tsx logic)
     const balance = transactions.reduce((acc, tx) => {

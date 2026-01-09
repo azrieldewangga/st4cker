@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Project, ProjectAttachment } from '@/types/models';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/store/useStoreNew';
 import {
     Calendar, Clock, FileText, Link as LinkIcon,
     Download, ExternalLink, Plus
@@ -21,10 +21,13 @@ interface ProjectDetailsModalProps {
 }
 
 const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClose, projectId, onEdit, onLogProgress }) => {
-    const {
-        projects, fetchProjectSessions, fetchProjectAttachments,
-        projectSessions, projectAttachments, courses
-    } = useStore();
+    // Use direct store access to avoid object recreation
+    const projects = useStore(state => state.projects);
+    const fetchProjectSessions = useStore(state => state.fetchProjectSessions);
+    const fetchProjectAttachments = useStore(state => state.fetchProjectAttachments);
+    const projectSessions = useStore(state => state.projectSessions);
+    const projectAttachments = useStore(state => state.projectAttachments);
+    const courses = useStore(state => state.courses);
 
     const project = projectId ? projects.find(p => p.id === projectId) : null;
     const sessions = projectId ? (projectSessions[projectId] || []) : [];
@@ -40,7 +43,7 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
                 fetchProjectAttachments(projectId);
             }
         }
-    }, [isOpen, projectId]);
+    }, [isOpen, projectId]); // Removed functions from dependencies
 
     if (!project) return null;
 
@@ -128,8 +131,8 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
                     </div>
                 </div>
 
-                <ScrollArea className="max-h-[calc(90vh-300px)] px-6 pb-6">
-                    <div className="space-y-8">
+                <ScrollArea className="max-h-[calc(90vh-300px)] px-6 pb-6 pr-8">
+                    <div className="space-y-8 pr-2">
                         {/* Attachments */}
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -166,9 +169,14 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
 
                         {/* Progress History */}
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                                 <h3 className="text-sm font-semibold">Progress History</h3>
-                                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onLogProgress(project)}>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs whitespace-nowrap flex-shrink-0"
+                                    onClick={() => onLogProgress(project)}
+                                >
                                     Log Progress
                                 </Button>
                             </div>
@@ -186,7 +194,9 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
                                                     <Badge variant="outline" className="font-mono text-[10px]">
                                                         {Math.floor(session.duration / 60)}h {session.duration % 60}m
                                                     </Badge>
-                                                    <span className="text-green-500 font-medium">+{session.progressAfter - session.progressBefore}%</span>
+                                                    <span className={`font-medium ${(session.progressAfter - session.progressBefore) > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                        {(session.progressAfter - session.progressBefore) > 0 ? '+' : ''}{session.progressAfter - session.progressBefore}%
+                                                    </span>
                                                 </div>
                                             </div>
                                             <div className="text-sm text-muted-foreground bg-muted/40 p-3 rounded-md mt-2">

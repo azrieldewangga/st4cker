@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore } from '../../store/useStoreNew';
 import { Assignment } from '../../types/models';
 import { BookOpen, GraduationCap, Calendar, CreditCard } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -10,7 +10,7 @@ interface SearchResultsProps {
 }
 
 const SearchResults: React.FC<SearchResultsProps> = ({ query, closeSearch }) => {
-    const { assignments } = useStore();
+    const assignments = useStore(state => state.assignments);
 
     if (!query) return null;
 

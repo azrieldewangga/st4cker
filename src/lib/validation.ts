@@ -132,7 +132,18 @@ export function validateData<T>(schema: z.ZodSchema<T>, data: unknown): { succes
         return { success: true, data: result.data };
     }
 
-    const errors = (result as any).error.errors.map((err: any) => {
+    if (!result.error) {
+        return { success: false, errors: ['Unknown validation error'] };
+    }
+
+    const errorList = result.error.issues || (result.error as any).errors;
+
+    if (!errorList) {
+        console.error('Validation error structure unexpected:', result);
+        return { success: false, errors: ['Unknown validation error'] };
+    }
+
+    const errors = errorList.map((err: any) => {
         const path = err.path.length > 0 ? err.path.join('.') : 'value';
         return `${path}: ${err.message}`;
     });

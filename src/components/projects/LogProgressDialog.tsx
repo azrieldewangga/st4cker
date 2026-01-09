@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/store/useStoreNew';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,8 @@ const LogProgressDialog: React.FC<LogProgressDialogProps> = ({
     projectId,
     currentProgress
 }) => {
-    const { addProjectSession, updateProject } = useStore();
+    const addProjectSession = useStore(state => state.addProjectSession);
+    const updateProject = useStore(state => state.updateProject);
     const [formData, setFormData] = useState({
         sessionDate: new Date(),
         durationPreset: '120' as '30' | '60' | '120' | 'custom',
@@ -236,7 +237,7 @@ const LogProgressDialog: React.FC<LogProgressDialogProps> = ({
                                     <span>100%</span>
                                 </div>
                                 {progressChange !== 0 && (
-                                    <p className={`text-xs ${progressChange > 0 ? 'text-green-600' : 'text-amber-600'}`}>
+                                    <p className={`text-xs font-medium ${progressChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         {progressChange > 0 ? '+' : ''}{progressChange}% change
                                     </p>
                                 )}

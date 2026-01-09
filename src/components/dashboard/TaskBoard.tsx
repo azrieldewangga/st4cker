@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore } from '../../store/useStoreNew';
 import { Assignment } from '../../types/models';
 import { Clock, ArrowRight } from 'lucide-react';
 import clsx from 'clsx';
@@ -42,7 +42,9 @@ const TaskCard = ({ task, status }: { task: Assignment; status: 'to-do' | 'progr
 };
 
 const TaskBoard = () => {
-    const { assignments, courses, userProfile } = useStore();
+    const assignments = useStore(state => state.assignments);
+    const courses = useStore(state => state.courses);
+    const userProfile = useStore(state => state.userProfile);
     const navigate = useNavigate();
 
     // Filter and sort assignments by status (most recent deadline first)

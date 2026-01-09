@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore } from '../../store/useStoreNew';
 import { Assignment } from '../../types/models';
 import { format, differenceInHours, differenceInDays } from 'date-fns';
 import { Clock, ArrowRight, CheckCircle } from 'lucide-react';
@@ -8,7 +8,11 @@ import clsx from 'clsx';
 import GlassCard from '../shared/GlassCard';
 
 const NearestDeadlineCard = () => {
-    const { assignments, fetchAssignments, updateAssignment, courses, userProfile } = useStore();
+    const assignments = useStore(state => state.assignments);
+    const fetchAssignments = useStore(state => state.fetchAssignments);
+    const updateAssignment = useStore(state => state.updateAssignment);
+    const courses = useStore(state => state.courses);
+    const userProfile = useStore(state => state.userProfile);
     const [nearest, setNearest] = useState<Assignment[]>([]);
 
     useEffect(() => {

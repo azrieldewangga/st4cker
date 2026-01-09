@@ -1108,7 +1108,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     getProjectById: async (id: string) => {
         try {
-            const project = await window.electronAPI.projects.getById(id);
+            const project = await window.electronAPI.projects.get(id);
             return project;
         } catch (error) {
             console.error('Get project by ID error:', error);

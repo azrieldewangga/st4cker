@@ -1,12 +1,15 @@
 import React, { useEffect } from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore } from '../../store/useStoreNew';
 import { LayoutDashboard, BookOpen, GraduationCap, Calendar, CreditCard } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { ThemeToggler } from '@/components/ui/animated/ThemeToggler';
 
 const Sidebar = () => {
-    const { userProfile, fetchUserProfile, theme, setTheme } = useStore();
+    const userProfile = useStore(state => state.userProfile);
+    const fetchUserProfile = useStore(state => state.fetchUserProfile);
+    const theme = useStore(state => state.theme);
+    const setTheme = useStore(state => state.setTheme);
     const navigate = useNavigate();
 
     useEffect(() => {

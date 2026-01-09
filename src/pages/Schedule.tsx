@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useStore } from '../store/useStore';
+import { useStore } from '../store/useStoreNew';
 import { Calendar, Clock, Search, X, MapPin, User as UserIcon, RefreshCw, Trash2, Edit2, Link as LinkIcon, FileText, ExternalLink, Plus } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
@@ -48,21 +48,20 @@ const COLOR_VARIANTS = [
 ];
 
 const Schedule = () => {
-    const {
-        courses,
-        fetchCourses,
-        userProfile,
-        schedule,
-        fetchSchedule,
-        setScheduleItem,
-        performanceRecords,
-        theme,
-        fetchMaterials,
-        materials,
-        addMaterial,
-        deleteMaterial,
-        undo
-    } = useStore();
+    // Use direct store access to prevent object recreation
+    const courses = useStore(state => state.courses);
+    const fetchCourses = useStore(state => state.fetchCourses);
+    const userProfile = useStore(state => state.userProfile);
+    const schedule = useStore(state => state.schedule);
+    const fetchSchedule = useStore(state => state.fetchSchedule);
+    const setScheduleItem = useStore(state => state.setScheduleItem);
+    const performanceRecords = useStore(state => state.performanceRecords);
+    const theme = useStore(state => state.theme);
+    const fetchMaterials = useStore(state => state.fetchMaterials);
+    const materials = useStore(state => state.materials);
+    const addMaterial = useStore(state => state.addMaterial);
+    const deleteMaterial = useStore(state => state.deleteMaterial);
+    const undo = useStore(state => state.undo);
 
     // UI State
     const [searchTerm, setSearchTerm] = useState('');
@@ -494,22 +493,24 @@ const Schedule = () => {
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input placeholder="Search course..." className="pl-8" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         </div>
-                        <div className="max-h-[300px] overflow-y-auto space-y-1">
-                            {filteredCourses.map(course => (
-                                <Button
-                                    key={course.id}
-                                    variant="ghost"
-                                    className="w-full justify-start font-normal h-auto py-3"
-                                    onClick={() => handleSelectCourse(course.id)}
-                                >
-                                    <div className="flex flex-col items-start gap-1">
-                                        <span className="font-medium">{course.name}</span>
-                                        <Badge variant="outline" className="text-[10px]">{course.sks} SKS</Badge>
-                                    </div>
-                                </Button>
-                            ))}
-                            {filteredCourses.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No courses found</p>}
-                        </div>
+                        <ScrollArea className="h-[300px]">
+                            <div className="space-y-1 p-1">
+                                {filteredCourses.map(course => (
+                                    <Button
+                                        key={course.id}
+                                        variant="ghost"
+                                        className="w-full justify-start font-normal h-auto py-3"
+                                        onClick={() => handleSelectCourse(course.id)}
+                                    >
+                                        <div className="flex flex-col items-start gap-1 w-full overflow-hidden">
+                                            <span className="font-medium truncate w-full text-left">{course.name}</span>
+                                            <Badge variant="outline" className="text-[10px]">{course.sks} SKS</Badge>
+                                        </div>
+                                    </Button>
+                                ))}
+                                {filteredCourses.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No courses found</p>}
+                            </div>
+                        </ScrollArea>
                         <Button variant="destructive" className="w-full" onClick={() => handleSelectCourse('')} aria-label="Clear selected slot">Clear Slot</Button>
                     </div>
                 </DialogContent>

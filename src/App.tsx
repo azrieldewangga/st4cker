@@ -4,7 +4,7 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ErrorFallback } from '@/components/common/ErrorFallback';
 import MainLayout from './components/layout/MainLayout';
 // import LoadingScreen from './components/shared/LoadingScreen';
-import { useStore } from './store/useStore';
+import { useStore } from './store/useStoreNew';
 import Dashboard from './pages/Dashboard';
 
 import Assignments from './pages/Assignments';
@@ -27,14 +27,46 @@ import { useState } from 'react';
 
 
 const StandaloneRoutes = () => {
-  const { initApp, isAppReady, userProfile, theme: storeTheme, setTheme: setStoreTheme } = useStore();
-  const { theme } = useTheme(); // Keep for reading current effective theme if needed, or just use storeTheme
+  // Use direct store access to prevent object recreation
+  const initApp = useStore(state => state.initApp);
+  const isAppReady = useStore(state => state.isAppReady);
+  const userProfile = useStore(state => state.userProfile);
+  const theme = useStore(state => state.theme);
+  const setTheme = useStore(state => state.setTheme);
+
+  const { theme: contextTheme } = useTheme(); // Keep for reading current effective theme if needed, or just use storeTheme
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     // Detect window type
     const isMain = window.location.hash === '' || window.location.hash === '#/';
     initApp(!isMain);
+
+    // Listen for refresh-data events (e.g. from Telegram)
+    const handleRefresh = () => {
+      console.log('[App] Received refresh-data signal');
+      useStore.getState().fetchAssignments();
+      import("sonner").then(({ toast }) => {
+        toast.success("New Data Received", {
+          description: "Your assignments have been updated from Telegram."
+        });
+      });
+    };
+
+    // Safe check for Electron API
+    // @ts-ignore
+    const api = window.electronAPI;
+    if (api && typeof api.onRefreshData === 'function') {
+      api.onRefreshData(handleRefresh);
+    }
+
+    return () => {
+      // @ts-ignore
+      const api = window.electronAPI;
+      if (api && typeof api.offRefreshData === 'function') {
+        api.offRefreshData();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -58,8 +90,8 @@ const StandaloneRoutes = () => {
           (window as any).triggerThemeToggle();
         } else {
           // Fallback if button not mounted yet
-          const newTheme = storeTheme === 'dark' ? 'light' : 'dark';
-          setStoreTheme(newTheme);
+          const newTheme = theme === 'dark' ? 'light' : 'dark';
+          setTheme(newTheme);
         }
       }
 
@@ -102,8 +134,8 @@ const StandaloneRoutes = () => {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onToggleTheme={() => {
-          const newTheme = storeTheme === 'dark' ? 'light' : 'dark';
-          setStoreTheme(newTheme);
+          const newTheme = theme === 'dark' ? 'light' : 'dark';
+          setTheme(newTheme);
         }}
         onUndo={() => useStore.getState().undo()}
         onRedo={() => useStore.getState().redo()}

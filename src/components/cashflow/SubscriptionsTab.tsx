@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore } from '../../store/useStoreNew';
 import { Plus, Trash2, Calendar, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from "@/lib/utils";
@@ -42,7 +42,9 @@ interface SubscriptionsTabProps {
 }
 
 const SubscriptionsTab: React.FC<SubscriptionsTabProps> = ({ formatMoney }) => {
-    const { subscriptions, addSubscription, deleteSubscription } = useStore();
+    const subscriptions = useStore(state => state.subscriptions);
+    const addSubscription = useStore(state => state.addSubscription);
+    const deleteSubscription = useStore(state => state.deleteSubscription);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [newSub, setNewSub] = useState<{
         name: string;
@@ -153,7 +155,7 @@ const SubscriptionsTab: React.FC<SubscriptionsTabProps> = ({ formatMoney }) => {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <Button variant="ghost" size="icon" onClick={(e) => handleDeleteClick(e, sub)}>
+                                            <Button variant="ghost" size="icon" onClick={(e: React.MouseEvent) => handleDeleteClick(e, sub)}>
                                                 <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                                             </Button>
                                         </TableCell>

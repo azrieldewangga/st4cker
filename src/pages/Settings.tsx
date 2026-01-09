@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
-import { useStore } from '../store/useStore';
+import { useStore } from '../store/useStoreNew';
 import { User, Save, Cloud, CheckCircle, RefreshCw, Trash2, Clock, Upload, RotateCcw, Moon, Sun, Laptop } from 'lucide-react';
+import { TelegramTab } from './Settings/TelegramTab';
 import { cn } from "@/lib/utils";
 
 // Shadcn Components
@@ -45,7 +46,7 @@ import {
 import ImageCropper from "@/components/shared/ImageCropper";
 
 const GoogleDriveCard = () => {
-    const { showNotification } = useStore();
+    const showNotification = useStore(state => state.showNotification);
 
     // G-Drive State
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -182,11 +183,20 @@ const GoogleDriveCard = () => {
 };
 
 const Settings = () => {
-    // Hoist Hooks
-    const { userProfile, updateUserProfile, showNotification, autoTheme, setAutoTheme, theme, setTheme, themeSchedule, setThemeSchedule } = useStore();
+    // Use direct store access to prevent object recreation
+    const userProfile = useStore(state => state.userProfile);
+    const updateUserProfile = useStore(state => state.updateUserProfile);
+    const showNotification = useStore(state => state.showNotification);
+    const autoTheme = useStore(state => state.autoTheme);
+    const setAutoTheme = useStore(state => state.setAutoTheme);
+    const theme = useStore(state => state.theme);
+    const setTheme = useStore(state => state.setTheme);
+    const themeSchedule = useStore(state => state.themeSchedule);
+    const setThemeSchedule = useStore(state => state.setThemeSchedule);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchParams] = useSearchParams();
     const view = searchParams.get('view') || 'preferences'; // Default to preferences if null
+    const isTelegramView = view === 'telegram';
 
     // Form State
     const [formData, setFormData] = useState({
@@ -308,7 +318,10 @@ const Settings = () => {
 
     return (
         <div className="flex flex-col gap-6 p-1 max-w-4xl mx-auto pb-10">
-            {isProfileView ? (
+            {isTelegramView ? (
+                // --- TELEGRAM VIEW ---
+                <TelegramTab />
+            ) : isProfileView ? (
                 // --- PROFILE VIEW ---
                 <>
                     {/* Profile Section */}
@@ -565,6 +578,9 @@ const Settings = () => {
 
                         <GoogleDriveCard />
                     </div>
+
+                    {/* Telegram Sync */}
+                    <TelegramTab />
                 </>
             )}
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/store/useStoreNew';
 import { format } from 'date-fns';
 import { TransactionSchema, validateData } from '@/lib/validation';
 import { AlertCircle } from 'lucide-react';
@@ -30,7 +30,9 @@ interface TransactionModalProps {
 }
 
 const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => {
-    const { addTransaction, currency } = useStore();
+    // Use direct store access to prevent object recreation and modal flickering
+    const addTransaction = useStore(state => state.addTransaction);
+    const currency = useStore(state => state.currency);
 
     const [formData, setFormData] = useState({
         title: '',

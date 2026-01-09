@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import Pencil1Icon from '../components/icons/Pencil1Icon';
-import { useStore } from '../store/useStore';
+import { useStore } from '../store/useStoreNew';
 import { GraduationCap, Download } from 'lucide-react';
 import { exportToCSV } from '../utils/export';
 import { toast } from "sonner";
@@ -29,7 +29,15 @@ import { SkeletonCard, SkeletonTable } from '../components/shared/Skeleton';
 import { EmptyState } from '../components/shared/EmptyState';
 
 const Performance = () => {
-    const { grades, fetchGrades, updateGrade, userProfile, getSemesterCourses, addCourse, updateCourse, deleteCourse } = useStore();
+    // Use direct store access to prevent object recreation
+    const grades = useStore(state => state.grades);
+    const fetchGrades = useStore(state => state.fetchGrades);
+    const updateGrade = useStore(state => state.updateGrade);
+    const userProfile = useStore(state => state.userProfile);
+    const getSemesterCourses = useStore(state => state.getSemesterCourses);
+    const addCourse = useStore(state => state.addCourse);
+    const updateCourse = useStore(state => state.updateCourse);
+    const deleteCourse = useStore(state => state.deleteCourse);
 
 
 

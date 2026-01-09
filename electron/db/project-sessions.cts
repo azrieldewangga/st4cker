@@ -32,6 +32,15 @@ export const projectSessions = {
             progressAfter: data.progressAfter,
             createdAt: data.createdAt || new Date().toISOString()
         });
+
+        // CRITICAL: Update the parent project's progress to match the session's progressAfter
+        const updateProjectStmt = db.prepare(`
+            UPDATE projects 
+            SET totalProgress = ? 
+            WHERE id = ?
+        `);
+        updateProjectStmt.run(data.progressAfter, data.projectId);
+
         return { success: true };
     },
 

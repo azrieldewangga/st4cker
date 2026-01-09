@@ -17,7 +17,7 @@ import {
     ChartTooltipContent,
     type ChartConfig,
 } from "@/components/ui/chart"
-import { useStore } from "@/store/useStore"
+import { useStore } from "@/store/useStoreNew"
 
 export const description = "An interactive bar chart"
 
@@ -59,7 +59,8 @@ export function OverviewChart({ data, period, headerAction }: OverviewChartProps
         return { month: maxItem.date, value: maxItem.balance };
     }, [chartData]);
 
-    const { currency, exchangeRate } = useStore();
+    const currency = useStore(state => state.currency);
+    const exchangeRate = useStore(state => state.exchangeRate);
     const formatMoney = (val: number) => {
         if (currency === 'IDR') {
             return new Intl.NumberFormat('id-ID', {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/store/useStoreNew';
 import { format } from 'date-fns';
 import { AssignmentType } from '@/types/models';
 import {
@@ -30,14 +30,13 @@ interface AssignmentModalProps {
 }
 
 const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) => {
-    const {
-        addAssignment,
-        updateAssignment,
-        courses,
-        fetchCourses,
-        assignments,
-        userProfile
-    } = useStore();
+    // Use direct store access to prevent object recreation and modal flickering
+    const addAssignment = useStore(state => state.addAssignment);
+    const updateAssignment = useStore(state => state.updateAssignment);
+    const courses = useStore(state => state.courses);
+    const fetchCourses = useStore(state => state.fetchCourses);
+    const assignments = useStore(state => state.assignments);
+    const userProfile = useStore(state => state.userProfile);
 
     const [formData, setFormData] = useState({
         courseName: '',
@@ -51,7 +50,7 @@ const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) =
         if (isOpen) {
             fetchCourses();
         }
-    }, [isOpen, fetchCourses]);
+    }, [isOpen]); // Removed fetchCourses from deps
 
     // Reset or populate form based on edit mode
     useEffect(() => {

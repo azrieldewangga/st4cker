@@ -1,6 +1,6 @@
 
 import { useNavigate } from "react-router-dom";
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bell, Calendar, AlertCircle, CheckCircle2, CreditCard, RefreshCcw } from "lucide-react";
 import { format, differenceInDays, isPast, isToday, isTomorrow, addMonths, setDate } from "date-fns";
@@ -37,7 +37,12 @@ type NotificationItem = {
 };
 
 export function NotificationsTab() {
-    const { assignments, subscriptions, userProfile, transactions, addTransaction, currency } = useStore();
+    const assignments = useStore(state => state.assignments);
+    const subscriptions = useStore(state => state.subscriptions);
+    const userProfile = useStore(state => state.userProfile);
+    const transactions = useStore(state => state.transactions);
+    const addTransaction = useStore(state => state.addTransaction);
+    const currency = useStore(state => state.currency);
     const navigate = useNavigate();
 
     // State for confirmation dialog

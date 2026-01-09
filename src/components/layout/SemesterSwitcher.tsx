@@ -7,10 +7,10 @@ import {
     AvatarImage,
 } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { useStore } from "@/store/useStore"
+import { useStore } from "@/store/useStoreNew"
 
 export function SemesterSwitcher({ className }: React.HTMLAttributes<HTMLDivElement>) {
-    const { userProfile } = useStore()
+    const userProfile = useStore(state => state.userProfile);
     const currentSem = userProfile?.semester || 1;
 
     return (

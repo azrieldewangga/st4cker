@@ -1,4 +1,4 @@
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { format } from "date-fns";
 import { Transaction, Course } from "@/types/models";
 
@@ -10,7 +10,10 @@ interface PrintableReportProps {
 }
 
 export function PrintableReport({ type, month, year, semester }: PrintableReportProps) {
-    const { userProfile, transactions, getSemesterCourses, currency } = useStore();
+    const userProfile = useStore(state => state.userProfile);
+    const transactions = useStore(state => state.transactions);
+    const getSemesterCourses = useStore(state => state.getSemesterCourses);
+    const currency = useStore(state => state.currency);
 
     // -- Helpers --
     const formatCurrency = (amount: number) => {

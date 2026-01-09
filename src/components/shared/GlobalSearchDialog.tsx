@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Search, FileText, CreditCard, BookOpen, Calendar } from 'lucide-react';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/store/useStoreNew';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -17,7 +17,13 @@ export const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({
     onClose,
 }) => {
     const navigate = useNavigate();
-    const { assignments, transactions, courses, userProfile } = useStore();
+
+    // Use direct store access to prevent object recreation
+    const assignments = useStore(state => state.assignments);
+    const transactions = useStore(state => state.transactions);
+    const courses = useStore(state => state.courses);
+    const userProfile = useStore(state => state.userProfile);
+
     const [search, setSearch] = useState('');
 
     // Reset search when dialog opens/closes

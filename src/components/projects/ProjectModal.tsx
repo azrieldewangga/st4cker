@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/store/useStoreNew';
 import { Project, ProjectAttachment } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,10 +22,16 @@ interface ProjectModalProps {
 }
 
 const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId, initialData }) => {
-    const {
-        addProject, updateProject, getProjectById, courses, userProfile,
-        fetchProjectAttachments, addProjectAttachment, deleteProjectAttachment, projectAttachments
-    } = useStore();
+    // Use new store directly to avoid object creation
+    const addProject = useStore(state => state.addProject);
+    const updateProject = useStore(state => state.updateProject);
+    const getProjectById = useStore(state => state.getProjectById);
+    const courses = useStore(state => state.courses);
+    const userProfile = useStore(state => state.userProfile);
+    const fetchProjectAttachments = useStore(state => state.fetchProjectAttachments);
+    const addProjectAttachment = useStore(state => state.addProjectAttachment);
+    const deleteProjectAttachment = useStore(state => state.deleteProjectAttachment);
+    const projectAttachments = useStore(state => state.projectAttachments);
 
     // Form State
     const [projectType, setProjectType] = useState<'course' | 'personal'>('course');
@@ -59,11 +65,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId,
                         id: crypto.randomUUID(),
                         projectId: '',
                         type: 'file',
-                        title: file.name,
-                        url: path,
-                        // @ts-ignore
                         name: file.name,
-                        // @ts-ignore
                         path: path,
                         createdAt: new Date().toISOString()
                     };
@@ -124,7 +126,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId,
                 setLocalAttachments([]);
             }
         }
-    }, [isOpen, initialData, editingId, getProjectById, fetchProjectAttachments]);
+    }, [isOpen, initialData, editingId]);
 
     // Sync Local Attachments with Store when Editing
     useEffect(() => {
@@ -173,11 +175,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId,
                             id: crypto.randomUUID(),
                             projectId: '',
                             type: 'file',
-                            title: file.name,
-                            url: path,
-                            // @ts-ignore
                             name: file.name,
-                            // @ts-ignore
                             path: path,
                             createdAt: new Date().toISOString()
                         };
@@ -206,11 +204,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId,
                 id: crypto.randomUUID(),
                 projectId: '',
                 type: 'link',
-                title: linkForm.title,
-                url: linkForm.url,
-                // @ts-ignore
                 name: linkForm.title,
-                // @ts-ignore
                 path: linkForm.url,
                 createdAt: new Date().toISOString()
             };
@@ -224,18 +218,19 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId,
         setLocalAttachments(prev => prev.filter(a => a.id !== id));
         setDeletedAttachmentIds(prev => [...prev, id]);
     };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const projectData = {
-            ...formData,
-            courseId: projectType === 'personal' ? null : formData.courseId,
+            title: formData.title,
+            description: formData.description,
+            priority: formData.priority,
+            courseId: projectType === 'course' ? formData.courseId : null, // Reverted to use projectType state
             startDate: formData.startDate.toISOString(),
             deadline: formData.deadline.toISOString(),
             semester: userProfile?.semester || 1,
-            status: editingId ? formData.status : ('active' as const),
-            totalProgress: editingId ? undefined : 0,
+            status: formData.status, // Kept formData.status as per instruction, but note original had editingId logic
+            totalProgress: 0,
         };
 
         try {
@@ -258,7 +253,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId,
 
             if (targetProjectId) {
                 for (const delId of deletedAttachmentIds) {
-                    await deleteProjectAttachment(delId);
+                    await deleteProjectAttachment(delId, targetProjectId);
                 }
 
                 const originalAttachments = projectAttachments[targetProjectId] || [];
@@ -269,10 +264,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, editingId,
                         await addProjectAttachment({
                             projectId: targetProjectId,
                             type: att.type,
-                            // @ts-ignore
-                            name: att.name || att.title,
-                            // @ts-ignore
-                            path: att.path || att.url
+                            name: att.name,
+                            path: att.path
                         });
                     }
                 }

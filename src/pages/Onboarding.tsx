@@ -1,6 +1,6 @@
 
 import { useState, useRef } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore } from '@/store/useStoreNew';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 export default function Onboarding() {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
-    const { updateUserProfile } = useStore();
+
+    // Use direct store access to prevent object recreation
+    const updateUserProfile = useStore(state => state.updateUserProfile);
+
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
 

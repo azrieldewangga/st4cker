@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Printer, Clock, TrendingUp } from "lucide-react";
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { PrintableReport } from "@/components/reports/PrintableReport";
 import { toast } from "sonner";
 
 export function ReportsTab() {
-    const { userProfile, transactions, getSemesterCourses } = useStore();
+    const userProfile = useStore(state => state.userProfile);
+    const transactions = useStore(state => state.transactions);
+    const getSemesterCourses = useStore(state => state.getSemesterCourses);
     const [reportType, setReportType] = useState<'financial' | 'academic' | null>(null);
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth().toString());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore } from '../store/useStoreNew';
 import { AssignmentStatus, Assignment } from '../types/models';
 import { Plus, GripVertical, MoreHorizontal, Search, Trash2, Copy, Edit } from 'lucide-react';
 import { toast } from "sonner";
@@ -325,7 +325,17 @@ const Assignments = () => {
         if (data.status === 'done') triggerConfetti();
     }
 
-    const { assignments, fetchAssignments, updateAssignment, reorderAssignments, courses, fetchCourses, duplicateAssignment, deleteAssignment, userProfile, undo } = useStore();
+    // Access store directly to prevent object recreation and flickering
+    const assignments = useStore(state => state.assignments);
+    const fetchAssignments = useStore(state => state.fetchAssignments);
+    const updateAssignment = useStore(state => state.updateAssignment);
+    const reorderAssignments = useStore(state => state.reorderAssignments);
+    const courses = useStore(state => state.courses);
+    const fetchCourses = useStore(state => state.fetchCourses);
+    const duplicateAssignment = useStore(state => state.duplicateAssignment);
+    const deleteAssignment = useStore(state => state.deleteAssignment);
+    const userProfile = useStore(state => state.userProfile);
+    const undo = useStore(state => state.undo);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -421,7 +431,7 @@ const Assignments = () => {
     useEffect(() => {
         fetchAssignments();
         fetchCourses();
-    }, [fetchAssignments, fetchCourses]);
+    }, []); // Remove functions from deps
 
     // Keyboard Shortcut: Ctrl+N to open New Assignment, ESC to deselect
     useEffect(() => {

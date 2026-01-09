@@ -15,7 +15,7 @@ const initialNotifications = [
   }
 ];
 
-import { useStore } from "@/store/useStore";
+import { useStore } from "@/store/useStoreNew";
 import { useEffect, useState } from "react";
 
 
@@ -54,7 +54,7 @@ const viewAllTextVariants = {
 function NotificationList() {
   const [notifications, setNotifications] = useState<any[]>(initialNotifications);
   const [isVisible, setIsVisible] = useState(true);
-  const { notification } = useStore();
+  const notification = useStore(state => state.notification);
   const navigate = useNavigate();
 
   useEffect(() => {

@@ -18,14 +18,14 @@ import {
     DropdownMenuSubContent,
     DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
-import { useStore } from "@/store/useStore"
+import { useStore } from "@/store/useStoreNew"
 import { useNavigate } from "react-router-dom"
 import { useTheme } from "@/components/theme-provider"
 import { Moon, Sun, Laptop } from "lucide-react"
 import { useEffect } from "react"
 
 export function UserNav() {
-    const { userProfile } = useStore()
+    const userProfile = useStore(state => state.userProfile);
     const navigate = useNavigate()
     const { setTheme } = useTheme()
 

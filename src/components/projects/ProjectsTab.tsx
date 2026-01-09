@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useStore } from '@/store/useStore';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Project } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { format, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
@@ -39,6 +38,11 @@ import {
 import ProjectModal from './ProjectModal';
 import ProjectDetailsModal from './ProjectDetailsModal';
 import LogProgressDialog from './LogProgressDialog';
+import { ProjectCardSkeleton } from '@/components/ui/skeleton';
+
+// Performance optimizations - use custom hooks
+import { useFilteredProjects, useProjectHelpers } from '@/hooks/useFilteredProjects';
+import { useStore } from '@/store/useStoreNew';
 
 interface ProjectsTabProps {
     isModalOpen: boolean;
@@ -46,7 +50,14 @@ interface ProjectsTabProps {
 }
 
 const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }) => {
-    const { projects, fetchProjects, courses, deleteProject, undo } = useStore();
+    // Use stable selectors - NO object destructuring to prevent re-renders
+    const projects = useStore(state => state.projects);
+    const courses = useStore(state => state.courses);
+
+    // Get actions directly (stable references)
+    const fetchProjects = useStore(state => state.fetchProjects);
+    const deleteProject = useStore(state => state.deleteProject);
+    const undo = useStore(state => state.undo);
 
     // Dialog State
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -66,11 +77,12 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, projectId: string } | null>(null);
     const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [isLoading, setIsLoading] = useState(true);
     const ITEMS_PER_PAGE = 6;
 
     useEffect(() => {
-        fetchProjects();
-    }, [fetchProjects]);
+        fetchProjects().finally(() => setIsLoading(false));
+    }, []); // Empty deps - only fetch once on mount
 
     // Close menu on click anywhere
     useEffect(() => {
@@ -119,28 +131,6 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
         return course?.name || "Unknown Course";
     };
 
-    const getDaysRemaining = (deadline: string) => {
-        return differenceInDays(new Date(deadline), new Date());
-    };
-
-    const getPriorityColor = (priority: string) => {
-        switch (priority) {
-            case 'high': return 'text-red-500';
-            case 'medium': return 'text-yellow-500';
-            case 'low': return 'text-gray-500';
-            default: return 'text-gray-500';
-        }
-    };
-
-    const getPriorityIcon = (priority: string) => {
-        switch (priority) {
-            case 'high': return '🔴';
-            case 'medium': return '🟡';
-            case 'low': return '⚪';
-            default: return '⚪';
-        }
-    };
-
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'active':
@@ -154,33 +144,16 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
         }
     };
 
-    const filteredProjects = projects.filter(p => {
-        const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-        const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
-        const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesStatus && matchesPriority && matchesSearch;
-    }).sort((a, b) => {
-        switch (sortOption) {
-            case 'deadline-asc':
-                return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-            case 'deadline-desc':
-                return new Date(b.deadline).getTime() - new Date(a.deadline).getTime();
-            case 'progress-asc':
-                return (a.totalProgress || 0) - (b.totalProgress || 0);
-            case 'progress-desc':
-                return (b.totalProgress || 0) - (a.totalProgress || 0);
-            case 'priority-high':
-                const pOrder = { high: 3, medium: 2, low: 1 };
-                return (pOrder[b.priority as keyof typeof pOrder] || 0) - (pOrder[a.priority as keyof typeof pOrder] || 0);
-            case 'priority-low':
-                const pOrderLow = { high: 3, medium: 2, low: 1 };
-                return (pOrderLow[a.priority as keyof typeof pOrderLow] || 0) - (pOrderLow[b.priority as keyof typeof pOrderLow] || 0);
-            case 'title-asc':
-                return a.title.localeCompare(b.title);
-            default:
-                return 0;
-        }
+    // Performance optimization - use memoized filtering
+    const filteredProjects = useFilteredProjects(projects, {
+        statusFilter,
+        priorityFilter,
+        sortOption: sortOption as any,
+        searchQuery,
     });
+
+    // Use memoized helper functions
+    const { getDaysRemaining, getPriorityColor, getPriorityIcon } = useProjectHelpers();
 
     return (
         <div className="space-y-6">
@@ -228,7 +201,13 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                 </div>
             </div>
 
-            {filteredProjects.length === 0 ? (
+            {isLoading ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {[...Array(6)].map((_, i) => (
+                        <ProjectCardSkeleton key={i} />
+                    ))}
+                </div>
+            ) : filteredProjects.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed rounded-lg">
                     <div className="text-muted-foreground">
                         <p className="text-lg font-medium">No projects found</p>
@@ -293,7 +272,7 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                                             size="sm"
                                             variant="outline"
                                             className="h-8 text-xs px-4"
-                                            onClick={(e) => {
+                                            onClick={(e: React.MouseEvent) => {
                                                 e.stopPropagation();
                                                 setViewingProjectId(project.id);
                                             }}
@@ -305,7 +284,7 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                                             size="sm"
                                             variant="outline"
                                             className="h-8 text-xs px-4"
-                                            onClick={(e) => {
+                                            onClick={(e: React.MouseEvent) => {
                                                 e.stopPropagation();
                                                 setLogProgressProjectId(project.id);
                                                 setLogProgressCurrent(project.totalProgress);

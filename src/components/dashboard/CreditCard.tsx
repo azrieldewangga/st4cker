@@ -1,12 +1,12 @@
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../../store/useStore';
+import { useStore } from '../../store/useStoreNew';
 import clsx from 'clsx';
 import { Wifi } from 'lucide-react';
 
 const CreditCard = () => {
     const navigate = useNavigate();
-    const { userProfile } = useStore();
+    const userProfile = useStore(state => state.userProfile);
     const cardRef = useRef<HTMLDivElement>(null);
     const [rotate, setRotate] = useState({ x: 0, y: 0 });
     const [glare, setGlare] = useState({ x: 50, y: 50, opacity: 0 });

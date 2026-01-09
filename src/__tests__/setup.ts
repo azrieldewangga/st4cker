@@ -8,6 +8,14 @@ afterEach(() => {
 });
 
 // Mock Electron API (Zustand store depends on window.electronAPI)
+const mockLocalStorage = {
+    getItem: vi.fn(),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
+};
+(globalThis as any).localStorage = mockLocalStorage;
+
 // @ts-ignore
 (globalThis as any).window = window;
 // @ts-ignore
@@ -48,5 +56,21 @@ afterEach(() => {
     },
     notifications: {
         send: vi.fn(),
+    },
+    projects: {
+        list: vi.fn().mockResolvedValue([]),
+        create: vi.fn(async (data) => ({ ...data, id: `proj-${Date.now()}` })),
+        update: vi.fn().mockResolvedValue({ success: true }),
+        delete: vi.fn().mockResolvedValue({ success: true }),
+        get: vi.fn().mockResolvedValue(null),
+    },
+    projectSessions: {
+        create: vi.fn().mockResolvedValue({ success: true, id: 'sess-1' }),
+        listByProject: vi.fn().mockResolvedValue([]),
+    },
+    projectAttachments: {
+        create: vi.fn().mockResolvedValue({ success: true, id: 'att-1' }),
+        listByProject: vi.fn().mockResolvedValue([]),
+        delete: vi.fn().mockResolvedValue({ success: true }),
     },
 } as any;

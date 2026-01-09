@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore } from '../store/useStoreNew';
 
 export const useNotifications = () => {
-    const { assignments } = useStore();
+    const assignments = useStore(state => state.assignments);
     const processedRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {

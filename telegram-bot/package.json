@@ -1,0 +1,36 @@
+{
+    "name": "st4cker-telegram-bot",
+    "version": "1.0.1",
+    "description": "Telegram bot for st4cker quick input with event-sourcing architecture",
+    "main": "src/index.js",
+    "type": "module",
+    "scripts": {
+        "start": "node src/index.js",
+        "dev": "nodemon src/index.js",
+        "test": "echo \"Tests not yet implemented\" && exit 0"
+    },
+    "keywords": [
+        "telegram",
+        "bot",
+        "st4cker",
+        "event-sourcing"
+    ],
+    "author": "st4cker",
+    "license": "MIT",
+    "dependencies": {
+        "node-telegram-bot-api": "^0.66.0",
+        "express": "^4.18.2",
+        "socket.io": "^4.7.2",
+        "better-sqlite3": "^9.2.2",
+        "cors": "^2.8.5",
+        "validator": "^13.11.0",
+        "uuid": "^9.0.1",
+        "googleapis": "^131.0.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.2"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

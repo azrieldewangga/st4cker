@@ -47,7 +47,7 @@ const RadioIndicator = React.forwardRef<
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 16 }}
             className={cn('flex h-2.5 w-2.5 rounded-full bg-current', className)}
-            {...props}
+            {...(props as any)}
         />
     </RadioGroupPrimitive.Indicator>
 ));
