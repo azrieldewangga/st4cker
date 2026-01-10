@@ -157,8 +157,11 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
                 data: { ...userSession.data, projectType: 'course' }
             });
 
-            bot.sendMessage(chatId, `📚 Select **Course**:`, {
-                reply_markup: { inline_keyboard: courseButtons }
+            bot.editMessageText(`📚 Select **Course**:`, {
+                chat_id: chatId,
+                message_id: query.message.message_id,
+                reply_markup: { inline_keyboard: courseButtons },
+                parse_mode: 'Markdown'
             });
         } else {
             // Personal -> Skip to Priority
