@@ -531,6 +531,9 @@ const Settings = () => {
                         </CardContent>
                     </Card>
 
+                    {/* Telegram Sync */}
+                    <TelegramTab />
+
                     {/* Data Management */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Card>
@@ -579,8 +582,7 @@ const Settings = () => {
                         <GoogleDriveCard />
                     </div>
 
-                    {/* Telegram Sync */}
-                    <TelegramTab />
+
                 </>
             )}
 

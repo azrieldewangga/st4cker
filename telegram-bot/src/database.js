@@ -60,11 +60,23 @@ function initDatabase() {
       delivered INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS devices (
+      device_id TEXT PRIMARY KEY,
+      telegram_user_id TEXT NOT NULL,
+      device_name TEXT,
+      first_paired_at INTEGER NOT NULL,
+      last_paired_at INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      enabled INTEGER DEFAULT 1
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(telegram_user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_pairing_user ON pairing_codes(telegram_user_id);
     CREATE INDEX IF NOT EXISTS idx_pairing_expires ON pairing_codes(expires_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user ON pending_events(telegram_user_id);
+    CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(telegram_user_id);
+    CREATE INDEX IF NOT EXISTS idx_devices_enabled ON devices(enabled) WHERE enabled = 1;
   `);
 
   console.log('[DB] Database initialized successfully');

@@ -129,7 +129,7 @@ export async function handleTaskInput(bot, msg, broadcastEvent) {
     if (session.step === 'enter_deadline') {
         try {
             const deadline = parseDate(text);
-            session.data.deadline = deadline.toISOString();
+            session.data.deadline = deadline.toISOString().split('T')[0]; // Store YYYY-MM-DD only to prevent timezone shifts
             session.step = 'enter_notes';
             setSession(userId, session);
 

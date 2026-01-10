@@ -45,10 +45,15 @@ const StandaloneRoutes = () => {
     // Listen for refresh-data events (e.g. from Telegram)
     const handleRefresh = () => {
       console.log('[App] Received refresh-data signal');
-      useStore.getState().fetchAssignments();
+      const state = useStore.getState();
+      state.fetchAssignments();
+      state.fetchProjects();
+      state.fetchTransactions();
+      state.fetchSchedule();
+
       import("sonner").then(({ toast }) => {
-        toast.success("New Data Received", {
-          description: "Your assignments have been updated from Telegram."
+        toast.success("Data Synced", {
+          description: "Your dashboard has been updated from Telegram."
         });
       });
     };

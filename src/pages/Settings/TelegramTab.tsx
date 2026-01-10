@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    InputOTP,
+    InputOTPGroup,
+    InputOTPSeparator,
+    InputOTPSlot,
+} from "@/components/ui/input-otp";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -94,10 +99,42 @@ export function TelegramTab() {
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Telegram Quick Input</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        Add tasks, expenses, and projects directly from your phone
-                    </p>
+                    <div className="flex flex-row items-center justify-between">
+                        <div className="space-y-1">
+                            <CardTitle>Telegram Quick Input</CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                                Add tasks, expenses, and projects directly from your phone
+                            </p>
+                        </div>
+                        {!isPaired && (
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-3">
+                                    <InputOTP
+                                        maxLength={6}
+                                        value={pairingCode}
+                                        onChange={(val) => setPairingCode(val.toUpperCase())}
+                                        disabled={isVerifying}
+                                    >
+                                        <InputOTPGroup>
+                                            <InputOTPSlot index={0} className="w-9 h-10 text-base" />
+                                            <InputOTPSlot index={1} className="w-9 h-10 text-base" />
+                                            <InputOTPSlot index={2} className="w-9 h-10 text-base" />
+                                        </InputOTPGroup>
+                                        <InputOTPSeparator />
+                                        <InputOTPGroup>
+                                            <InputOTPSlot index={3} className="w-9 h-10 text-base" />
+                                            <InputOTPSlot index={4} className="w-9 h-10 text-base" />
+                                            <InputOTPSlot index={5} className="w-9 h-10 text-base" />
+                                        </InputOTPGroup>
+                                    </InputOTP>
+
+                                    <Button onClick={handlePair} disabled={isVerifying || pairingCode.length !== 6} size="sm">
+                                        {isVerifying ? '...' : 'Pair Device'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {!isPaired ? (
@@ -113,29 +150,7 @@ export function TelegramTab() {
                                 </ol>
                             </div>
 
-                            {/* Pairing Code Input */}
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Enter code (e.g., ABC123)"
-                                    value={pairingCode}
-                                    onChange={(e) => {
-                                        const upperCode = e.target.value.toUpperCase();
-                                        console.log('[Pairing] Code input:', upperCode);
-                                        setPairingCode(upperCode);
-                                    }}
-                                    maxLength={6}
-                                    className="font-mono text-lg tracking-wider"
-                                    disabled={isVerifying}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && pairingCode.length === 6) {
-                                            handlePair();
-                                        }
-                                    }}
-                                />
-                                <Button onClick={handlePair} disabled={isVerifying || pairingCode.length !== 6}>
-                                    {isVerifying ? 'Verifying...' : 'Pair Device'}
-                                </Button>
-                            </div>
+
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -171,32 +186,12 @@ export function TelegramTab() {
                                     {status === 'disconnected' && '🔴 Offline - changes will sync when connection restored'}
                                     {status === 'unknown' && '⚪ Checking connection...'}
                                 </p>
+                                <p className="text-xs text-muted-foreground mt-1 ml-6">
+                                    <a href="https://t.me/st4cker_bot" target="_blank" rel="noreferrer" className="font-semibold hover:underline">@st4cker_bot</a>
+                                </p>
                             </div>
 
-                            {/* Quick Command Reference */}
-                            <div className="p-4 bg-muted rounded-lg">
-                                <h4 className="font-medium mb-3">Quick Commands</h4>
-                                <div className="grid grid-cols-2 gap-2 text-sm font-mono">
-                                    <div>
-                                        <code className="text-blue-600">/task</code> - Add assignment
-                                    </div>
-                                    <div>
-                                        <code className="text-blue-600">/expense</code> - Record expense
-                                    </div>
-                                    <div>
-                                        <code className="text-blue-600">/income</code> - Record income
-                                    </div>
-                                    <div>
-                                        <code className="text-blue-600">/project</code> - Create project
-                                    </div>
-                                    <div>
-                                        <code className="text-blue-600">/progress</code> - Log progress
-                                    </div>
-                                    <div>
-                                        <code className="text-blue-600">/help</code> - See all commands
-                                    </div>
-                                </div>
-                            </div>
+
                         </div>
                     )}
                 </CardContent>

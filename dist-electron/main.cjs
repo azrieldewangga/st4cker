@@ -259,14 +259,39 @@ electron_1.app.on('ready', async () => {
     });
     // Performance
     electron_1.ipcMain.handle('performance:getSemesters', () => performance_cjs_1.performance.getSemesters());
-    electron_1.ipcMain.handle('performance:upsertSemester', (_, s, i) => performance_cjs_1.performance.upsertSemester(s, i));
+    electron_1.ipcMain.handle('performance:upsertSemester', (_, s, i) => {
+        const result = performance_cjs_1.performance.upsertSemester(s, i);
+        if (telegramStore && telegramStore.get('paired'))
+            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        return result;
+    });
     electron_1.ipcMain.handle('performance:getCourses', (_, sem) => performance_cjs_1.performance.getCourses(sem));
-    electron_1.ipcMain.handle('performance:upsertCourse', (_, c) => performance_cjs_1.performance.upsertCourse(c));
-    electron_1.ipcMain.handle('performance:updateSksOnly', (_, id, sks) => performance_cjs_1.performance.updateSksOnly(id, sks));
-    electron_1.ipcMain.handle('performance:deleteCourse', (_, id) => performance_cjs_1.performance.deleteCourse(id));
+    electron_1.ipcMain.handle('performance:upsertCourse', (_, c) => {
+        const result = performance_cjs_1.performance.upsertCourse(c);
+        if (telegramStore && telegramStore.get('paired'))
+            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        return result;
+    });
+    electron_1.ipcMain.handle('performance:updateSksOnly', (_, id, sks) => {
+        const result = performance_cjs_1.performance.updateSksOnly(id, sks);
+        if (telegramStore && telegramStore.get('paired'))
+            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        return result;
+    });
+    electron_1.ipcMain.handle('performance:deleteCourse', (_, id) => {
+        const result = performance_cjs_1.performance.deleteCourse(id);
+        if (telegramStore && telegramStore.get('paired'))
+            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        return result;
+    });
     // Schedule
     electron_1.ipcMain.handle('schedule:getAll', () => schedule_cjs_1.schedule.getAll());
-    electron_1.ipcMain.handle('schedule:upsert', (_, item) => schedule_cjs_1.schedule.upsert(item));
+    electron_1.ipcMain.handle('schedule:upsert', (_, item) => {
+        const result = schedule_cjs_1.schedule.upsert(item);
+        if (telegramStore && telegramStore.get('paired'))
+            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        return result;
+    });
     // Course Materials
     electron_1.ipcMain.handle('materials:getByCourse', (_, courseId) => materials_cjs_1.materials.getByCourse(courseId));
     electron_1.ipcMain.handle('materials:add', (_, id, courseId, type, title, url) => materials_cjs_1.materials.add(id, courseId, type, title, url));
@@ -425,13 +450,14 @@ electron_1.app.on('ready', async () => {
             });
             // Initialize WebSocket connection
             initTelegramWebSocket = (token) => {
-                console.log(`[Telegram] Initializing WebSocket with token: ${token ? token.slice(0, 8) + '...' : 'NONE'}`);
-                if (telegramSocket?.connected) {
-                    console.log('[Telegram] Socket is already connected (id=' + telegramSocket.id + ')');
-                    // Ensure listeners are attached even if re-using socket?
-                    // Ideally we shouldn't re-init.
+                if (telegramSocket) {
+                    console.log('[Telegram] Socket instance already exists. Skipping initialization.');
+                    if (!telegramSocket.connected) {
+                        telegramSocket.connect();
+                    }
                     return;
                 }
+                console.log(`[Telegram] Initializing WebSocket with token: ${token ? token.slice(0, 8) + '...' : 'NONE'}`);
                 console.log(`[Telegram] Connecting to ${WEBSOCKET_URL}`);
                 // Force WebSocket transport to avoid polling issues
                 try {
@@ -455,7 +481,7 @@ electron_1.app.on('ready', async () => {
                     // Heartbeat Logger
                     setInterval(() => {
                         if (telegramSocket) {
-                            console.log(`[Telegram Heartbeat] Connected: ${telegramSocket.connected}, ID: ${telegramSocket.id}`);
+                            // console.log(`[Telegram Heartbeat] Connected: ${telegramSocket.connected}, ID: ${telegramSocket.id}`);
                         }
                     }, 5000);
                     // Auto-sync whenever we connect/reconnect
@@ -470,8 +496,58 @@ electron_1.app.on('ready', async () => {
                         win.webContents.send('telegram:status-change', 'disconnected');
                     });
                 });
-                telegramSocket.on('connect_error', (error) => {
+                telegramSocket.on('connect_error', async (error) => {
                     console.error('[Telegram] Connection error:', error.message);
+                    // Check if error is authentication failure
+                    if (error.message && (error.message.includes('Authentication') || error.message.includes('Invalid'))) {
+                        console.log('[Telegram] Session invalid, attempting auto-recovery...');
+                        const deviceId = telegramStore.get('deviceId');
+                        const userId = telegramStore.get('userId');
+                        if (deviceId && userId) {
+                            try {
+                                const response = await fetch(`${WEBSOCKET_URL}/api/recover-session`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ deviceId, telegramUserId: userId })
+                                });
+                                const data = await response.json();
+                                if (data.success && data.sessionToken) {
+                                    console.log('[Telegram] Session recovered successfully');
+                                    // Update stored token
+                                    telegramStore.set('sessionToken', data.sessionToken);
+                                    telegramStore.set('expiresAt', data.expiresAt);
+                                    // Reconnect with new token
+                                    if (telegramSocket) {
+                                        telegramSocket.auth = { token: data.sessionToken };
+                                        telegramSocket.connect();
+                                    }
+                                    // Notify UI
+                                    electron_1.BrowserWindow.getAllWindows().forEach((win) => {
+                                        win.webContents.send('telegram:session-recovered');
+                                    });
+                                }
+                                else {
+                                    console.error('[Telegram] Auto-recovery failed, session not found');
+                                    // Notify UI that pairing is needed
+                                    electron_1.BrowserWindow.getAllWindows().forEach((win) => {
+                                        win.webContents.send('telegram:session-expired', { recoverable: false });
+                                    });
+                                }
+                            }
+                            catch (recoveryError) {
+                                console.error('[Telegram] Auto-recovery error:', recoveryError);
+                                electron_1.BrowserWindow.getAllWindows().forEach((win) => {
+                                    win.webContents.send('telegram:session-expired', { recoverable: false });
+                                });
+                            }
+                        }
+                        else {
+                            console.log('[Telegram] No device ID stored, cannot auto-recover');
+                            electron_1.BrowserWindow.getAllWindows().forEach((win) => {
+                                win.webContents.send('telegram:session-expired', { recoverable: false });
+                            });
+                        }
+                    }
                 });
                 telegramSocket.onAny((event, ...args) => {
                     console.log(`[Telegram Debug] Incoming Event: ${event}`, args);
@@ -546,27 +622,28 @@ electron_1.app.on('ready', async () => {
                             }
                         }
                         else if (event.eventType === 'project.created') {
-                            const payload = event.payload;
-                            console.log('[Telegram] Received project.created:', payload);
-                            // Payload: { title, description, deadline, priority, type, courseId }
+                            const { title, description, deadline, priority, type, courseId } = event.payload;
+                            // Create project
+                            // Map incoming priority/status if needed
                             const newProject = {
-                                id: event.eventId,
-                                title: payload.title,
-                                description: payload.description || '',
-                                deadline: payload.deadline,
-                                priority: payload.priority || 'medium',
-                                status: 'in_progress',
-                                type: payload.type === 'course' ? 'Course Project' : 'Personal Project',
-                                courseId: payload.courseId || null, // Map courseId
-                                totalProgress: 0,
+                                id: (0, crypto_1.randomUUID)(),
+                                title: title,
+                                description: description || '',
+                                deadline: deadline,
+                                priority: priority || 'medium', // low, medium, high
+                                status: 'active', // active, completed, archived
+                                type: type || 'personal', // personal, course
+                                courseId: courseId || null,
+                                progress: 0,
+                                startDate: new Date().toISOString().split('T')[0], // Default to today as Telegram doesn't send it
                                 createdAt: new Date().toISOString(),
-                                updatedAt: new Date().toISOString(),
-                                target_word_count: 0 // Default
+                                updatedAt: new Date().toISOString()
                             };
                             projects_cjs_1.projects.create(newProject);
+                            console.log('[Telegram] Project created from event:', newProject.id);
                             new (require('electron').Notification)({
-                                title: 'Project Created',
-                                body: `${payload.title} (Due: ${payload.deadline})`
+                                title: 'New Project Created',
+                                body: `${title}\nDue: ${deadline}`
                             }).show();
                             success = true;
                         }
@@ -702,25 +779,40 @@ electron_1.app.on('ready', async () => {
             });
             const data = await response.json();
             if (data.success) {
+                // Store session data
                 telegramStore.set('sessionToken', data.sessionToken);
+                telegramStore.set('deviceId', data.deviceId);
+                telegramStore.set('userId', data.telegramUserId);
                 telegramStore.set('paired', true);
                 telegramStore.set('expiresAt', data.expiresAt);
-                // We need to re-init socket here.
-                // But initTelegramWebSocket was internal to initTelegramModules.
-                // We should expose it or make it accessible.
-                // FIX: Let's emit a signal or restructure.
-                // For now, simpler fix: Just reload window would trigger re-init? No, main process stays.
-                // We need to access initTelegramWebSocket.
-                // Let's attach it to global or export checking context.
-                // Or just restart app... "Please restart app".
-                // Better: Move initTelegramWebSocket to outer scope or make it accessible helper.
-                return { success: true, needsRestart: true };
+                // Register device with backend
+                try {
+                    const os = await import('os');
+                    await fetch(`${WEBSOCKET_URL}/api/register-device`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sessionToken: data.sessionToken,
+                            deviceId: data.deviceId,
+                            deviceName: os.hostname()
+                        })
+                    });
+                    console.log('[Telegram] Device registered successfully');
+                }
+                catch (regError) {
+                    console.error('[Telegram] Device registration failed (non-fatal):', regError);
+                }
+                // Initialize WebSocket with new token
+                if (initTelegramWebSocket) {
+                    initTelegramWebSocket(data.sessionToken);
+                }
+                return { success: true };
             }
             return { success: false, error: data.error || 'Invalid code' };
         }
         catch (error) {
             console.error('[Telegram] Verify pairing error:', error);
-            return { success: false, error: 'Unknown error' };
+            return { success: false, error: 'Connection failed' };
         }
     });
     electron_1.ipcMain.handle('telegram:sync-now', async () => {
@@ -809,7 +901,7 @@ electron_1.app.on('ready', async () => {
     });
     createWindow();
     // Check Auto-Backup & Subscriptions (After a short delay to let things settle)
-    setTimeout(() => {
+    setTimeout(async () => {
         // 1. Auto Backup
         if (driveService) {
             driveService.checkAndRunAutoBackup().catch((err) => console.error('Auto-backup check failed:', err));
@@ -817,7 +909,25 @@ electron_1.app.on('ready', async () => {
         else {
             console.log('[Main] driveService not available for auto-backup check.');
         }
-        // 2. Check Subscriptions & Recurring Transactions
+        // 2. Telegram Auto-Connect
+        try {
+            // Do NOT re-init modules. They are init at line ~769.
+            // Just check if we need to connect.
+            if (telegramStore && initTelegramWebSocket) {
+                const sessionToken = telegramStore.get('sessionToken');
+                if (sessionToken && (!telegramSocket || !telegramSocket.connected)) {
+                    console.log('[Main] Found Telegram session, connecting...');
+                    initTelegramWebSocket(sessionToken);
+                }
+            }
+            else {
+                console.log('[Main] Telegram modules not ready yet or not paired.');
+            }
+        }
+        catch (err) {
+            console.error('[Main] Telegram auto-connect failed:', err);
+        }
+        // 3. Check Subscriptions & Recurring Transactions
         try {
             console.log('[Main] Checking for due subscriptions...');
             const result = subscriptions_cjs_1.subscriptions.checkAndProcessDeductions();

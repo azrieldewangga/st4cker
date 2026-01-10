@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
+import crypto from 'crypto';
 import db from './database.js';
 import { createPairingCode, verifyPairingCode, validateSession, unpairSession } from './pairing.js';
 import { saveUserData, getUserData } from './store.js';
@@ -82,6 +83,8 @@ app.post('/api/verify-pairing', (req, res) => {
             res.json({
                 success: true,
                 sessionToken: result.sessionToken,
+                telegramUserId: result.telegramUserId,
+                deviceId: result.deviceId,
                 expiresAt: result.expiresAt
             });
         } else {
@@ -107,6 +110,92 @@ app.post('/api/unpair', (req, res) => {
     } catch (error) {
         console.error('[API] Unpair error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Session Recovery Endpoint
+app.post('/api/recover-session', async (req, res) => {
+    try {
+        const { deviceId, telegramUserId } = req.body;
+
+        console.log('[API] Recovery request:', { deviceId, telegramUserId });
+
+        if (!deviceId || !telegramUserId) {
+            return res.status(400).json({ success: false, error: 'Missing parameters' });
+        }
+
+        // Check if device is registered and enabled
+        const device = db.prepare(
+            'SELECT * FROM devices WHERE device_id = ? AND telegram_user_id = ? AND enabled = 1'
+        ).get(deviceId, telegramUserId);
+
+        if (!device) {
+            console.log('[API] Device not found or disabled');
+            return res.status(404).json({ success: false, error: 'Device not registered' });
+        }
+
+        // Generate new session token
+        const sessionToken = crypto.randomUUID();
+        const now = Date.now();
+        const expiresAt = now + (30 * 24 * 60 * 60 * 1000); // 30 days
+
+        // Create new session
+        db.prepare(`
+            INSERT OR REPLACE INTO sessions 
+            (session_token, telegram_user_id, device_id, created_at, expires_at, last_activity)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(sessionToken, telegramUserId, deviceId, now, expiresAt, now);
+
+        // Update device last seen
+        db.prepare('UPDATE devices SET last_seen = ? WHERE device_id = ?')
+            .run(now, deviceId);
+
+        console.log('[API] Session recovered successfully');
+        res.json({
+            success: true,
+            sessionToken,
+            expiresAt
+        });
+    } catch (error) {
+        console.error('[API] Recover session error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// Device Registration Endpoint
+app.post('/api/register-device', (req, res) => {
+    try {
+        const { sessionToken, deviceId, deviceName } = req.body;
+
+        console.log('[API] Register device:', { deviceId, deviceName });
+
+        if (!sessionToken || !deviceId) {
+            return res.status(400).json({ success: false, error: 'Missing parameters' });
+        }
+
+        // Verify session token
+        const session = db.prepare('SELECT * FROM sessions WHERE session_token = ?').get(sessionToken);
+        if (!session) {
+            return res.status(401).json({ success: false, error: 'Invalid session' });
+        }
+
+        const now = Date.now();
+
+        // Register or update device
+        db.prepare(`
+            INSERT INTO devices (device_id, telegram_user_id, device_name, first_paired_at, last_paired_at, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+                last_paired_at = excluded.last_paired_at,
+                last_seen = excluded.last_seen,
+                device_name = excluded.device_name
+        `).run(deviceId, session.telegram_user_id, deviceName || 'Unknown Device', now, now, now);
+
+        console.log('[API] Device registered successfully');
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[API] Register device error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
 

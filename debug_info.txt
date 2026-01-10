@@ -166,3 +166,36 @@
 [DB] Connecting to: D:\Project\st4cker\st4cker.db
 [Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
 [Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.
+[DB] Connecting to: D:\Project\st4cker\st4cker.db
+[Migration] Msg: No JSON found at D:\Project\st4cker\campusdash-db.json or C:\Users\washi\AppData\Roaming\st4cker\campusdash-db.json
+[Migration] ABORT: Source file not found.

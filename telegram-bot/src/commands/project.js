@@ -212,7 +212,20 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         });
 
         bot.answerCallbackQuery(query.id);
-        bot.sendMessage(chatId, `📝 Add a **Note/Description** (Optional, type /skip):`);
+
+        // FIX: Edit the priority selection message to hide buttons
+        const priorityEmoji = priority === 'low' ? '🟢' : priority === 'medium' ? '🟡' : '🔴';
+        const priorityText = priority.charAt(0).toUpperCase() + priority.slice(1);
+        bot.editMessageText(`⚡ Select Priority: ${priorityEmoji} ${priorityText}`, {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: 'Markdown'
+        });
+
+        // Send next step
+        bot.sendMessage(chatId, `📝 Add a **Note/Description** (Optional, type /skip):`, {
+            parse_mode: 'Markdown'
+        });
         return;
     }
 };

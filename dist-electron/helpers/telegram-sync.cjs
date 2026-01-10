@@ -84,8 +84,7 @@ async function syncUserDataToBackend(telegramStore, socket) {
                 priorities: ['Low', 'Medium', 'High'],
                 projectTypes: ['Course Project', 'Personal Project'],
                 assignmentTypes: [
-                    'Tugas', 'Kuis', 'UTS', 'UAS', 'Project',
-                    'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'
+                    'Tugas', 'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'
                 ],
                 activeAssignments, // Send assignments to bot
                 currentBalance: currentBalance
