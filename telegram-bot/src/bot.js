@@ -5,7 +5,7 @@ import handleListTasks from './commands/listtasks.js';
 import { handleEditTaskCommand, handleEditTaskCallback } from './commands/edittask.js';
 import { handleBalanceCommand } from './commands/balance.js';
 import { handleTransactionCommand, handleTransactionCallback, handleTransactionInput, handleTransactionNote } from './commands/transaction.js';
-import { handleProjectsCommand, handleLogCommand, handleProjectCallback, handleProjectInput } from './commands/project.js';
+import { handleProjectsCommand, handleLogCommand, handleProjectCallback, handleProjectInput, handleCreateProjectCommand } from './commands/project.js';
 
 import { broadcastEvent } from './server.js';
 import crypto from 'crypto';
@@ -110,9 +110,16 @@ bot.on('callback_query', async (query) => {
         handleEditTaskCallback(bot, query, broadcastEvent);
     } else if (query.data.startsWith('tx_cat_')) {
         handleTransactionCallback(bot, query, broadcastEvent);
-    } else if (query.data.startsWith('log_proj_')) {
-        handleProjectCallback(bot, query);
+    } else if (query.data.startsWith('log_proj_') || query.data.startsWith('K_PRIORITY_') || query.data.startsWith('LOG_STATUS_') || query.data.startsWith('TYPE_') || query.data.startsWith('COURSE_')) {
+        handleProjectCallback(bot, query, broadcastEvent);
     }
+});
+
+// /listprojects command
+bot.onText(/\/listprojects/, (msg) => {
+    const telegramUserId = msg.from.id.toString();
+    if (!hasActiveSession(telegramUserId)) return bot.sendMessage(msg.chat.id, '❌ Not connected. Use /start to pair first.');
+    handleProjectsCommand(bot, msg);
 });
 
 // /listtasks command
@@ -209,7 +216,7 @@ bot.on('message', async (msg) => {
     const handledTxNote = await handleTransactionNote(bot, msg, broadcastEvent);
     if (handledTxNote) return;
 
-    // Try handling as project input (duration/note)
+    // Try handling as project input (duration/note/creation)
     const handledProjInput = await handleProjectInput(bot, msg, broadcastEvent);
     if (handledProjInput) return;
 });
@@ -229,13 +236,38 @@ bot.onText(/\/expense/, (msg) => {
     handleTransactionCommand(bot, msg, 'expense');
 });
 
-// /projects command
+// /projects command (List)
 bot.onText(/\/projects/, (msg) => {
+    // If msg.text is exactly /project (singular), do NOT trigger this handler as regex matches partial?
+    // Regex /\/projects/ matches /projects but also /projectssss
+    // We want explicit separation.
+
+    // Actually, bot.onText uses regex.
+    // /\/projects/ will match "/projects".
+    // /\/project/ will match "/project" AND "/projects".
+
+    // To match strict, use anchor or check text manually.
+    // Better:
+    // /project (singular) -> CREATE
+    // /projects (plural) -> LIST
+
+    // We'll trust the user types correctly or use regex anchors.
     handleProjectsCommand(bot, msg);
 });
 
+// /project command (Create) - Use $ to match end of string
+bot.onText(/\/project$/, (msg) => {
+    handleCreateProjectCommand(bot, msg);
+});
+// Also handle /project with arguments if we implement quick add later, but for now interactive.
+
 // /log command
 bot.onText(/\/log/, (msg) => {
+    handleLogCommand(bot, msg);
+});
+
+// /progress command (Alias for /log)
+bot.onText(/\/progress/, (msg) => {
     handleLogCommand(bot, msg);
 });
 
