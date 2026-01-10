@@ -1,4 +1,4 @@
-import { getUserData } from '../store.js';
+import { getUserData, saveUserData } from '../store.js';
 import crypto from 'crypto';
 
 // Local in-memory session store
@@ -51,7 +51,7 @@ export const handleProjectsCommand = async (bot, msg) => {
     userData.projects.forEach((proj, index) => {
         const statusIcon = proj.status === 'in_progress' ? '▶️' : '⏸️';
         response += `${index + 1}. ${statusIcon} *${proj.name}*\n`;
-        response += `   Status: ${proj.status.replace('_', ' ')} | ${proj.totalProgress || 0}%\n`;
+        response += `   Status: ${(proj.status || 'in_progress').replace('_', ' ')} | ${proj.totalProgress || 0}%\n`;
 
         inlineKeyboard.push([{
             text: `⏱️ Log: ${proj.name.substring(0, 20)}...`,
@@ -283,8 +283,25 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
             source: 'telegram'
         };
 
-        broadcastEvent(event);
+        broadcastEvent(userId, event); // FIXED call (was just event)
         updateSession(userId, { state: 'IDLE', data: {} });
+
+        // Optimistic Update
+        const userData = getUserData(userId);
+        if (userData && userData.projects) {
+            const projIndex = userData.projects.findIndex(p => p.id === projectId);
+            if (projIndex !== -1) {
+                userData.projects[projIndex].totalProgress = newProgress;
+
+                // Map status back to storage format
+                let dbStatus = 'in_progress';
+                if (newStatus.toLowerCase() === 'completed') dbStatus = 'completed';
+                if (newStatus.toLowerCase() === 'on hold') dbStatus = 'on_hold';
+
+                userData.projects[projIndex].status = dbStatus;
+                saveUserData(userId, userData);
+            }
+        }
 
         // Format duration display
         const hours = Math.floor(duration / 60);
@@ -337,8 +354,9 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         const { title, deadline, priority, projectType, courseId } = userSession.data;
 
         // Create Event
+        const eventId = crypto.randomUUID();
         const event = {
-            eventId: crypto.randomUUID(),
+            eventId: eventId,
             eventType: 'project.created',
             telegramUserId: userId,
             timestamp: new Date().toISOString(),
@@ -353,8 +371,21 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
             source: 'telegram'
         };
 
-        broadcastEvent(event);
+        broadcastEvent(userId, event); // FIXED call (was just event)
         updateSession(userId, { state: 'IDLE', data: {} });
+
+        // Optimistic Update
+        const userData = getUserData(userId) || {};
+        if (!userData.projects) userData.projects = [];
+
+        userData.projects.push({
+            id: eventId,
+            name: title,
+            status: 'in_progress',
+            totalProgress: 0,
+            createdAt: new Date().toISOString()
+        });
+        saveUserData(userId, userData);
 
         bot.sendMessage(chatId, `✅ *Project Created!*\n\n📌 ${title}\n📅 Due: ${deadline}\n⚡ Priority: ${priority}\n📂 Type: ${projectType === 'course' ? 'Course Project' : 'Personal'}\n\nSynced to Desktop.`);
         return true;
