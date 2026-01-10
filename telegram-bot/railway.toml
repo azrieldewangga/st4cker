@@ -3,8 +3,6 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "node src/index.js"
-restartPolicyType = "on-failure"
-restartPolicyMaxRetries = 3
 
 [[deploy.volumes]]
 mountPath = "/data"
