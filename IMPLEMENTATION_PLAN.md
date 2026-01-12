@@ -1,900 +1,1087 @@
-﻿# Telegram Quick Input Integration - Implementation Plan v2 (Event-Sourced)
+﻿# st4cker NLP Implementation Plan v1.9.0
 
-## Overview
-
-Implement instant real-time sync between Telegram and st4cker desktop app using **event-sourcing architecture** for idempotent, conflict-free data synchronization.
-
-### Key Features
-- ⚡ **Instant sync** (<1 second) when laptop is online via WebSocket
-- 💾 **Offline support** via append-only event log in Google Drive
-- 🔐 **Secure pairing** using random session tokens (not user IDs)
-- 📝 **Event-sourced** - all changes are immutable events with UUID
-- 🔄 **Idempotent** - duplicate events automatically deduplicated
-- 🆓 **Free hosting** using Railway.app serverless
-- 🛡️ **Multi-user ready** - scalable pairing without hardcoded whitelist
+**Version:** 1.9.0  
+**Date:** January 12, 2026  
+**Status:** Migration Phase
 
 ---
 
-## Architecture Overview v2
+## 📋 Overview
 
-```mermaid
-graph TD
-    A[User: /start] -->|Generate| B[Bot: Pairing Code XYZ789]
-    B -->|User inputs code| C[Desktop verifies code]
-    C -->|Server generates| D[sessionToken UUID]
-    D -->|Stored in| E[Persistent DB + Desktop]
-    
-    F[User: /task command] -->|Create| G[Event: task.created UUID]
-    G -->|Append to| H[Google Drive Event Log]
-    G -->|Push via WebSocket| I[Desktop: sessionToken auth]
-    
-    I -->|Check eventId| J{Already applied?}
-    J -->|No| K[Apply event + Store eventId]
-    J -->|Yes| L[Skip duplicate]
-    
-    M[Desktop Startup] -->|Read| H
-    H -->|Process events| J
+Integrasi Natural Language Processing (NLP) menggunakan **NLP.js** (offline) ke bot Telegram st4cker. User bisa mengirim pesan natural language dan bot akan mengenali intent serta entity secara otomatis.
+
+> [!IMPORTANT]
+> **Migrasi dari Wit.ai ke NLP.js**
+> Wit.ai mengalami bug intent classification (issue #2822). Solusi: migrasi ke NLP.js yang berjalan offline di server Railway.
+
+### Keuntungan NLP.js:
+| Aspek | Wit.ai (Lama) | NLP.js (Baru) |
+|-------|---------------|---------------|
+| Hosting | Cloud (Meta) | Self-hosted |
+| Latency | ~200-500ms | <50ms |
+| Privacy | Data ke Meta | Data lokal |
+| Reliability | Tergantung API | 100% offline |
+| Cost | Free tier limit | Unlimited |
+
+
+---
+
+## 🎯 Requirements Summary
+
+| Aspek | Keputusan |
+|-------|-----------|
+| Bahasa | Indonesia |
+| Low Confidence (<70%) | Konfirmasi kontekstual |
+| Missing Entity | Follow-up question |
+| Currency | "rb", "k", "jt", "gocap", "cepe" |
+| Typo | Fuzzy match + konfirmasi |
+| Cancel | "batal" + tombol inline |
+| Kategori Baru | Tolak, pilih existing |
+| API Down | Fallback command-based |
+| Destructive Actions | Konfirmasi dulu |
+| Multiple Items | Per-item deadline |
+| Undo | Chain undo dengan konfirmasi |
+| Reminder | Gabung jika waktu sama |
+| Timezone | WIB fixed |
+| Overdue | Notif jam 7:30 WIB, setiap hari sampai selesai |
+| Bot Personality | Casual, "kamu", vokal dipanjangkan ("okee", "siapp") |
+| Response Style | List tapi casual |
+| Emoji | Minimal |
+| Sync | Bidirectional realtime (WebSocket) |
+| History | 10 transaksi terakhir |
+| Deadline | 5 hari kedepan |
+| Text Truncate | 75 karakter |
+| Date Format | "15 Januari" (output), bebas (input) |
+| Time Format | 24h |
+| Confidence Log | Ya |
+| Feedback | User bisa report error |
+
+---
+
+## ✅ NLP System Checklist (16 Points)
+
+**Fokus: Data aman, UX enak, NLP boleh salah**
+
+### 1️⃣ Intent Schema
+Setiap intent punya required/optional fields:
+```json
+{
+  "tambah_pengeluaran": { "required": ["amount"], "optional": ["category", "note", "time"] },
+  "buat_tugas": { "required": ["matkul", "waktu"], "optional": ["tipe_tugas", "note"] },
+  "catat_progress": { "required": ["project", "duration", "note"], "optional": [] }
+}
+```
+
+### 2️⃣ Raw Text Always Stored
+Simpan raw text **SEBELUM** parsing NLP:
+```json
+{ "raw_text": "naik gojek habis 20rb", "timestamp": "2026-01-10T20:30", "user_id": "..." }
+```
+
+### 3️⃣ NLP = Extractor Only
+NLP **tidak pernah insert DB**. Output hanya structured data → validator yang proses.
+
+### 4️⃣ Confidence Gate
+- Intent confidence < 0.6 → fallback to note
+- Entity penting confidence rendah → clarification mode
+```
+Bot: "aku catat ini sebagai catatan dulu ya"
+DB: { "type": "note", "content": "naik gojek habis 20rb" }
+```
+
+### 5️⃣ Missing Field Detector + Smart Field Completion
+Cek required fields → kalau ada yang kosong → tanyakan **satu per satu**, skip yang sudah ada.
+
+**Contoh `buat_project`:**
+```
+User: project baru website deadline februari high
+
+Bot internal check:
+- project_name: "website" ✅
+- deadline: "februari" ⚠️ (tidak spesifik tanggal)
+- priority: "high" ✅
+- project_type: ❌ missing
+- matkul: ❌ (depends on type)
+
+Bot: Project "Website" deadline Februari prioritas High!
+     Deadline tanggal berapa di Februari?
+
+User: tanggal 20
+
+Bot: Oke! Ini Course Project atau Personal Project?
+     [Course Project] [Personal Project]
+
+User: Personal
+
+Bot: Siapp, project Website (High) deadline 20 Feb udah dicatat!
+     Ada deskripsi ga?
+```
+
+**Rules:**
+1. **Skip** field yang sudah disebutkan user
+2. **Ask one by one** untuk yang missing
+3. **Never auto-assume** - misal "februari" tanpa tanggal → TANYA
+4. Berlaku untuk SEMUA intent
+5. **Title/Name Confirmation** - konfirmasi jika kompleks, langsung pakai jika simple:
+   ```javascript
+   function shouldConfirmTitle(title, confidence) {
+     if (!title) return true;              // tidak detect → wajib tanya
+     if (confidence < 0.7) return true;    // low confidence
+     if (title.split(' ').length > 3) return true; // >3 kata
+     if (/[0-9!@#$%]/.test(title)) return true;    // karakter aneh
+     return false;                         // langsung pakai
+   }
+   ```
+   **Contoh:**
+   | Title | Action |
+   |-------|--------|
+   | "skripsi" | Langsung ✅ |
+   | "website portfolio" | Langsung ✅ |
+   | "sistem informasi manajemen keuangan" | Konfirmasi ⚠️ |
+   | tidak terdetect | Tanya ❌ |
+
+### 6️⃣ Clarification State
+Pending intent disimpan di DB/Redis dengan TTL:
+```json
+{
+  "pending_intent": "tambah_pengeluaran",
+  "missing_fields": ["category"],
+  "filled_fields": { "amount": 20000 },
+  "raw_text": "habis 20rb",
+  "expires_at": "2026-01-10T20:45"
+}
+```
+
+### 7️⃣ Bot Nanya Balik (Slot-aware)
+❌ "tolong ulangi input"  
+✅ "kategorinya apa?" dengan inline buttons
+
+### 8️⃣ User Answer = Slot Completion
+Jawaban user di-merge ke pending state, **bukan intent baru**.
+
+### 9️⃣ Enrichment Logic
+Deterministic enrichment:
+- `gojek` → category: Transport
+- `note` = raw_text - amount - time - category
+```json
+{ "amount": 20000, "category": "transport", "note": "naik gojek" }
+```
+
+### 🔟 Never Auto-Assume
+User: "senin" → Bot: "senin ini atau senin depan?"  
+❌ Bot TIDAK BOLEH nebak diam-diam untuk tanggal.
+
+### 1️⃣1️⃣ Cancellation Handling
+"ngga jadi" / "batal" → clear pending state, simpan raw_text sebagai cancelled.
+
+### 1️⃣2️⃣ Timeout Handling
+Pending expired → simpan sebagai note:
+```
+Bot: "yang tadi belum selesai, aku simpan sebagai catatan ya"
+```
+
+### 1️⃣3️⃣ Idempotent Finalization
+Event hanya diproses sekali (pakai event_id UUID). Restart/spam aman.
+
+### 1️⃣4️⃣ Intent Override
+User: "eh bukan pengeluaran, pemasukan deng"  
+→ pending intent diganti, filled fields dipertahankan
+
+### 1️⃣5️⃣ Multi-Entity Conflict Resolver
+User: "bayar listrik kemarin dan hari ini"  
+Bot: "pakai yang mana? kemarin atau hari ini?"
+
+### 1️⃣6️⃣ Explainable Logs
+```json
+{
+  "intent": "tambah_pengeluaran",
+  "confidence": 0.91,
+  "missing": ["category"],
+  "question_asked": "kategorinya apa?",
+  "final_action": "expense_created"
+}
+```
+
+### 1️⃣7️⃣ Mid-flow Field Editing
+User bisa ubah field **kapan saja sebelum finalized**. Berlaku untuk SEMUA intent.
+
+**Trigger keywords:** "ganti", "ubah", "bukan", "salah", "koreksi"
+
+**Contoh:**
+```
+[Expense]
+User: aku habis makan nasi goreng 20rb
+Bot: Siapp, expense makan Rp20.000 udah kucatat! Kategorinya apa?
+
+User: eh ganti harganya bukan 20rb tapi 22rb
+Bot: Oke, udah kuganti jadi Rp22.000! Kategorinya apa?
+
+[Project]
+User: buat project skripsi deadline maret
+Bot: Project "Skripsi" deadline Maret! Course atau Personal?
+
+User: ganti nama projectnya jadi tugas akhir
+Bot: Oke, udah kuganti jadi "Tugas Akhir"! Course atau Personal?
+
+[Task]
+User: tugas ppl deadline senin
+Bot: Siapp, tugas PPL deadline Senin! Ada note ga?
+
+User: eh deadline nya rabu bukan senin
+Bot: Oke, deadline udah kuganti ke Rabu! Ada note ga?
+```
+
+**Logic:**
+1. Detect "ganti/ubah/bukan/salah" + field name
+2. Parse new value dari input
+3. Update `pending_state.filled_fields[field]`
+4. **Lanjut dari step yang sama**, tidak restart
+
+### 1️⃣8️⃣ Mid-flow Cancel/Undo
+User bisa cancel **kapan saja** saat flow belum selesai.
+
+**Trigger keywords:** "ga jadi", "batal", "cancel", "skip", "udahan"
+
+```
+User: buat project skripsi deadline maret
+Bot: Project "Skripsi" deadline Maret! Course atau Personal?
+
+User: eh ga jadi deh
+Bot: Okee, dibatalin ya~
+```
+
+**Logic:**
+1. Clear `pending_state`
+2. Simpan raw_text sebagai cancelled (untuk log)
+3. Tidak insert ke DB
+
+### 1️⃣9️⃣ Mid-flow Delete (After Finalized)
+User bisa delete **setelah finalized** tapi masih dalam sesi.
+
+**Trigger keywords:** "hapus yang tadi", "delete", "buang"
+
+```
+User: habis 50rb makan
+Bot: Siapp, expense makan Rp50.000 udah dicatat!
+
+User: eh hapus yang tadi
+Bot: Mau hapus expense makan Rp50.000?
+     [Ya, hapus] [Ga jadi]
+
+User: [Ya, hapus]
+Bot: Expense makan Rp50.000 udah kuhapus~
+```
+
+**Logic:**
+1. Cek `last_action` di session
+2. **KONFIRMASI DULU** dengan inline buttons
+3. Soft delete dari DB setelah user confirm
+4. Update `last_action` untuk chain undo
+
+### 2️⃣0️⃣ Destructive Action Confirmation
+**SEMUA destructive action wajib konfirmasi:**
+- `hapus_tugas` → "Yakin hapus tugas X?"
+- `hapus_transaksi` → "Yakin hapus expense/income X?"  
+- `hapus_project` → "Yakin hapus project X? Progress juga kehapus loh"
+- `batalkan` (undo) → langsung execute (karena bisa redo)
+
+```
+User: hapus tugas ppl
+Bot: Yakin hapus tugas PPL?
+     [Ya, hapus] [Ga jadi]
+```
+
+### 2️⃣1️⃣ Catat Progress Guided Flow
+`catat_progress` pakai **guided flow** step-by-step:
+
+```
+Step 1: User trigger
+User: mau log progress / nyatet progress / catat progress
+
+Step 2: Bot tampilkan project aktif
+Bot: Mau log progress project mana?
+     [Skripsi] [Website] [Freelance]
+
+Step 3: User pilih project
+User: [Skripsi]
+
+Step 4: Bot tanya durasi
+Bot: Berapa lama kerja project Skripsi?
+     [30 menit] [1 jam] [2 jam] [Custom]
+
+User: 2 jam
+
+Step 5: Bot tanya persentase
+Bot: Progress Skripsi sekarang 45%. Mau update ke berapa persen?
+
+User: 60
+
+Step 6: Bot tanya note (WAJIB)
+Bot: Oke 60%! Tadi ngerjain apaa?
+
+User: selesaiin bab 3 metodologi
+
+Step 7: Konfirmasi
+Bot: Siapp! Progress Skripsi udah kucatat:
+     • Durasi: 2 jam
+     • Progress: 45% → 60% (+15%)
+     • Note: selesaiin bab 3 metodologi
+```
+
+**Entity baru yang dibutuhkan:** `persentase`
+| Keyword | Synonyms |
+|---------|----------|
+| (Free Text) | 50%, 60 persen, setengah |
+
+---
+
+## 🔧 Intent Mapping (19 Intents)
+
+| Intent | Contoh | Default/Note |
+|--------|--------|--------------|
+| `buat_tugas` | "tugas fisdas besok" | Filter per semester |
+| `edit_tugas` | "ubah status tugas fisdas jadi done" | — |
+| `lihat_tugas` | "tugas minggu ini" | — |
+| `hapus_tugas` | "hapus tugas fisdas" | ⚠️ Konfirmasi |
+| `deadline_terdekat` | "ada deadline apa aja" | 5 hari kedepan |
+| `tambah_pengeluaran` | "habis 50rb makan" | — |
+| `tambah_pemasukan` | "dapat 2jt gaji" | — |
+| `edit_transaksi` | "ubah expense makan jadi 75rb" | Ubah field yang disebut |
+| `hapus_transaksi` | "hapus expense yang tadi" | ⚠️ Konfirmasi |
+| `lihat_transaksi` | "history transaksi" | 10 terakhir |
+| `cek_saldo` | "saldo berapa" | IDR only |
+| `buat_project` | "buat project skripsi" | — |
+| `edit_project` | "ubah deadline project skripsi" | — |
+| `hapus_project` | "hapus project web" | ⚠️ Konfirmasi |
+| `lihat_project` | "list project" | — |
+| `catat_progress` | "kerja skripsi 2 jam" | — |
+| `ingatkan` | "ingatkan tugas fisdas besok jam 8" | Tanya waktu jika tidak disebut |
+| `tambah_langganan` | "langganan spotify 50rb tiap bulan" | Recurring |
+| `batalkan` | "ga jadi", "cancel" | Redo jika undo lagi |
+| `minta_summary` | "summary minggu ini" | Tugas, transaksi, progress |
+| `bantuan` | "bisa apa aja", "bantuan" | List kemampuan |
+| `feedback` | "bot salah", "laporkan bug" | Simpan ke DB bot |
+| `casual` | "makasih", "halo" | Reply friendly |
+
+---
+
+## 🎭 Bot Personality
+
+### Style Guide
+
+| Aspek | Rule |
+|-------|------|
+| Pronoun | "kamu" |
+| Vokal akhir | Dipanjangkan: "okee", "siapp", "sudahh" |
+| Emoji | Minimal, hanya di awal kalimat jika perlu |
+| Tone | Friendly, casual, informatif |
+| Error | Tetap friendly tanpa emoji: "Waduh, ada yang salah nih: [error]" |
+
+### Contoh Response
+
+**Buat tugas:**
+```
+Siapp, tugas Fisika Dasar deadline besok udah dicatat yaa
+```
+
+**Lihat tugas:**
+```
+Tugas kamu minggu ini:
+• Fisika Dasar - Lapres (besok)
+• Aljabar Linear - Tugas (Senin)
+• WPL - Lapdul (Rabu)
+
+Masih ada 3 lagi, mau lihat?
+```
+
+**Undo:**
+```
+Okee, expense Rp50.000 (Makan) dibatalkan
+
+Mau undo lagi yang sebelumnya?
+[💜 Ya] [Tidak usah]
+```
+
+**Overdue (pagi):**
+```
+Heyy, tugas Fisika Dasar udah lewat deadline kemarin nih
+
+Udah selesai atau mau perpanjang?
+[Udah selesai] [Perpanjang]
+```
+
+**Buat Tugas (ask note):**
+```
+User: lapres kjk prak deadline rabu
+
+Bot: Siapp, Laporan Resmi Praktikum KJK yang deadlinenya Rabu udah dicatat yaa
+     Ada note ga?
+
+User: inget pake format IEEE
+
+Bot: Okee, "inget pake format IEEE" udah kumasukin ke note nya. Udah ku input jugaa!
+
+--- ATAU jika tidak ada note ---
+
+User: ga ada
+
+Bot: Okee udah ku input!
+```
+
+**Note Flow (opsional - kecuali progress):**
+- `buat_tugas` → tanya note setelah konfirmasi
+- `tambah_pengeluaran/pemasukan` → tanya note setelah konfirmasi
+- `buat_project` → tanya note setelah konfirmasi
+- `catat_progress` → note WAJIB, tanya di awal jika tidak ada
+
+**Congratulate selesai:**
+```
+Yeayy tugas Fisika Dasar selesaiii! Satu lagi kelar nihh
+```
+
+**Error:**
+```
+Waduh, ada yang salah nih: gagal nyimpen ke database
 ```
 
 ---
 
-## Critical Revisions from v1
+## 📊 Fitur Detail
 
-### 1. Session Token Architecture
+### Undo Chain
+- Setiap undo dikonfirmasi dengan konteks
+- Undo berulang = redo aksi sebelumnya
+- Unlimited time
 
-**Old (Insecure):**
+### Pagination
+- Default sesuai fitur (10 transaksi, 5 hari deadline)
+- "masih ada X lagi, mau lihat?"
+- User bilang berapa → tampilkan sejumlah itu
+- Jika kurang dari yang diminta: "ini sisanya"
+
+### Validasi Tipe Tugas
+**Logic:** Laporan (lapres, lapsem, lapen) hanya untuk matkul praktikum/workshop.
+
 ```javascript
-// ❌ Exposed user IDs directly
-socket.auth = { userId: telegramUserId, deviceId }
+function validateTipeTugas(matkul, tipeTugas) {
+  const isPraktikum = matkul.toLowerCase().includes('prak') || 
+                      matkul.toLowerCase().includes('praktikum') ||
+                      matkul.toLowerCase().includes('workshop');
+  
+  const laporanTypes = ['lapres', 'lapsem', 'lapen', 'laporan'];
+  const isLaporan = laporanTypes.some(t => tipeTugas.toLowerCase().includes(t));
+  
+  if (isLaporan && !isPraktikum) {
+    return { valid: false, reason: 'Laporan hanya untuk matkul praktikum' };
+  }
+  return { valid: true };
+}
 ```
 
-**New (Secure):**
+**Response jika invalid:**
+```
+Bot: Hmm, lapres itu cuma buat matkul praktikum loh. 
+     Mau ganti jadi Tugas atau Quiz?
+     [Tugas] [Quiz]
+```
+
+### Overdue Notification
+- Dikirim jam 7:30 WIB
+- Setiap hari sampai tugas selesai
+- Tombol aksi: [Udah selesai] [Perpanjang]
+- Perpanjang: tanya user mau berapa hari
+- Skip jika bot down, lanjut besok
+
+### Feedback
+- User bilang "bot salah" → simpan ke tabel `feedback` di DB bot
+- Cara cek: Railway Console → query `SELECT * FROM feedback`
+
+### Sync Bidirectional
+- Desktop online → realtime WebSocket
+- Desktop offline → simpan ke server, sync saat buka app
+- Desktop harus cek pending sync setiap buka app
+- Last write wins (desktop dan bot setara)
+
+### Summary
+- On-demand (user minta)
+- Mencakup: tugas selesai, overdue, income/expense, progress project
+
+### Description Fallback (Transaksi)
+Jika `note` kosong tapi `kategori` ada → gunakan trigger word sebagai description:
 ```javascript
-// ✅ Random session token
-const sessionToken = crypto.randomUUID();
-sessions.set(sessionToken, {
-  telegramUserId,
-  deviceId,
-  createdAt: Date.now(),
-  expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000)
-});
-
-socket.auth = { token: sessionToken }
-```
-
-**Storage:**
-- **Server:** SQLite database (persistent across restarts)
-- **Desktop:** Electron store (encrypted)
-
----
-
-### 2. Event-Sourced Data Flow
-
-**All changes are events:**
-```typescript
-interface TelegramEvent {
-  eventId: string;          // UUID v4
-  eventType: 'task.created' | 'task.updated' | 'task.deleted' | 
-             'transaction.created' | 'project.created' | 'progress.logged';
-  telegramUserId: string;
-  timestamp: string;        // ISO 8601
-  payload: any;             // Event-specific data
-  source: 'telegram';
+// Contoh: "naik gojek 15rb ke kampus"
+// kategori = Transport (trigger: gojek), note = kosong
+if (!note && kategoriTrigger) {
+  description = kategoriTrigger; // "Gojek"
 }
 ```
 
-**Example Events:**
-```json
-{
-  "eventId": "550e8400-e29b-41d4-a716-446655440000",
-  "eventType": "task.created",
-  "telegramUserId": "123456789",
-  "timestamp": "2026-01-09T16:20:00.000Z",
-  "payload": {
-    "title": "Laporan Praktikum",
-    "courseId": "course-uuid",
-    "type": "Laporan Resmi",
-    "deadline": "2026-01-10T17:00:00.000Z",
-    "note": "Percobaan hukum newton"
-  },
-  "source": "telegram"
+### Entity Fallback (Matkul/Project)
+Entity `matkul` dan `project` isinya sama. Kode harus cek keduanya:
+```javascript
+function getCourseName(entities) {
+  return entities.matkul?.[0]?.value || 
+         entities.project?.[0]?.value || 
+         null;
+}
+```
+
+### Entity Fallback (Status)
+Entity `task_status` dan `project_status` punya synonym mirip (selesai, done, completed). Kode pilih berdasarkan **intent**:
+```javascript
+function getStatus(intent, entities) {
+  // Pilih entity berdasarkan intent
+  if (['edit_tugas', 'buat_tugas'].includes(intent)) {
+    return entities.task_status?.[0]?.value || 
+           entities.project_status?.[0]?.value || null;
+  }
+  if (['edit_project', 'catat_progress'].includes(intent)) {
+    return entities.project_status?.[0]?.value || 
+           entities.task_status?.[0]?.value || null;
+  }
+  return entities.task_status?.[0]?.value || 
+         entities.project_status?.[0]?.value || null;
 }
 ```
 
 ---
 
-### 3. Idempotent Event Processing
+## 🗄️ Entities wit.ai
 
-**Desktop App Event Store:**
-```sql
-CREATE TABLE applied_events (
-  event_id TEXT PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  applied_at INTEGER NOT NULL,
-  source TEXT NOT NULL
-);
-
-CREATE INDEX idx_applied_at ON applied_events(applied_at);
-```
-
-**Processing Logic:**
-```typescript
-async function processEvent(event: TelegramEvent) {
-  // Check if already applied
-  const existing = await db.get(
-    'SELECT event_id FROM applied_events WHERE event_id = ?',
-    [event.eventId]
-  );
-  
-  if (existing) {
-    console.log(`Event ${event.eventId} already applied, skipping`);
-    return { applied: false, reason: 'duplicate' };
-  }
-  
-  // Apply event based on type
-  switch (event.eventType) {
-    case 'task.created':
-      await createAssignment(event.payload);
-      break;
-    case 'task.updated':
-      await updateAssignment(event.payload);
-      break;
-    // ... other event types
-  }
-  
-  // Mark as applied
-  await db.run(
-    'INSERT INTO applied_events (event_id, event_type, applied_at, source) VALUES (?, ?, ?, ?)',
-    [event.eventId, event.eventType, Date.now(), event.source]
-  );
-  
-  return { applied: true };
-}
-```
+| Entity | Role | Contoh Synonyms |
+|--------|------|-----------------|
+| `matkul` | Mata kuliah | fisdas→Fisika Dasar, alin→Aljabar Linear |
+| `tipe_tugas` | Jenis tugas | lapres→Laporan Resmi, lapsem→Laporan Sementara |
+| `kategori` | Income/expense | makan, transport, gaji, transfer |
+| `project` | Nama project | skripsi, web, app |
+| `hari` | Hari (typo) | senen→Senin, rebo→Rabu |
 
 ---
 
-### 4. Google Drive as Append-Only Event Log
+## �️ Filler Words
 
-**File Structure:**
-```
-Google Drive/
-└── st4cker/
-    └── telegram-events/
-        ├── events-2026-01.jsonl     # Current month
-        ├── events-2026-02.jsonl
-        └── processed-index.json     # Tracks last processed
-```
+Kata-kata filler yang akan di-ignore (user bisa pakai, bot tetap paham):
+- "dong", "sih", "nih", "deh", "ya", "yaa", "kah"
 
-**Event File Format (JSONL):**
-```jsonl
-{"eventId":"uuid-1","eventType":"task.created","timestamp":"2026-01-09T10:00:00Z","payload":{...}}
-{"eventId":"uuid-2","eventType":"transaction.created","timestamp":"2026-01-09T10:05:00Z","payload":{...}}
-```
+Contoh: "liat tugas minggu ini dong" → intent `lihat_tugas` ✅
 
-**Sync on Startup:**
-```typescript
-async function syncFromDrive() {
-  const lastProcessed = await getLastProcessedTimestamp();
-  
-  // Download events since lastProcessed
-  const events = await downloadEventsFromDrive(lastProcessed);
-  
-  // Process each event (idempotent)
-  for (const event of events) {
-    await processEvent(event);
-  }
-  
-  // Update last processed
-  await setLastProcessedTimestamp(Date.now());
-}
-```
-
-**No Duplicates:**
-- Events from WebSocket and Drive share same `eventId`
-- Desktop's `applied_events` table ensures each event processed once
-- Even if WebSocket delivers AND Drive sync runs, no double-insert
+**Handling:**
+1. Train wit.ai dengan beberapa contoh yang include filler
+2. Preprocessing: hapus filler sebelum kirim ke wit.ai
 
 ---
 
-### 5. Conflict Resolution via Events
-
-**Not last-write-wins! Instead:**
-
-**CREATE Operations (Append-only):**
-```typescript
-// Each create is a new event, always appended
-const event = {
-  eventId: crypto.randomUUID(),
-  eventType: 'task.created',
-  payload: { ...taskData }
-};
-// No conflicts possible - each create is unique
-```
-
-**UPDATE Operations:**
-```typescript
-// Update represented as event with full state
-const event = {
-  eventId: crypto.randomUUID(),
-  eventType: 'task.updated',
-  payload: {
-    taskId: 'existing-task-uuid',
-    status: 'done',
-    updatedFields: ['status'],
-    timestamp: Date.now()
-  }
-};
-// Applied in timestamp order
-```
-
-**DELETE Operations:**
-```typescript
-const event = {
-  eventId: crypto.randomUUID(),
-  eventType: 'task.deleted',
-  payload: {
-    taskId: 'existing-task-uuid'
-  }
-};
-// Soft delete - mark as deleted but keep event history
-```
-
----
-
-## Revised Command Specifications
-
-### Enhanced /progress Command
-
-**Old:**
-```
-/progress Website Portfolio | 35 | Selesai design homepage
-```
-
-**New (with duration + detailed tracking):**
-```
-/progress [project] | [progress%] | [duration_minutes] | [note]
-```
-
-**Example:**
-```
-/progress Website Portfolio | 45 | 120 | Selesai design homepage dan about page. Next: implement backend API
-```
-
-**Event Structure:**
-```json
-{
-  "eventId": "uuid",
-  "eventType": "progress.logged",
-  "payload": {
-    "projectId": "project-uuid",
-    "progressAfter": 45,
-    "durationMinutes": 120,
-    "note": "Selesai design homepage dan about page...",
-    "timestamp": "2026-01-09T16:30:00Z"
-  }
-}
-```
-
-**Progress is snapshot-based:**
-- Each log represents current progress state (not delta)
-- History preserved in `applied_events` or separate `project_sessions` table
-- Desktop can show timeline of progress changes
-
----
-
-### All Command Event Mappings
-
-| Command | Event Type | Payload |
-|---------|-----------|---------|
-| `/task ...` | `task.created` | title, courseId, type, deadline, note |
-| `/edittask` → status | `task.updated` | taskId, status, updatedFields |
-| `/edittask` → delete | `task.deleted` | taskId |
-| `/project ...` | `project.created` | title, courseId, description, dates, priority |
-| `/progress ...` | `progress.logged` | projectId, progressAfter, duration, note |
-| `/editproject` → complete | `project.updated` | projectId, status: 'completed' |
-| `/expense ...` | `transaction.created` | type: 'expense', amount, category, date, description |
-| `/income ...` | `transaction.created` | type: 'income', amount, category, date, description |
-
----
-
-## Revised Tech Stack
-
-### Backend (Railway.app)
-
-**Persistent Storage:**
-- **Database:** SQLite (via `better-sqlite3`)
-  - `sessions` table - session tokens, user mappings
-  - `pairing_codes` table - temporary codes (TTL)
-  
-**Event Publishing:**
-- **WebSocket:** Socket.io v4 (real-time push)
-- **Google Drive API:** Append-only event log (offline fallback)
-
-### Desktop App
-
-**Event Store:**
-- **SQLite table:** `applied_events` (deduplication)
-- **Electron Store:** Session token (encrypted)
-
----
-
-## Implementation Plan v2
-
-### Phase 1: Architecture & Setup (Completed) ✅
-
-**Agent Tasks:**
-- [x] ✅ Design event schema (all event types)
-- [x] ✅ Design session token architecture
-- [x] ✅ Create SQLite schema for server (sessions, pairing_codes)
-- [x] ✅ Create desktop schema (applied_events table)
-- [ ] Design Google Drive JSONL structure
-
-**Manual Tasks:**
-- [x] ✅ 🔧 Create Telegram Bot via @BotFather (5 min)
-- [x] ✅ 🔧 Setup Railway.app account (10 min)
-
-**Deliverable:** ✅ Event-sourced architecture finalized
-
----
-
-### Phase 2: Telegram Bot + Event Publishing (Completed) ✅
-
-**Agent Tasks:**
-- [x] ✅ Setup Express + SQLite backend
-- [x] ✅ Implement pairing flow:
-  - [x] ✅ Generate random 6-digit code (TTL 5 min, one-time)
-  - [x] ✅ Store in `pairing_codes` table
-  - [x] ✅ On verification, generate `sessionToken` UUID
-  - [x] ✅ Store session in `sessions` table
-- [x] ✅ Implement event creation for all commands:
-  - [x] ✅ Parse command → Create event with UUID (`/task`, `/expense`, `/income`, `/project`)
-  - [x] ✅ Emit via WebSocket (if desktop connected)
-  - [ ] Append to Google Drive JSONL (Deferred: Focused on real-time sync first)
-- [ ] Natural language date parser (Indonesian) (Deferred: Basic regex used for now)
-- [x] ✅ Enhanced `/progress` command handler (`/log`)
-- [x] ✅ Security: input sanitization
-
-**Manual Tasks:**
-- [x] ✅ 🔧 Deploy to Railway (15 min)
-- [x] ✅ 🔧 Set webhook
-
-**Deliverable:** ✅ Bot creates events, publishes to WebSocket
-
----
-
-### Phase 3: WebSocket Server with Token Auth (Completed) ✅
-
-**Agent Tasks:**
-- [x] ✅ WebSocket authentication with sessionToken
-- [x] ✅ Event broadcasting (mapped to user session)
-- [x] ✅ Reconnection handling
-
-**Manual Tasks:**
-- [x] ✅ 🧪 Test pairing flow (30 min)
-
-**Deliverable:** ✅ Token-based WebSocket ready
-
----
-
-### Phase 4a: Project Management (New Feature) (Completed) ✅
-
-**Agent Tasks:**
-- [x] ✅ **Sync Projects (Desktop -> Bot)**
-    - [x] ✅ Include active `projects` in sync payload.
-    - [x] ✅ Trigger sync on project changes.
-- [x] ✅ **Bot Commands**
-    - [x] ✅ Implement `/projects`: List active projects with ID.
-    - [x] ✅ Implement `/log`: Interactive flow (Select -> Duration -> Note).
-- [x] ✅ **Progress Events (Bot -> Desktop)**
-    - [x] ✅ Listen for `progress.logged` in `main.cts`.
-    - [x] ✅ Insert into `project_sessions` table.
-    - [x] ✅ Update Project `updatedAt` and `totalProgress`.
-
----
-
-### Phase 4b: Desktop Event Processing (Completed) ✅
-
-**Agent Tasks:**
-- [x] ✅ Add `applied_events` table to SQLite schema
-  - *Status*: Implemented in `schema.cts` and `main.cts`.
-- [x] ✅ WebSocket listener
-  - [x] ✅ Receive events (`task.created`, `transaction.created`, `progress.logged`)
-  - [x] ✅ Process events (Apply to DB)
-  - [x] ✅ Refresh UI
-  - [x] ✅ Show toast notification
-- [x] ✅ Store sessionToken (encrypted in Electron store)
-- [x] ✅ WebSocket connection with token auth
-- [x] ✅ Auto-connect on startup
-- [x] ✅ Settings → Telegram tab (Pairing UI)
-
-**Deliverable:** ✅ Real-time sync works. Robust offline logging deferred.
-
----
-
-### Phase 5: Google Drive Event Log (Deferred) ⚠️
-
-**Status**: **Deferred**.
-**Reason**: We prioritized direct WebSocket synchronization ("Real-time") over the "Store-and-Forward" Google Drive approach for this iteration. The current implementation queues events in memory/socket if connection is brief, but extensive offline queuing via Drive is not yet implemented.
-
-**Agent Tasks (Remaining):**
-- [ ] Implement JSONL append function to Google Drive
-- [ ] Implement event reader
-- [ ] Sync on desktop startup from Drive
-
----
-
-### Phase 6: Testing & Verification (Completed) ✅
-
-**Test Scenarios:**
-- [x] ✅ Pairing Flow (End-to-End)
-- [x] ✅ Real-time Event Sync (Task, Expense, Project)
-- [x] ✅ Offline Handling (Basic: Events queue/ack mechanism)
-- [x] ✅ Data Sync (Desktop -> Bot)
-
----
-
-### Phase 7: Documentation & Release (Completed) ✅
-
-**Agent Tasks:**
-- [x] ✅ Update README
-- [x] ✅ Created Walkthrough Artifact
-- [x] ✅ Build installer (v1.6.0)
-
-**Deliverable:** ✅ Production release
-
----
-
-## Persistent Storage Schema
-
-### Server (SQLite)
-
-```sql
--- Sessions (persistent across restarts)
-CREATE TABLE sessions (
-  session_token TEXT PRIMARY KEY,
-  telegram_user_id TEXT NOT NULL,
-  device_id TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  last_activity INTEGER NOT NULL
-);
-
-CREATE INDEX idx_expires_at ON sessions(expires_at);
-CREATE INDEX idx_telegram_user ON sessions(telegram_user_id);
-
--- Pairing codes (short-lived)
-CREATE TABLE pairing_codes (
-  code TEXT PRIMARY KEY,
-  telegram_user_id TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  used INTEGER DEFAULT 0
-);
-
-CREATE INDEX idx_pairing_expiry ON pairing_codes(expires_at);
-```
-
-### Desktop (SQLite)
-
-```sql
--- Event deduplication
-CREATE TABLE applied_events (
-  event_id TEXT PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  applied_at INTEGER NOT NULL,
-  source TEXT NOT NULL, -- 'websocket' or 'drive'
-  payload_hash TEXT     -- For extra verification
-);
-
-CREATE INDEX idx_applied_at ON applied_events(applied_at);
-CREATE INDEX idx_event_type ON applied_events(event_type);
-
--- Sync cursor
-CREATE TABLE sync_state (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- Store last processed Drive timestamp
-INSERT INTO sync_state VALUES ('drive_last_sync', '1970-01-01T00:00:00Z', 0);
-```
-
----
-
-## Security Enhancements
-
-### 1. Session Token Properties
-- **Format:** UUID v4 (128-bit random)
-- **Storage:** Server DB (encrypted at rest via Railway)
-- **Transmission:** HTTPS/WSS only
-- **Expiry:** 30 days, auto-cleanup on server
-
-### 2. No User ID Exposure
-```typescript
-// ❌ Old
-socket.emit('event', { userId: 123456789 });
-
-// ✅ New
-socket.emit('event', { /* no user info in client */ });
-// Server maps token → user internally
-```
-
-### 3. Multi-User Ready
-- No hardcoded whitelist
-- Any Telegram user can pair
-- Each pairing creates isolated session
-- Event publishing scoped to user's sessions only
-
----
-
-## Desktop UI Components
-
-### Settings → Telegram Tab
-
-**Component:** `src/pages/Settings/TelegramTab.tsx`
-
-**Features:**
-1. Pairing code input (6-character, auto-uppercase)
-2. Connection status indicator (real-time)
-3. Unpair button with confirmation
-4. Command quick reference
-
-**Component Structure:**
-
-```tsx
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
-
-export function TelegramTab() {
-  const [pairingCode, setPairingCode] = useState('');
-  const [isPaired, setIsPaired] = useState(false);
-  const [status, setStatus] = useState<'connected' | 'disconnected' | 'unknown'>('unknown');
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  useEffect(() => {
-    // Check pairing status on mount
-    window.electronAPI?.telegramSync?.getPairingStatus().then(({ paired, status }) => {
-      setIsPaired(paired);
-      setStatus(status);
-    });
-
-    // Listen to WebSocket status changes
-    const cleanup = window.electronAPI?.telegramSync?.onStatusChange((_, newStatus) => {
-      setStatus(newStatus);
-    });
-
-    return () => cleanup?.();
-  }, []);
-
-  const handlePair = async () => {
-    if (!pairingCode.trim() || pairingCode.length !== 6) {
-      toast.error('Please enter a valid 6-character code');
-      return;
-    }
-
-    setIsVerifying(true);
-    const result = await window.electronAPI.telegramSync.verifyPairingCode(pairingCode);
-    setIsVerifying(false);
-
-    if (result.success) {
-      setIsPaired(true);
-      setPairingCode('');
-      toast.success('Successfully paired with Telegram! 🎉');
-    } else {
-      toast.error(result.error || 'Invalid or expired code');
-    }
+## �💰 Currency Parsing (Lokal)
+
+```javascript
+// currency.js
+export function parseAmount(text) {
+  // Slang khusus
+  const slang = {
+    'gocap': 50000,
+    'cepe': 100000,
+    'gopek': 500000,
+    'sejuta': 1000000
   };
-
-  const handleUnpair = async () => {
-    const confirmed = confirm('Unpair Telegram bot? You will need a new code to reconnect.');
-    if (!confirmed) return;
-
-    await window.electronAPI.telegramSync.unpair();
-    setIsPaired(false);
-    setStatus('unknown');
-    toast.info('Telegram unpaired successfully');
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Telegram Quick Input</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Add tasks, expenses, and projects directly from your phone
-          </p>
-        </CardHeader>
-        <CardContent>
-          {!isPaired ? (
-            <div className="space-y-4">
-              {/* Pairing Instructions */}
-              <div className="p-4 bg-muted rounded-lg space-y-3">
-                <h4 className="font-medium">Setup Instructions</h4>
-                <ol className="text-sm space-y-2 list-decimal list-inside">
-                  <li>Open Telegram and search for <code className="px-1 py-0.5 bg-background rounded">@st4cker_bot</code></li>
-                  <li>Send <code className="px-1 py-0.5 bg-background rounded">/start</code> command</li>
-                  <li>Click "🔐 Generate Pairing Code" button</li>
-                  <li>Enter the 6-character code below (valid 5 minutes)</li>
-                </ol>
-              </div>
-
-              {/* Pairing Code Input */}
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Enter code (e.g., ABC123)"
-                  value={pairingCode}
-                  onChange={(e) => setPairingCode(e.target.value.toUpperCase())}
-                  maxLength={6}
-                  className="font-mono text-lg tracking-wider"
-                  disabled={isVerifying}
-                />
-                <Button onClick={handlePair} disabled={isVerifying || pairingCode.length !== 6}>
-                  {isVerifying ? 'Verifying...' : 'Pair Device'}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Connected Status */}
-              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium flex items-center gap-2">
-                    ✅ Telegram Connected
-                    {status === 'connected' && (
-                      <span className="flex items-center gap-1 text-xs text-green-600">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                        Live
-                      </span>
-                    )}
-                    {status === 'disconnected' && (
-                      <span className="flex items-center gap-1 text-xs text-gray-500">
-                        <span className="w-2 h-2 bg-gray-500 rounded-full" />
-                        Offline
-                      </span>
-                    )}
-                  </h4>
-                  <Button variant="outline" size="sm" onClick={handleUnpair}>
-                    Unpair
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {status === 'connected' && '🟢 Real-time sync active'}
-                  {status === 'disconnected' && '🔴 Offline - changes will sync when connection restored'}
-                  {status === 'unknown' && '⚪ Checking connection...'}
-                </p>
-              </div>
-
-              {/* Quick Command Reference */}
-              <div className="p-4 bg-muted rounded-lg">
-                <h4 className="font-medium mb-3">Quick Commands</h4>
-                <div className="grid grid-cols-2 gap-2 text-sm font-mono">
-                  <div>
-                    <code className="text-blue-600">/task</code> - Add assignment
-                  </div>
-                  <div>
-                    <code className="text-blue-600">/expense</code> - Record expense
-                  </div>
-                  <div>
-                    <code className="text-blue-600">/income</code> - Record income
-                  </div>
-                  <div>
-                    <code className="text-blue-600">/project</code> - Create project
-                  </div>
-                  <div>
-                    <code className="text-blue-600">/progress</code> - Log progress
-                  </div>
-                  <div>
-                    <code className="text-blue-600">/help</code> - See all commands
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-```
-
-**Required Electron API Extensions:**
-
-```typescript
-// electron/preload.cts
-telegramSync: {
-  verifyPairingCode: (code: string) => ipcRenderer.invoke('telegram:verify-pairing', code),
-  unpair: () => ipcRenderer.invoke('telegram:unpair'),
-  getPairingStatus: () => ipcRenderer.invoke('telegram:get-status'),
-  onStatusChange: (callback: (event: any, status: string) => void) => {
-    ipcRenderer.on('telegram:status-change', callback);
-    return () => ipcRenderer.removeListener('telegram:status-change', callback);
+  
+  const lower = text.toLowerCase().replace(/\./g, '');
+  
+  if (slang[lower]) return slang[lower];
+  
+  // Pattern matching: rb, ribu, k, jt, juta
+  if (lower.match(/[\d,]+\s*(rb|ribu)$/)) {
+    return parseFloat(lower.replace(/[^\d.,]/g, '').replace(',', '.')) * 1000;
   }
+  if (lower.match(/[\d,]+k$/)) {
+    return parseFloat(lower.replace(/[^\d.,]/g, '').replace(',', '.')) * 1000;
+  }
+  if (lower.match(/[\d,]+\s*(jt|juta)$/)) {
+    return parseFloat(lower.replace(/[^\d.,]/g, '').replace(',', '.')) * 1000000;
+  }
+  
+  // Angka biasa
+  return parseInt(lower.replace(/\D/g, '')) || 0;
 }
+
+// Contoh:
+// parseAmount("50rb") → 50000
+// parseAmount("1.5jt") → 1500000
+// parseAmount("gocap") → 50000
 ```
 
-**IPC Handlers in main.cts:**
+---
 
-```typescript
-// Verify pairing code
-ipcMain.handle('telegram:verify-pairing', async (event, code: string) => {
-  try {
-    const response = await fetch(`${WEBSOCKET_URL}/api/verify-pairing`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
-    });
-    
-    const data = await response.json();
-    
-    if (data.success) {
-      // Store sessionToken encrypted
-      store.set('telegram.sessionToken', data.sessionToken);
-      store.set('telegram.paired', true);
-      store.set('telegram.expiresAt', data.expiresAt);
-      
-      // Initialize WebSocket connection
-      initTelegramWebSocket(data.sessionToken);
-      
-      return { success: true };
+## 📅 Date Parsing (Lokal)
+
+wit.ai hanya extract text, **kode yang translate ke tanggal**.
+
+**Cara tag:** Tag **seluruh phrase** sebagai `waktu`:
+- ✅ "**selasa depan**" → tag semua sebagai `waktu`
+- ❌ "**selasa**" saja → salah, "depan" hilang
+
+```javascript
+// dateParser.js
+export function parseDate(text) {
+  const today = new Date();
+  const lower = text.toLowerCase();
+  
+  // Relative
+  if (lower === 'besok') return addDays(today, 1);
+  if (lower === 'lusa') return addDays(today, 2);
+  if (lower.includes('minggu ini')) return getEndOfWeek(today);
+  if (lower.includes('minggu depan')) return addDays(getEndOfWeek(today), 7);
+  
+  // Day + "depan"
+  const days = ['minggu','senin','selasa','rabu','kamis','jumat','sabtu'];
+  for (let i = 0; i < days.length; i++) {
+    if (lower.includes(days[i])) {
+      let diff = (i - today.getDay() + 7) % 7;
+      if (lower.includes('depan')) diff += 7;
+      return addDays(today, diff || 7);
     }
-    
-    return { success: false, error: data.error || 'Invalid code' };
-  } catch (error) {
-    return { success: false, error: 'Connection failed' };
+  }
+  
+  // Absolute: "20 januari", "tanggal 25"
+  const dateMatch = lower.match(/(\d{1,2})\s*(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)?/);
+  if (dateMatch) {
+    const day = parseInt(dateMatch[1]);
+    const month = dateMatch[2] ? parseMonth(dateMatch[2]) : today.getMonth();
+    return new Date(today.getFullYear(), month, day);
+  }
+  
+  return null;
+}
+```
+
+---
+
+## 📁 New Files
+
+| File | Purpose |
+|------|---------|
+| `nlp-service.js` | **[NEW]** NLP.js manager (replaces wit.js) |
+| `corpus.json` | **[NEW]** Trained model file |
+| `nlp-handler.js` | Intent routing + confidence check |
+| `currency.js` | Parse currency slang |
+| `dateParser.js` | Parse tanggal Indonesia |
+| `aliases.js` | Fallback synonyms |
+| `undo.js` | Track last actions untuk undo chain |
+| `reminder.js` | Scheduler untuk reminder + overdue |
+| `personality.js` | Response templates casual |
+| `pendingState.js` | Manage clarification state |
+| `intentSchemas.js` | Required/optional fields per intent |
+
+---
+
+## 🔧 Coding Phase
+
+### Phase 0: Migration from Wit.ai to NLP.js
+
+> [!CAUTION]
+> **Breaking Change:** Menghapus dependency Wit.ai API. Bot akan berjalan 100% offline.
+
+#### 0.1 Install Dependencies
+```bash
+cd telegram-bot
+npm install node-nlp
+```
+
+#### 0.2 Convert Wit.ai Backup
+Backup Wit.ai sudah tersedia di `st4cker/st4cker/`:
+- `utterances/utterances-1.json` - Training data (3000+ utterances)
+- `entities/*.json` - Entity definitions (matkul, kategori, waktu, dll)
+
+Script konversi: `convert-wit.js`
+```javascript
+// convert-wit.js - Run once to generate corpus.json
+const { NlpManager } = require('node-nlp');
+const manager = new NlpManager({ languages: ['id'], forceNER: true });
+
+// Load entities from st4cker/entities/*.json
+// Load utterances from st4cker/utterances/utterances-1.json
+// manager.addDocument('id', text, intent);
+// manager.addNamedEntity(entityName, keyword, ['id'], synonyms);
+
+await manager.train();
+manager.save('./corpus.json');
+```
+
+#### 0.3 [NEW] `nlp-service.js`
+```javascript
+// src/nlp/nlp-service.js - Replaces wit.js
+import { NlpManager } from 'node-nlp';
+
+let manager = null;
+
+export async function initNLP() {
+    manager = new NlpManager({ languages: ['id'], forceNER: true });
+    manager.load('./corpus.json');
+    console.log('[NLP] Model loaded');
+}
+
+export async function parseMessage(text) {
+    const result = await manager.process('id', text);
+    // Convert to Wit.ai-compatible format for minimal code changes
+    return {
+        intents: [{ name: result.intent, confidence: result.score }],
+        entities: convertEntities(result.entities)
+    };
+}
+
+function convertEntities(nlpEntities) {
+    const converted = {};
+    for (const e of nlpEntities || []) {
+        const name = e.entity;
+        if (!converted[name]) converted[name] = [];
+        converted[name].push({
+            value: e.option || e.utteranceText,
+            confidence: e.accuracy,
+            body: e.utteranceText
+        });
+    }
+    return converted;
+}
+```
+
+#### 0.4 [MODIFY] `nlp-handler.js`
+```diff
+- import { parseMessage, extractEntities } from './wit.js';
++ import { parseMessage, extractEntities, initNLP } from './nlp-service.js';
+
+// Add initialization call at bot startup
++ await initNLP();
+```
+
+#### 0.5 [DELETE] Files
+- `src/nlp/wit.js` - No longer needed
+
+---
+
+### Phase 1: Core NLP (Existing - No Changes Needed)
+
+#### 1.2 `intentSchemas.js`
+```javascript
+// intentSchemas.js
+export const schemas = {
+  tambah_pengeluaran: { required: ['amount'], optional: ['category', 'note', 'time'] },
+  buat_tugas: { required: ['matkul', 'waktu'], optional: ['tipe_tugas', 'note'] },
+  buat_project: { required: ['project'], optional: ['waktu', 'priority'] },
+  catat_progress: { required: ['project'], optional: [] }, // guided flow
+  // ... semua intent
+};
+```
+
+#### 1.3 `pendingState.js`
+```javascript
+// pendingState.js - manage clarification state
+const pendingStates = new Map(); // chatId -> state
+
+export function setPending(chatId, state) {
+  pendingStates.set(chatId, { ...state, expires_at: Date.now() + 15*60*1000 });
+}
+
+export function getPending(chatId) {
+  const state = pendingStates.get(chatId);
+  if (!state || Date.now() > state.expires_at) return null;
+  return state;
+}
+
+export function clearPending(chatId) {
+  pendingStates.delete(chatId);
+}
+```
+
+#### 1.4 `nlp-handler.js`
+```javascript
+// nlp-handler.js
+export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+  
+  // 1. Store raw text
+  logRawText(chatId, text);
+  
+  // 2. Check pending state (for slot completion)
+  const pending = getPending(chatId);
+  if (pending) return handleSlotCompletion(bot, msg, pending, text);
+  
+  // 3. Parse with wit.ai
+  const result = await parseMessage(text);
+  
+  // 4. Confidence gate
+  if (!result.intents?.[0] || result.intents[0].confidence < 0.6) {
+    return handleLowConfidence(bot, msg, text);
+  }
+  
+  // 5. Extract entities
+  const intent = result.intents[0].name;
+  const entities = extractEntities(result.entities);
+  
+  // 6. Check required fields (Smart Field Completion)
+  const schema = schemas[intent];
+  const missing = getMissingFields(schema.required, entities);
+  
+  if (missing.length > 0) {
+    setPending(chatId, { intent, entities, filled: entities, missing, raw_text: text });
+    return askForMissing(bot, chatId, missing[0], intent);
+  }
+  
+  // 7. Execute intent
+  return executeIntent(bot, msg, intent, entities, broadcastEvent);
+}
+
+// handleSlotCompletion - BERLAKU UNTUK SEMUA INTENT
+async function handleSlotCompletion(bot, msg, pending, text) {
+  const chatId = msg.chat.id;
+  
+  // A. Check for cancel keywords
+  if (isCancelKeyword(text)) {
+    clearPending(chatId);
+    return bot.sendMessage(chatId, responses.cancelled());
+  }
+  
+  // B. Check for mid-flow edit keywords (ganti, ubah, bukan, salah)
+  const editMatch = detectMidFlowEdit(text);
+  if (editMatch) {
+    pending.filled[editMatch.field] = editMatch.value;
+    await bot.sendMessage(chatId, `Oke, ${editMatch.field} udah kuganti!`);
+    // Continue asking for remaining missing fields
+  }
+  
+  // C. Parse answer as slot completion
+  const result = await parseMessage(text);
+  const entities = extractEntities(result.entities || {});
+  
+  // D. Merge new entities to filled fields
+  Object.assign(pending.filled, entities);
+  
+  // E. Re-check missing fields
+  const schema = schemas[pending.intent];
+  const stillMissing = getMissingFields(schema.required, pending.filled);
+  
+  if (stillMissing.length > 0) {
+    pending.missing = stillMissing;
+    setPending(chatId, pending);
+    return askForMissing(bot, chatId, stillMissing[0], pending.intent);
+  }
+  
+  // F. All fields complete → execute
+  clearPending(chatId);
+  return executeIntent(bot, msg, pending.intent, pending.filled, broadcastEvent);
+}
+```
+
+### Phase 2: Utility Functions
+
+#### 2.1 `currency.js` ✅ (sudah di plan)
+#### 2.2 `dateParser.js` ✅ (sudah di plan)
+
+#### 2.3 `personality.js`
+```javascript
+// personality.js
+export const responses = {
+  confirm_expense: (amount, category) => 
+    `Siapp, expense ${category} Rp${amount.toLocaleString()} udah kucatat!`,
+  confirm_task: (matkul, deadline) => 
+    `Siapp, tugas ${matkul} deadline ${deadline} udah dicatat yaa`,
+  ask_category: () => 
+    `Kategorinya apa?`,
+  ask_note: () => 
+    `Ada note ga?`,
+  cancelled: () => 
+    `Okee, dibatalin ya~`,
+  // ...
+};
+```
+
+### Phase 3: Integration
+
+#### 3.1 Update `bot.js`
+```javascript
+// bot.js - tambahkan di on('message')
+bot.on('message', async (msg) => {
+  // ... existing handlers ...
+  
+  // NLP Fallback (jika bukan command)
+  if (!msg.text?.startsWith('/')) {
+    const handled = await handleNaturalLanguage(bot, msg, broadcastEvent);
+    if (handled) return;
   }
 });
+```
 
-// Unpair
-ipcMain.handle('telegram:unpair', async () => {
-  const sessionToken = store.get('telegram.sessionToken');
-  
-  if (sessionToken) {
-    // Notify server
-    await fetch(`${WEBSOCKET_URL}/api/unpair`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionToken })
-    });
-  }
-  
-  // Close WebSocket
-  if (telegramSocket) {
-    telegramSocket.close();
-    telegramSocket = null;
-  }
-  
-  // Clear local data
-  store.delete('telegram.sessionToken');
-  store.delete('telegram.paired');
-  store.delete('telegram.expiresAt');
-  
-  return { success: true };
-});
+### Phase 4: Testing
 
-// Get pairing status
-ipcMain.handle('telegram:get-status', () => {
-  const paired = store.get('telegram.paired', false);
-  const expiresAt = store.get('telegram.expiresAt');
-  const connected = telegramSocket?.connected || false;
-  
-  return {
-    paired,
-    expiresAt,
-    status: paired ? (connected ? 'connected' : 'disconnected') : 'unknown'
-  };
-});
+1. Test dengan wit.ai HTTP API langsung
+2. Test confidence threshold
+3. Test entity extraction
+4. Test pending state flow
+5. Test mid-flow editing
+6. Test cancel/undo
+7. Test edge cases
+
+---
+
+## 🔄 Modified Files
+
+| File | Changes |
+|------|---------|
+| `bot.js` | NLP handler integration |
+| `server.js` | Pending sync endpoint |
+| `package.json` | Add node-fetch, fuzzball |
+| `.env` | Add WIT_ACCESS_TOKEN |
+
+---
+
+## 📋 wit.ai Training Guide
+
+### Step 1: Buat Entities
+
+Buka wit.ai Dashboard → Entities, buat:
+- `matkul` — nama mata kuliah
+- `tipe_tugas` — lapres, tugas, dll
+- `kategori` — makan, transport, gaji
+- `project` — nama project
+- `hari` — senen → senin
+- `status` — selesai, done, belum, pending
+
+> **Built-in (otomatis ada):** `wit$datetime`, `wit$number`, `wit$duration`
+
+### ⚡ Dynamic Entities (Auto-Sync)
+
+**Problem:** Matkul berubah tiap semester, tidak mau update wit.ai manual.
+
+**Solusi:** Gunakan **local aliases** yang di-sync dari desktop:
+
+1. Desktop sync daftar matkul + aliases ke bot server
+2. Bot simpan di database `course_aliases`
+3. Sebelum kirim ke wit.ai, bot resolve alias dulu
+4. wit.ai cukup tau pattern, bukan nama matkul spesifik
+
+**Flow:**
+```
+"tugas fisdas besok"
+  → Bot: "fisdas" = "Fisika Dasar" (dari sync data)
+  → wit.ai: detect intent "buat_tugas"
+```
+
+**Yang perlu di-sync dari desktop:**
+- Daftar matkul + singkatan
+- Daftar project
+- Daftar kategori custom
+
+### Step 2: Isi Synonyms
+
+**Entity `matkul`:**
+| Value | Synonyms |
+|-------|----------|
+| Fisika Dasar | fisdas, fisda |
+| Aljabar Linear | alin |
+| Web Programming Lab | wpl |
+
+**Entity `tipe_tugas`:**
+| Value | Synonyms |
+|-------|----------|
+| Laporan Resmi | lapres |
+| Laporan Sementara | lapsem |
+| Laporan Pendahuluan | lapdul, lapen |
+
+### Step 3: Train Utterances
+
+**`buat_tugas`:**
+```
+senen besok ada lapres wpl
+tugas fisdas deadline besok
+jumat ini kumpul lapdul alin
+bikin tugas fisika sama alin deadline senin depan
+```
+
+**`batalkan`:**
+```
+ga jadi
+cancel yang tadi
+batal
+ga jadi deh
+```
+
+**`casual`:**
+```
+makasih
+halo
+thanks bot
 ```
 
 ---
 
-## API Changes Summary
+## ✅ Verification Plan
 
-### Pairing API
+### Test Lokal
 
-**POST /api/generate-pairing**
-```json
-// Request
-{ "telegramUserId": "123456789" }
+1. Setup wit.ai app + train intents
+2. Copy WIT_ACCESS_TOKEN ke .env
+3. Run `npm run dev`
+4. Test via Telegram:
+   - High confidence: "habis 50rb makan"
+   - Low confidence: "keluar uang nih"
+   - Missing entity: "buat tugas deadline besok"
+   - Typo: "tugas fisads besok"
+   - Undo: "ga jadi"
+   - Casual: "makasih"
 
-// Response
-{
-  "code": "ABC123",
-  "expiresAt": "2026-01-09T16:25:00Z"
-}
-```
+### Checklist
 
-**POST /api/verify-pairing**
-```json
-// Request
-{ "code": "ABC123" }
-
-// Response
-{
-  "success": true,
-  "sessionToken": "550e8400-e29b-41d4-a716-446655440000",
-  "expiresAt": "2026-02-08T16:20:00Z"
-}
-```
-
-### WebSocket Events
-
-**Client → Server (Auth):**
-```json
-{
-  "auth": {
-    "token": "session-token-uuid"
-  }
-}
-```
-
-**Server → Client (Event):**
-```json
-{
-  "eventId": "uuid",
-  "eventType": "task.created",
-  "timestamp": "2026-01-09T16:20:00Z",
-  "payload": { /* event data */ }
-}
-```
+- [ ] 19 intents berfungsi
+- [ ] Konfirmasi muncul saat confidence rendah
+- [ ] Follow-up question saat entity missing
+- [ ] Fuzzy match untuk typo
+- [ ] Currency parsing (rb, k, jt, gocap)
+- [ ] Undo chain berfungsi
+- [ ] Overdue notif pagi
+- [ ] Pagination "mau lihat lagi?"
+- [ ] Summary lengkap
+- [ ] Sync ke desktop realtime
+- [ ] Personality casual
 
 ---
 
-## Migration from v1
+## 🚀 Implementation Steps
 
-If v1 was already partially implemented:
-
-1. **Session Migration:**
-   - Generate sessionToken for existing userId/deviceId pairs
-   - Store in new `sessions` table
-   - Update desktop to use token
-
-2. **Data Migration:**
-   - Export existing data as events
-   - Assign retroactive `eventId`
-   - Populate `applied_events` table
-
-3. **Code Migration:**
-   - Replace auth logic
-   - Add event processing layer
-   - No data loss
+1. [ ] Buat akun wit.ai
+2. [ ] Buat entities + synonyms
+3. [ ] Train 19 intents
+4. [ ] Copy WIT_ACCESS_TOKEN ke .env
+5. [ ] Install: node-fetch, fuzzball
+6. [ ] Implement new files
+7. [ ] Modify bot.js, server.js
+8. [ ] Test lokal
+9. [ ] Buat user documentation
+10. [ ] Deploy ke Railway
 
 ---
 
-## Scalability Notes
+## 📝 User Documentation (Draft)
 
-**Railway Free Tier:**
-- SQLite file persists across deploys
-- 500 hours/month sufficient for single user
-- Upgrade to $5/month if >500 hours
+### Cara Pakai NLP
 
-**Multi-User Support:**
-- Each user has separate sessions
-- Events scoped per telegramUserId
-- Google Drive: separate folder per user or shared with user-scoped files
+Kirim pesan ke bot tanpa command, contoh:
+- "tugas fisdas deadline besok"
+- "habis 50rb makan"
+- "kerja skripsi 2 jam"
+- "ada deadline apa aja"
+- "saldo berapa"
 
-**Future Enhancements:**
-- Migrate from SQLite to PostgreSQL (if scaling)
-- Add event compaction (snapshot + recent events)
-- Webhook-based Drive sync (if Google adds support)
+### Command Tetap Berfungsi
+
+Semua /command lama tetap bisa dipakai:
+- /task, /expense, /income, /project, /log, dll
+
+### Tips
+
+- Pakai singkatan matkul (fisdas, alin, wpl)
+- Pakai singkatan currency (50rb, 100k, gocap)
+- Bilang "ga jadi" untuk undo
+- Bilang "bantuan" untuk lihat kemampuan
 
 ---
 
-## Conclusion
-
-This v2 plan addresses all critical security and architecture concerns:
-
-✅ **Persistent sessions** (survive restarts)  
-✅ **Event-sourced** (immutable, idempotent)  
-✅ **Token-based auth** (no exposed user IDs)  
-✅ **Conflict-free** (event append model)  
-✅ **Deduplication** (eventId tracking)  
-✅ **Enhanced progress** (duration + notes)  
-✅ **Multi-user ready** (pairing flow)  
-✅ **Production grade** (persistent storage, proper auth)
-
-Timeline remains 3 weeks. Ready for implementation.
+**Ready for Review** ✅

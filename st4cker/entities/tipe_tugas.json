@@ -1,0 +1,62 @@
+{
+    "name": "tipe_tugas",
+    "roles": [
+        "tipe_tugas"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "Laporan Pendahuluan",
+            "synonyms": [
+                "Laporan Pendahuluan",
+                "lapen"
+            ]
+        },
+        {
+            "keyword": "Laporan Resmi",
+            "synonyms": [
+                "Laporan Resmi",
+                "lap resmi",
+                "lapres"
+            ]
+        },
+        {
+            "keyword": "Laporan Sementara",
+            "synonyms": [
+                "Laporan Sementara",
+                "lapsem"
+            ]
+        },
+        {
+            "keyword": "Quiz",
+            "synonyms": [
+                "kuis",
+                "quiz"
+            ]
+        },
+        {
+            "keyword": "Tugas",
+            "synonyms": [
+                "Tugas",
+                "task",
+                "tugas"
+            ]
+        },
+        {
+            "keyword": "UAS",
+            "synonyms": [
+                "UAS"
+            ]
+        },
+        {
+            "keyword": "UTS",
+            "synonyms": [
+                "ujian tengah semester",
+                "uts"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,43 @@
+{
+    "name": "task_status",
+    "roles": [
+        "task_status"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "Completed",
+            "synonyms": [
+                "completed",
+                "done",
+                "kelar",
+                "selesai",
+                "udah kelar",
+                "udah selesai"
+            ]
+        },
+        {
+            "keyword": "In Progress",
+            "synonyms": [
+                "garap",
+                "in progress",
+                "lagi digarap",
+                "lagi dikerjain",
+                "mengerjakan",
+                "mulai garap",
+                "mulai ngerjain"
+            ]
+        },
+        {
+            "keyword": "To Do",
+            "synonyms": [
+                "To Do",
+                "baru",
+                "belum mulai"
+            ]
+        }
+    ]
+}

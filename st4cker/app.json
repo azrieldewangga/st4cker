@@ -1,0 +1,7 @@
+{
+    "version": 20200513,
+    "zip-command": "zip st4cker.zip st4cker\/app.json st4cker\/entities\/*.json st4cker\/intents\/*.json st4cker\/traits\/*.json st4cker\/utterances\/*.json st4cker\/composer\/*.json",
+    "name": "st4cker",
+    "lang": "id",
+    "timezone": "Asia\/Jakarta"
+}

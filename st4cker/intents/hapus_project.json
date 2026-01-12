@@ -1,0 +1,7 @@
+{
+    "name": "hapus_project",
+    "entities": [
+        "project:project",
+        "project_status:project_status"
+    ]
+}

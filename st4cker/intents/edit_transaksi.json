@@ -1,0 +1,7 @@
+{
+    "name": "edit_transaksi",
+    "entities": [
+        "kategori:kategori",
+        "wit$number:number"
+    ]
+}

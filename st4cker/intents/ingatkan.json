@@ -1,0 +1,7 @@
+{
+    "name": "ingatkan",
+    "entities": [
+        "note:note",
+        "waktu:waktu"
+    ]
+}

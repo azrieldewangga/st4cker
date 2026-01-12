@@ -237,7 +237,7 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className={getPriorityColor(project.priority)}>{getPriorityIcon(project.priority)}</span>
-                                                <h3 className="font-semibold text-sm line-clamp-1">{project.title}</h3>
+                                                <h3 className="font-semibold text-sm line-clamp-1">{project.title || "Untitled Project"}</h3>
                                             </div>
                                             <p className="text-xs text-muted-foreground">{getProjectType(project)}</p>
                                         </div>

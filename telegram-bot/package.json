@@ -7,7 +7,9 @@
     "scripts": {
         "start": "node src/index.js",
         "dev": "nodemon src/index.js",
-        "test": "echo \"Tests not yet implemented\" && exit 0"
+        "test": "echo \"Tests not yet implemented\" && exit 0",
+        "train": "node scripts/train.js",
+        "train:bulk": "node scripts/bulk-train.js"
     },
     "keywords": [
         "telegram",
@@ -18,14 +20,15 @@
     "author": "st4cker",
     "license": "MIT",
     "dependencies": {
-        "node-telegram-bot-api": "^0.66.0",
-        "express": "^4.18.2",
-        "socket.io": "^4.7.2",
         "better-sqlite3": "^9.2.2",
         "cors": "^2.8.5",
-        "validator": "^13.11.0",
+        "express": "^4.18.2",
+        "googleapis": "^131.0.0",
+        "node-nlp": "^4.27.0",
+        "node-telegram-bot-api": "^0.66.0",
+        "socket.io": "^4.7.2",
         "uuid": "^9.0.1",
-        "googleapis": "^131.0.0"
+        "validator": "^13.11.0"
     },
     "devDependencies": {
         "nodemon": "^3.0.2"

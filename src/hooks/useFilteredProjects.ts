@@ -23,7 +23,7 @@ export const useFilteredProjects = (projects: Project[], filters: FilterOptions)
         let filtered = projects.filter(p => {
             const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
             const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
-            const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = !searchQuery || (p.title && p.title.toLowerCase().includes(searchQuery.toLowerCase()));
             return matchesStatus && matchesPriority && matchesSearch;
         });
 
@@ -63,7 +63,10 @@ export const useFilteredProjects = (projects: Project[], filters: FilterOptions)
 export const useProjectHelpers = () => {
     return useMemo(() => ({
         getDaysRemaining: (deadline: string) => {
-            return differenceInDays(new Date(deadline), new Date());
+            if (!deadline) return 0;
+            const date = new Date(deadline);
+            if (isNaN(date.getTime())) return 0;
+            return differenceInDays(date, new Date());
         },
         getPriorityColor: (priority: string) => {
             switch (priority) {

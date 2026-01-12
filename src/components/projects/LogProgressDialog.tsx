@@ -100,7 +100,9 @@ const LogProgressDialog: React.FC<LogProgressDialogProps> = ({
         await handleLogSession(formData.progressAfter, formData.status);
     };
 
-    const progressChange = formData.progressAfter - currentProgress;
+    // Safety check
+    const safeCurrentProgress = currentProgress || 0;
+    const progressChange = (formData.progressAfter || 0) - safeCurrentProgress;
 
     // View: Completion Confirmation
     if (showCompletionConfirm) {

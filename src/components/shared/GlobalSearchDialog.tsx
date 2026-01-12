@@ -57,7 +57,7 @@ export const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({
         assignments.forEach(a => {
             const courseName = courseMap[a.courseId] || 'No Course';
             if (
-                a.title.toLowerCase().includes(lowerSearch) ||
+                (a.title && a.title.toLowerCase().includes(lowerSearch)) ||
                 (a.note && a.note.toLowerCase().includes(lowerSearch)) ||
                 courseName.toLowerCase().includes(lowerSearch)
             ) {
@@ -75,8 +75,8 @@ export const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({
         // 2. Search Transactions
         transactions.forEach(t => {
             if (
-                t.title.toLowerCase().includes(lowerSearch) ||
-                t.category.toLowerCase().includes(lowerSearch)
+                (t.title && t.title.toLowerCase().includes(lowerSearch)) ||
+                (t.category && t.category.toLowerCase().includes(lowerSearch))
             ) {
                 allResults.push({
                     id: t.id,
@@ -91,7 +91,7 @@ export const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({
 
         // 3. Search Courses
         courses.forEach(c => {
-            if (c.name.toLowerCase().includes(lowerSearch)) {
+            if (c.name && c.name.toLowerCase().includes(lowerSearch)) {
                 allResults.push({
                     id: c.id,
                     type: 'course',

@@ -1,0 +1,41 @@
+{
+    "name": "project_status",
+    "roles": [
+        "project_status"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "Active",
+            "synonyms": [
+                "Active",
+                "aktif",
+                "jalan",
+                "running"
+            ]
+        },
+        {
+            "keyword": "Completed",
+            "synonyms": [
+                "completed",
+                "done",
+                "ga aktif",
+                "kelar",
+                "selesai"
+            ]
+        },
+        {
+            "keyword": "On Hold",
+            "synonyms": [
+                "ditunda",
+                "ga aktif",
+                "on hold",
+                "pause",
+                "pending"
+            ]
+        }
+    ]
+}

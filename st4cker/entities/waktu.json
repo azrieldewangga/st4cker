@@ -1,0 +1,173 @@
+{
+    "name": "waktu",
+    "roles": [
+        "waktu"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "20 januari",
+            "synonyms": [
+                "20 januari"
+            ]
+        },
+        {
+            "keyword": "20 maret",
+            "synonyms": [
+                "20 maret"
+            ]
+        },
+        {
+            "keyword": "30 maret",
+            "synonyms": [
+                "30 maret"
+            ]
+        },
+        {
+            "keyword": "Besok",
+            "synonyms": [
+                "besok",
+                "bsk",
+                "bsok"
+            ]
+        },
+        {
+            "keyword": "besok pagi",
+            "synonyms": [
+                "besok pagi"
+            ]
+        },
+        {
+            "keyword": "bulan ini",
+            "synonyms": [
+                "bulan ini"
+            ]
+        },
+        {
+            "keyword": "februari",
+            "synonyms": [
+                "februari"
+            ]
+        },
+        {
+            "keyword": "hari ini",
+            "synonyms": [
+                "hari ini",
+                "today"
+            ]
+        },
+        {
+            "keyword": "jam 7",
+            "synonyms": [
+                "jam 7"
+            ]
+        },
+        {
+            "keyword": "jumat",
+            "synonyms": [
+                "jumat"
+            ]
+        },
+        {
+            "keyword": "jumat depan",
+            "synonyms": [
+                "jumat depan"
+            ]
+        },
+        {
+            "keyword": "jumat sore",
+            "synonyms": [
+                "jumat sore"
+            ]
+        },
+        {
+            "keyword": "juni",
+            "synonyms": [
+                "juni"
+            ]
+        },
+        {
+            "keyword": "kamis",
+            "synonyms": [
+                "kamis"
+            ]
+        },
+        {
+            "keyword": "kemarin",
+            "synonyms": [
+                "kemarin"
+            ]
+        },
+        {
+            "keyword": "lusa",
+            "synonyms": [
+                "lusa"
+            ]
+        },
+        {
+            "keyword": "maret",
+            "synonyms": [
+                "maret"
+            ]
+        },
+        {
+            "keyword": "minggu depan",
+            "synonyms": [
+                "minggu depan",
+                "minggu dpan",
+                "minggu dpn"
+            ]
+        },
+        {
+            "keyword": "minggu ini",
+            "synonyms": [
+                "minggu ini"
+            ]
+        },
+        {
+            "keyword": "minggu lalu",
+            "synonyms": [
+                "minggu lalu"
+            ]
+        },
+        {
+            "keyword": "rabu",
+            "synonyms": [
+                "rabu"
+            ]
+        },
+        {
+            "keyword": "rabu depan",
+            "synonyms": [
+                "rabu depan"
+            ]
+        },
+        {
+            "keyword": "senin",
+            "synonyms": [
+                "senin"
+            ]
+        },
+        {
+            "keyword": "senin depan",
+            "synonyms": [
+                "senin depan"
+            ]
+        },
+        {
+            "keyword": "tanggal 15",
+            "synonyms": [
+                "tanggal 15"
+            ]
+        },
+        {
+            "keyword": "tanggal 25",
+            "synonyms": [
+                "tanggal 25"
+            ]
+        }
+    ]
+}

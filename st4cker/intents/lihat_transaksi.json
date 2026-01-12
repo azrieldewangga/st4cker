@@ -1,0 +1,6 @@
+{
+    "name": "lihat_transaksi",
+    "entities": [
+        "waktu:waktu"
+    ]
+}

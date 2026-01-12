@@ -306,15 +306,16 @@ electron_1.app.on('ready', async () => {
     electron_1.ipcMain.handle('projects:list', () => projects_cjs_1.projects.getAll());
     electron_1.ipcMain.handle('projects:getById', (_, id) => projects_cjs_1.projects.getById(id));
     electron_1.ipcMain.handle('projects:create', (_, data) => {
-        const result = projects_cjs_1.projects.create({
+        const newProject = {
             ...data,
             id: (0, crypto_1.randomUUID)(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
-        });
+        };
+        projects_cjs_1.projects.create(newProject);
         if (telegramStore && telegramStore.get('paired'))
             (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
-        return result;
+        return newProject;
     });
     electron_1.ipcMain.handle('projects:update', (_, id, data) => {
         const result = projects_cjs_1.projects.update(id, data);
@@ -337,21 +338,29 @@ electron_1.app.on('ready', async () => {
     // Project Sessions
     electron_1.ipcMain.handle('projectSessions:listByProject', (_, projectId) => project_sessions_cjs_1.projectSessions.getByProjectId(projectId));
     electron_1.ipcMain.handle('projectSessions:getById', (_, id) => project_sessions_cjs_1.projectSessions.getById(id));
-    electron_1.ipcMain.handle('projectSessions:create', (_, data) => project_sessions_cjs_1.projectSessions.create({
-        ...data,
-        id: (0, crypto_1.randomUUID)(),
-        createdAt: new Date().toISOString()
-    }));
+    electron_1.ipcMain.handle('projectSessions:create', (_, data) => {
+        const newSession = {
+            ...data,
+            id: (0, crypto_1.randomUUID)(),
+            createdAt: new Date().toISOString()
+        };
+        project_sessions_cjs_1.projectSessions.create(newSession);
+        return newSession;
+    });
     electron_1.ipcMain.handle('projectSessions:update', (_, id, data) => project_sessions_cjs_1.projectSessions.update(id, data));
     electron_1.ipcMain.handle('projectSessions:delete', (_, id) => project_sessions_cjs_1.projectSessions.delete(id));
     electron_1.ipcMain.handle('projectSessions:getStats', (_, projectId) => project_sessions_cjs_1.projectSessions.getStats(projectId));
     // Project Attachments
     electron_1.ipcMain.handle('projectAttachments:listByProject', (_, projectId) => project_attachments_cjs_1.projectAttachments.getByProjectId(projectId));
-    electron_1.ipcMain.handle('projectAttachments:create', (_, data) => project_attachments_cjs_1.projectAttachments.create({
-        ...data,
-        id: (0, crypto_1.randomUUID)(),
-        createdAt: new Date().toISOString()
-    }));
+    electron_1.ipcMain.handle('projectAttachments:create', (_, data) => {
+        const newAttachment = {
+            ...data,
+            id: (0, crypto_1.randomUUID)(),
+            createdAt: new Date().toISOString()
+        };
+        project_attachments_cjs_1.projectAttachments.create(newAttachment);
+        return newAttachment;
+    });
     electron_1.ipcMain.handle('projectAttachments:delete', (_, id) => project_attachments_cjs_1.projectAttachments.delete(id));
     // Backup & Restore
     electron_1.ipcMain.handle('db:export', async () => {
@@ -849,8 +858,16 @@ electron_1.app.on('ready', async () => {
             return { paired: false, status: 'unknown' };
         const paired = telegramStore.get('paired', false);
         const expiresAt = telegramStore.get('expiresAt');
+        const deviceId = telegramStore.get('deviceId');
+        const userId = telegramStore.get('userId');
         const connected = telegramSocket?.connected || false;
-        return { paired, expiresAt, status: paired ? (connected ? 'connected' : 'disconnected') : 'unknown' };
+        return {
+            paired,
+            expiresAt,
+            deviceId,
+            userId,
+            status: paired ? (connected ? 'connected' : 'disconnected') : 'unknown'
+        };
     });
     // Listeners
     electron_1.ipcMain.on('data-changed', () => {

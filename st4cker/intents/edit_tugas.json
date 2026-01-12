@@ -1,0 +1,11 @@
+{
+    "name": "edit_tugas",
+    "entities": [
+        "matkul:matkul",
+        "project:project",
+        "project_status:project_status",
+        "task_status:task_status",
+        "tipe_tugas:tipe_tugas",
+        "waktu:waktu"
+    ]
+}

@@ -474,8 +474,8 @@ const Assignments = () => {
         if (search) {
             const s = search.toLowerCase();
             result = result.filter(a =>
-                a.title.toLowerCase().includes(s) ||
-                a.courseId.toLowerCase().includes(s) ||
+                (a.title && a.title.toLowerCase().includes(s)) ||
+                (a.courseId && a.courseId.toLowerCase().includes(s)) ||
                 (a.note && a.note.toLowerCase().includes(s))
             );
         }

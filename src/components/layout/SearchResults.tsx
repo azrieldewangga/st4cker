@@ -18,8 +18,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({ query, closeSearch }) => 
 
     // Filter Logic
     const filteredAssignments = assignments.filter(a =>
-        a.title.toLowerCase().includes(lowerQuery) ||
-        a.courseId.toLowerCase().includes(lowerQuery)
+        (a.title && a.title.toLowerCase().includes(lowerQuery)) ||
+        (a.courseId && a.courseId.toLowerCase().includes(lowerQuery))
     ).slice(0, 5); // Limit 5
 
     // Dummy logic for other modules

@@ -58,7 +58,10 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
     const avgHours = Math.floor(avgSessionMinutes / 60);
     const avgRemMinutes = avgSessionMinutes % 60;
 
-    const daysLeft = differenceInDays(new Date(project.deadline), new Date());
+    const daysLeft = project.deadline && !isNaN(new Date(project.deadline).getTime())
+        ? differenceInDays(new Date(project.deadline), new Date())
+        : 0;
+    const isValidDeadline = project.deadline && !isNaN(new Date(project.deadline).getTime());
 
     const handleOpenAttachment = (att: ProjectAttachment) => {
         if (att.type === 'link') {
@@ -88,7 +91,7 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
                                 </>
                             )}
                             <span className={daysLeft < 0 ? 'text-destructive' : ''}>
-                                Due: {format(new Date(project.deadline), 'MMM d, yyyy')}
+                                Due: {isValidDeadline ? format(new Date(project.deadline), 'MMM d, yyyy') : 'No Deadline'}
                             </span>
                         </div>
                     </div>

@@ -1,0 +1,6 @@
+{
+    "name": "lihat_project",
+    "entities": [
+        "project_status:project_status"
+    ]
+}

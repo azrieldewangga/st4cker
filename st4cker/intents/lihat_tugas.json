@@ -1,0 +1,8 @@
+{
+    "name": "lihat_tugas",
+    "entities": [
+        "matkul:matkul",
+        "project:project",
+        "waktu:waktu"
+    ]
+}

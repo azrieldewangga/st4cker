@@ -1,0 +1,69 @@
+{
+    "name": "kategori",
+    "roles": [
+        "kategori"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "Bills",
+            "synonyms": [
+                "Bills",
+                "internet",
+                "paylater",
+                "spotify",
+                "tagihan"
+            ]
+        },
+        {
+            "keyword": "Food",
+            "synonyms": [
+                "food",
+                "makan",
+                "minum"
+            ]
+        },
+        {
+            "keyword": "Shopping",
+            "synonyms": [
+                "shopping"
+            ]
+        },
+        {
+            "keyword": "Subscription",
+            "synonyms": [
+                "Subscription",
+                "langganan"
+            ]
+        },
+        {
+            "keyword": "Transfer",
+            "synonyms": [
+                "dapat",
+                "dikasih",
+                "gaji",
+                "income",
+                "masuk",
+                "ngasih",
+                "terima",
+                "tf",
+                "transfer"
+            ]
+        },
+        {
+            "keyword": "Transport",
+            "synonyms": [
+                "bensin",
+                "ganti oli",
+                "gocar",
+                "gojek",
+                "parkir",
+                "service motor",
+                "transport"
+            ]
+        }
+    ]
+}

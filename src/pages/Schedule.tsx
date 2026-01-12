@@ -123,7 +123,7 @@ const Schedule = () => {
         let course = courses.find(c => c.id === item.course);
         // Fallbacks logic (legacy/db mismatch)
         if (!course && item.course) {
-            course = courses.find(c => c.name === item.course || c.name.toLowerCase() === item.course.toLowerCase());
+            course = courses.find(c => c.name === item.course || (c.name && item.course && c.name.toLowerCase() === item.course.toLowerCase()));
         }
         if (!course && performanceRecords) {
             course = performanceRecords.find(c => c.id === item.course);
@@ -416,7 +416,7 @@ const Schedule = () => {
     };
 
     // Filtered courses for selector
-    const filteredCourses = courses.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredCourses = courses.filter(c => c.name && c.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return (
         <div className="flex flex-col h-full space-y-6">

@@ -6,6 +6,7 @@ import { handleEditTaskCommand, handleEditTaskCallback } from './commands/editta
 import { handleBalanceCommand } from './commands/balance.js';
 import { handleTransactionCommand, handleTransactionCallback, handleTransactionInput, handleTransactionNote } from './commands/transaction.js';
 import { handleProjectsCommand, handleLogCommand, handleProjectCallback, handleProjectInput, handleCreateProjectCommand } from './commands/project.js';
+import { handleNaturalLanguage, handleNLPCallback } from './nlp/index.js';
 
 import { broadcastEvent } from './server.js';
 import crypto from 'crypto';
@@ -112,6 +113,9 @@ bot.on('callback_query', async (query) => {
         handleTransactionCallback(bot, query, broadcastEvent);
     } else if (query.data.startsWith('log_proj_') || query.data.startsWith('K_PRIORITY_') || query.data.startsWith('LOG_STATUS_') || query.data.startsWith('TYPE_') || query.data.startsWith('COURSE_')) {
         handleProjectCallback(bot, query, broadcastEvent);
+    } else if (query.data.startsWith('nlp_')) {
+        // NLP callback handlers
+        handleNLPCallback(bot, query, broadcastEvent);
     }
 });
 
@@ -219,6 +223,14 @@ bot.on('message', async (msg) => {
     // Try handling as project input (duration/note/creation)
     const handledProjInput = await handleProjectInput(bot, msg, broadcastEvent);
     if (handledProjInput) return;
+
+    // NLP Fallback - try natural language processing
+    try {
+        const handledNLP = await handleNaturalLanguage(bot, msg, broadcastEvent);
+        if (handledNLP) return;
+    } catch (error) {
+        console.error('[NLP] Error:', error.message);
+    }
 });
 
 // /balance command

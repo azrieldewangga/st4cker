@@ -1,0 +1,10 @@
+{
+    "name": "buat_tugas",
+    "entities": [
+        "hari:hari",
+        "matkul:matkul",
+        "project:project",
+        "tipe_tugas:tipe_tugas",
+        "waktu:waktu"
+    ]
+}

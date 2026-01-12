@@ -1,0 +1,8 @@
+{
+    "name": "buat_project",
+    "entities": [
+        "Priority:Priority",
+        "project:project",
+        "waktu:waktu"
+    ]
+}

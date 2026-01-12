@@ -1,0 +1,65 @@
+{
+    "name": "hari",
+    "roles": [
+        "hari"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "Jum'at",
+            "synonyms": [
+                "Jum'at",
+                "jum",
+                "jumat"
+            ]
+        },
+        {
+            "keyword": "Kamis",
+            "synonyms": [
+                "kam",
+                "kamis",
+                "kemis"
+            ]
+        },
+        {
+            "keyword": "Minggu",
+            "synonyms": [
+                "Minggu",
+                "ming"
+            ]
+        },
+        {
+            "keyword": "Rabu",
+            "synonyms": [
+                "Rabu",
+                "rabu",
+                "rebo"
+            ]
+        },
+        {
+            "keyword": "Sabtu",
+            "synonyms": [
+                "Sabtu",
+                "sab"
+            ]
+        },
+        {
+            "keyword": "Selasa",
+            "synonyms": [
+                "sel",
+                "selasa"
+            ]
+        },
+        {
+            "keyword": "Senin",
+            "synonyms": [
+                "sen",
+                "senen",
+                "senin"
+            ]
+        }
+    ]
+}

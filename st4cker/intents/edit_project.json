@@ -1,0 +1,9 @@
+{
+    "name": "edit_project",
+    "entities": [
+        "Priority:Priority",
+        "project:project",
+        "project_status:project_status",
+        "waktu:waktu"
+    ]
+}

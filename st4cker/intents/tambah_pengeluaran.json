@@ -1,0 +1,8 @@
+{
+    "name": "tambah_pengeluaran",
+    "entities": [
+        "kategori:kategori",
+        "note:note",
+        "wit$number:number"
+    ]
+}

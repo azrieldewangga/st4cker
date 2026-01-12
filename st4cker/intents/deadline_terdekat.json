@@ -1,0 +1,6 @@
+{
+    "name": "deadline_terdekat",
+    "entities": [
+        "waktu:waktu"
+    ]
+}

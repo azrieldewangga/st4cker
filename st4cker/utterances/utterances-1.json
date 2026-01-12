@@ -1,0 +1,3152 @@
+{
+    "utterances": [
+        {
+            "text": "ada deadline apa",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "ada deadline apa aja",
+            "entities": [],
+            "traits": [],
+            "intent": "deadline_terdekat"
+        },
+        {
+            "text": "ada lapres prak komber hari senin",
+            "entities": [
+                {
+                    "entity": "hari:hari",
+                    "start": 28,
+                    "end": 33,
+                    "body": "senin",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 11,
+                    "end": 22,
+                    "body": "prak komber",
+                    "entities": []
+                },
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 4,
+                    "end": 10,
+                    "body": "lapres",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "ada lapsem prak sister besok",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 4,
+                    "end": 10,
+                    "body": "lapsem",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 11,
+                    "end": 22,
+                    "body": "prak sister",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 23,
+                    "end": 28,
+                    "body": "besok",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "ada quiz wspk kamis",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 4,
+                    "end": 8,
+                    "body": "quiz",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 14,
+                    "end": 19,
+                    "body": "kamis",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 9,
+                    "end": 13,
+                    "body": "wspk",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "ada tugas apa",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "ada tugas apa aja",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "ada workshop spk besok pagi",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 4,
+                    "end": 16,
+                    "body": "workshop spk",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 17,
+                    "end": 27,
+                    "body": "besok pagi",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "aku habis makan nasi ayam 17rb lalu minumnya es teh 3rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 10,
+                    "end": 15,
+                    "body": "makan",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 16,
+                    "end": 25,
+                    "body": "nasi ayam",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 26,
+                    "end": 30,
+                    "body": "17rb",
+                    "entities": []
+                },
+                {
+                    "entity": "kategori:kategori",
+                    "start": 36,
+                    "end": 41,
+                    "body": "minum",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 45,
+                    "end": 51,
+                    "body": "es teh",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 52,
+                    "end": 55,
+                    "body": "3rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "balance",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "bantuan",
+            "entities": [],
+            "traits": [],
+            "intent": "bantuan"
+        },
+        {
+            "text": "batalin",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "batalin pengeluaran tadi",
+            "entities": [],
+            "traits": [],
+            "intent": "hapus_transaksi"
+        },
+        {
+            "text": "batalin tugas sister",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 8,
+                    "end": 13,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 14,
+                    "end": 20,
+                    "body": "sister",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "batalin yang tadi",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "batalkan",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "batalkan yang tadi",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "bayar 100rb buat pulsa",
+            "entities": [
+                {
+                    "entity": "note:note",
+                    "start": 17,
+                    "end": 22,
+                    "body": "pulsa",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 12,
+                    "body": "100rb ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "bayar 150jt service hp",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 11,
+                    "body": "150jt",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 12,
+                    "end": 22,
+                    "body": "service hp",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "bayar 150rb service hp",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 11,
+                    "body": "150rb",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 12,
+                    "end": 22,
+                    "body": "service hp",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "bayar internet 100rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 6,
+                    "end": 14,
+                    "body": "internet",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 15,
+                    "end": 20,
+                    "body": "100rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "beli kopi 25rb",
+            "entities": [
+                {
+                    "entity": "note:note",
+                    "start": 5,
+                    "end": 10,
+                    "body": "kopi ",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 10,
+                    "end": 14,
+                    "body": "25rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "beli tiket kereta 300rb",
+            "entities": [
+                {
+                    "entity": "note:note",
+                    "start": 5,
+                    "end": 17,
+                    "body": "tiket kereta",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 18,
+                    "end": 23,
+                    "body": "300rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "bensin 40rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "bensin",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 11,
+                    "body": "40rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "bensin 80jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "bensin",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 11,
+                    "body": "80jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "bensin 80rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "bensin",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 11,
+                    "body": "80rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "bikin lapen pemjar minggu ini",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 6,
+                    "end": 11,
+                    "body": "lapen",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 12,
+                    "end": 18,
+                    "body": "pemjar",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 19,
+                    "end": 29,
+                    "body": "minggu ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "bikin project mobile app urgent",
+            "entities": [
+                {
+                    "entity": "Priority:Priority",
+                    "start": 25,
+                    "end": 31,
+                    "body": "urgent",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 14,
+                    "end": 24,
+                    "body": "mobile app",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "bisa apa aja?",
+            "entities": [],
+            "traits": [],
+            "intent": "bantuan"
+        },
+        {
+            "text": "buang project lama",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 14,
+                    "end": 18,
+                    "body": "lama",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_project"
+        },
+        {
+            "text": "buat project baru namanya spek sakit hati",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 26,
+                    "end": 41,
+                    "body": "spek sakit hati",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "buat project baru namanya webapp",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 26,
+                    "end": 32,
+                    "body": "webapp",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "buat project belajar flutter deadline minggu depan",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 38,
+                    "end": 50,
+                    "body": "minggu depan",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 28,
+                    "body": "belajar flutter",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "buat project berjudul dugong funny",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 22,
+                    "end": 34,
+                    "body": "dugong funny",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "buat project riset ml prioritas tinggi",
+            "entities": [
+                {
+                    "entity": "Priority:Priority",
+                    "start": 32,
+                    "end": 38,
+                    "body": "tinggi",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 21,
+                    "body": "riset ml",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "buat project skripsi",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 20,
+                    "body": "skripsi",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "buat project skripsi deadline 30 maret",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 30,
+                    "end": 38,
+                    "body": "30 maret",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 20,
+                    "body": "skripsi",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "cancel",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "catat progress",
+            "entities": [],
+            "traits": [],
+            "intent": "catat_progress"
+        },
+        {
+            "text": "cek deadline",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "cek duit",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "cek saldo",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "cek transaksi terakhir",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "coy",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "daftar project",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_project"
+        },
+        {
+            "text": "daftar tugas sister",
+            "entities": [
+                {
+                    "entity": "matkul:matkul",
+                    "start": 13,
+                    "end": 19,
+                    "body": "sister",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "dapat 100k dari temen",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "dapat",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 10,
+                    "body": "100k",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 11,
+                    "end": 21,
+                    "body": "dari temen",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "dapat 500rb dari ayah",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "dapat",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 11,
+                    "body": "500rb",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 12,
+                    "end": 21,
+                    "body": "dari ayah",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "dapat bayaran project 3jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "dapat",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 22,
+                    "end": 25,
+                    "body": "3jt",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 6,
+                    "end": 21,
+                    "body": "bayaran project",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "dapat bonus 500k",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 12,
+                    "end": 16,
+                    "body": "500k",
+                    "entities": []
+                },
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "dapat",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "dapat cepe dari ayah",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "dapat",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 10,
+                    "body": "cepe",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "dapat duit 200rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "dapat",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 11,
+                    "end": 16,
+                    "body": "200rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "dapat gaji 5jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 6,
+                    "end": 11,
+                    "body": "gaji ",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 11,
+                    "end": 14,
+                    "body": "5jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "dapat uang saku 200k",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "dapat",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 16,
+                    "end": 20,
+                    "body": "200k",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "deadline besok",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 9,
+                    "end": 14,
+                    "body": "besok",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "deadline_terdekat"
+        },
+        {
+            "text": "deadline besok ada ga",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 9,
+                    "end": 14,
+                    "body": "besok",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "deadline_terdekat"
+        },
+        {
+            "text": "deadline minggu ini",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 9,
+                    "end": 19,
+                    "body": "minggu ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "deadline_terdekat"
+        },
+        {
+            "text": "deadline terdekat",
+            "entities": [],
+            "traits": [],
+            "intent": "deadline_terdekat"
+        },
+        {
+            "text": "delete project freelance",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 15,
+                    "end": 24,
+                    "body": "freelance",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_project"
+        },
+        {
+            "text": "delete project yang ga aktif",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 20,
+                    "end": 28,
+                    "body": "ga aktif",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_project"
+        },
+        {
+            "text": "delete project yang udah ga aktif",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 25,
+                    "end": 33,
+                    "body": "ga aktif",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_project"
+        },
+        {
+            "text": "delete transaksi terakhir",
+            "entities": [],
+            "traits": [],
+            "intent": "hapus_transaksi"
+        },
+        {
+            "text": "delete tugas kjk",
+            "entities": [],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "duit ku ada berapa",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "duit sisa berapa?",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "edit transaksi terakhir jadi transport",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 29,
+                    "end": 38,
+                    "body": "transport",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_transaksi"
+        },
+        {
+            "text": "fitur ada apa aja?",
+            "entities": [],
+            "traits": [],
+            "intent": "bantuan"
+        },
+        {
+            "text": "fitur apa aja",
+            "entities": [],
+            "traits": [],
+            "intent": "bantuan"
+        },
+        {
+            "text": "ga jadi",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "ga jadi deh",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "gaji bulanan 4jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 4,
+                    "body": "gaji",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 13,
+                    "end": 16,
+                    "body": "4jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "ganti amount income tadi jadi 2jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 13,
+                    "end": 19,
+                    "body": "income",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 30,
+                    "end": 33,
+                    "body": "2jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_transaksi"
+        },
+        {
+            "text": "ganti deadline web jadi 20 maret",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 24,
+                    "end": 32,
+                    "body": "20 maret",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_project"
+        },
+        {
+            "text": "ganti nominal yang tadi 75rb",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 24,
+                    "end": 28,
+                    "body": "75rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_transaksi"
+        },
+        {
+            "text": "gojek 15rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "gojek",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 10,
+                    "body": "15rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "gojek 1jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "gojek",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 9,
+                    "body": "1jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "habis 25rb makan bakso",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 10,
+                    "body": "25rb",
+                    "entities": []
+                },
+                {
+                    "entity": "kategori:kategori",
+                    "start": 11,
+                    "end": 16,
+                    "body": "makan",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 17,
+                    "end": 22,
+                    "body": "bakso",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "habis 2jt makan bakso",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 9,
+                    "body": "2jt",
+                    "entities": []
+                },
+                {
+                    "entity": "kategori:kategori",
+                    "start": 10,
+                    "end": 15,
+                    "body": "makan",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 16,
+                    "end": 21,
+                    "body": "bakso",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "habis 50rb makan siang",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 11,
+                    "end": 16,
+                    "body": "makan",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 10,
+                    "body": "50rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "habis 81rb hokben",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 10,
+                    "body": "81rb",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 11,
+                    "end": 17,
+                    "body": "hokben",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "habis cepe tadi",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 11,
+                    "body": "cepe ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "habis gocap tadi",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 11,
+                    "body": "gocap",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "hai",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "halo",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "hapus expense yang tadi",
+            "entities": [],
+            "traits": [],
+            "intent": "hapus_transaksi"
+        },
+        {
+            "text": "hapus income terakhir",
+            "entities": [],
+            "traits": [],
+            "intent": "hapus_transaksi"
+        },
+        {
+            "text": "hapus lapres komber",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 19,
+                    "body": "komber",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "hapus lapres prak komber",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 6,
+                    "end": 12,
+                    "body": "lapres",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 24,
+                    "body": "prak komber",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "hapus project ta",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 14,
+                    "end": 16,
+                    "body": "ta",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_project"
+        },
+        {
+            "text": "hapus project web",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 14,
+                    "end": 17,
+                    "body": "web",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "hapus tugas kb",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 6,
+                    "end": 11,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 12,
+                    "end": 14,
+                    "body": "kb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "hapus tugas ppl",
+            "entities": [],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "help",
+            "entities": [],
+            "traits": [],
+            "intent": "bantuan"
+        },
+        {
+            "text": "history keuangan",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "history transaksi",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "income 350rb freelance",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "income",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 12,
+                    "body": "350rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "income 800k dari jualan",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "income",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 11,
+                    "body": "800k",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "income freelance 1.5jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 7,
+                    "body": "income ",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 17,
+                    "end": 22,
+                    "body": "1.5jt",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 7,
+                    "end": 17,
+                    "body": "freelance ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "income sampingan 600rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "income",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 7,
+                    "end": 17,
+                    "body": "sampingan ",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 17,
+                    "end": 22,
+                    "body": "600rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "ingetin aku besok pagi",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 12,
+                    "end": 22,
+                    "body": "besok pagi",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "ingatkan"
+        },
+        {
+            "text": "ingetin bayar wifi tanggal 25",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 19,
+                    "end": 29,
+                    "body": "tanggal 25",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 8,
+                    "end": 18,
+                    "body": "bayar wifi",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "ingatkan"
+        },
+        {
+            "text": "jajan martabak 40rb",
+            "entities": [
+                {
+                    "entity": "note:note",
+                    "start": 6,
+                    "end": 14,
+                    "body": "martabak",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 15,
+                    "end": 19,
+                    "body": "40rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "kamu bisa apa?",
+            "entities": [],
+            "traits": [],
+            "intent": "bantuan"
+        },
+        {
+            "text": "keluar 75jt beli obat",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 12,
+                    "body": "75jt ",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 12,
+                    "end": 21,
+                    "body": "beli obat",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "keluar 75rb beli obat",
+            "entities": [
+                {
+                    "entity": "note:note",
+                    "start": 12,
+                    "end": 21,
+                    "body": "beli obat",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 12,
+                    "body": "75rb ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "keluar duit 80rb buku",
+            "entities": [
+                {
+                    "entity": "note:note",
+                    "start": 17,
+                    "end": 21,
+                    "body": "buku",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 12,
+                    "end": 17,
+                    "body": "80rb ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "kumpul lapres pj senin depan",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 7,
+                    "end": 13,
+                    "body": "lapres",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 17,
+                    "end": 28,
+                    "body": "senin depan",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 14,
+                    "end": 16,
+                    "body": "pj",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "kumpul lapsem prak sister jumat depan",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 7,
+                    "end": 13,
+                    "body": "lapsem",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 14,
+                    "end": 25,
+                    "body": "prak sister",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 26,
+                    "end": 37,
+                    "body": "jumat depan",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "kumpul tugas prak kb jumat",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 7,
+                    "end": 12,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 20,
+                    "body": "prak kb",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 21,
+                    "end": 26,
+                    "body": "jumat",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "langganan netflix 50rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 9,
+                    "body": "langganan",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 10,
+                    "end": 18,
+                    "body": "netflix ",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 18,
+                    "end": 22,
+                    "body": "50rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "lapres kjk prak deadline rabu",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 6,
+                    "body": "lapres",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 7,
+                    "end": 15,
+                    "body": "kjk prak",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 25,
+                    "end": 29,
+                    "body": "rabu",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "lapres kjk prak kelar",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 6,
+                    "body": "lapres",
+                    "entities": []
+                },
+                {
+                    "entity": "task_status:task_status",
+                    "start": 16,
+                    "end": 21,
+                    "body": "kelar",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 7,
+                    "end": 15,
+                    "body": "kjk prak",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_tugas"
+        },
+        {
+            "text": "lapres prak kjk kelar",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 6,
+                    "body": "lapres",
+                    "entities": []
+                },
+                {
+                    "entity": "task_status:task_status",
+                    "start": 16,
+                    "end": 21,
+                    "body": "kelar",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 7,
+                    "end": 15,
+                    "body": "prak kjk",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_tugas"
+        },
+        {
+            "text": "liat expense",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "liat pemasukan",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "lihat pengeluaran",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "lihat project aktif",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 14,
+                    "end": 19,
+                    "body": "aktif",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_project"
+        },
+        {
+            "text": "lihat tugas",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "lihat tugas besok",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 12,
+                    "end": 17,
+                    "body": "besok",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "lihat tugas hari ini",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 12,
+                    "end": 20,
+                    "body": "hari ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "list project",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_project"
+        },
+        {
+            "text": "list transaksi",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "list tugas",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "list tugas minggu ini dong",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 11,
+                    "end": 21,
+                    "body": "minggu ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "log kerja",
+            "entities": [],
+            "traits": [],
+            "intent": "catat_progress"
+        },
+        {
+            "text": "makan siang 35jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "makan",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 12,
+                    "end": 16,
+                    "body": "35jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "makan siang 35rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "makan",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 12,
+                    "end": 16,
+                    "body": "35rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "makan siang nasi padang 35rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "makan",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 12,
+                    "end": 23,
+                    "body": "nasi padang",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 24,
+                    "end": 28,
+                    "body": "35rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "makasih",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "mantap",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "masuk 4.5jt bulan ini",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "masuk",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 6,
+                    "end": 11,
+                    "body": "4.5jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "masuk duit 2jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "masuk",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 11,
+                    "end": 14,
+                    "body": "2jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "mau log progress",
+            "entities": [],
+            "traits": [],
+            "intent": "catat_progress"
+        },
+        {
+            "text": "minum kopi 25rb di kampus",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 5,
+                    "body": "minum",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 6,
+                    "end": 10,
+                    "body": "kopi",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 11,
+                    "end": 16,
+                    "body": "25rb ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "naik gojek 15rb ke kampus",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 5,
+                    "end": 10,
+                    "body": "gojek",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 11,
+                    "end": 16,
+                    "body": "15rb ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "ngga jadi",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "ngga jadi deh",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "nyatet progress",
+            "entities": [],
+            "traits": [],
+            "intent": "catat_progress"
+        },
+        {
+            "text": "oi",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "oke",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "parkir 5rb",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 7,
+                    "end": 10,
+                    "body": "5rb",
+                    "entities": []
+                },
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "parkir",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "pengeluaran minggu ini",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 12,
+                    "end": 22,
+                    "body": "minggu ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "perintah apa aja",
+            "entities": [],
+            "traits": [],
+            "intent": "bantuan"
+        },
+        {
+            "text": "project baru api backend low priority",
+            "entities": [
+                {
+                    "entity": "Priority:Priority",
+                    "start": 25,
+                    "end": 28,
+                    "body": "low",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 24,
+                    "body": "api backend",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "project baru website deadline februari",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 21,
+                    "body": "website ",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 30,
+                    "end": 38,
+                    "body": "februari",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "project dashboard admin medium",
+            "entities": [
+                {
+                    "entity": "Priority:Priority",
+                    "start": 24,
+                    "end": 30,
+                    "body": "medium",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 8,
+                    "end": 23,
+                    "body": "dashboard admin",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "project freelance prioritas high",
+            "entities": [
+                {
+                    "entity": "Priority:Priority",
+                    "start": 28,
+                    "end": 32,
+                    "body": "high",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 8,
+                    "end": 17,
+                    "body": "freelance",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_project"
+        },
+        {
+            "text": "project freelance sampai maret",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 8,
+                    "end": 18,
+                    "body": "freelance ",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 25,
+                    "end": 30,
+                    "body": "maret",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "project on hold",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 8,
+                    "end": 15,
+                    "body": "on hold",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_project"
+        },
+        {
+            "text": "project skripsi on hold",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 16,
+                    "end": 23,
+                    "body": "on hold",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 8,
+                    "end": 15,
+                    "body": "skripsi",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_project"
+        },
+        {
+            "text": "project yang lagi jalan",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 18,
+                    "end": 23,
+                    "body": "jalan",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_project"
+        },
+        {
+            "text": "quiz sister tanggal 15",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 4,
+                    "body": "quiz",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 5,
+                    "end": 11,
+                    "body": "sister",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 12,
+                    "end": 22,
+                    "body": "tanggal 15",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "rangkuman keuangan",
+            "entities": [],
+            "traits": [],
+            "intent": "minta_summary"
+        },
+        {
+            "text": "rekap bulan ini",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 6,
+                    "end": 15,
+                    "body": "bulan ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "minta_summary"
+        },
+        {
+            "text": "rekap pengeluaran minggu lalu",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 18,
+                    "end": 29,
+                    "body": "minggu lalu",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "minta_summary"
+        },
+        {
+            "text": "remind jam 7",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 7,
+                    "end": 12,
+                    "body": "jam 7",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "ingatkan"
+        },
+        {
+            "text": "remove expense terakhir",
+            "entities": [],
+            "traits": [],
+            "intent": "hapus_transaksi"
+        },
+        {
+            "text": "remove project riset",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 15,
+                    "end": 20,
+                    "body": "riset",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_project"
+        },
+        {
+            "text": "remove tugas pemjar",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 13,
+                    "end": 19,
+                    "body": "pemjar",
+                    "entities": []
+                },
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 7,
+                    "end": 12,
+                    "body": "tugas",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "hapus_tugas"
+        },
+        {
+            "text": "saldo berapa?",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "saldo ku sisa berapa?",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "set reminder jumat sore",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 13,
+                    "end": 23,
+                    "body": "jumat sore",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "ingatkan"
+        },
+        {
+            "text": "siap",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "sisa duit",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "sisa duit ku berapa?",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "sisa uangku berapa?",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "summary minggu ini",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 8,
+                    "end": 18,
+                    "body": "minggu ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "minta_summary"
+        },
+        {
+            "text": "summary tugas",
+            "entities": [],
+            "traits": [],
+            "intent": "minta_summary"
+        },
+        {
+            "text": "tagihan listrik 200rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 7,
+                    "body": "tagihan",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 8,
+                    "end": 16,
+                    "body": "listrik ",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 16,
+                    "end": 21,
+                    "body": "200rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "tambah project judulnya riset ai",
+            "entities": [
+                {
+                    "entity": "project:project",
+                    "start": 24,
+                    "end": 32,
+                    "body": "riset ai",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "tambah project redesign deadline 20 januari",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 33,
+                    "end": 43,
+                    "body": "20 januari",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 15,
+                    "end": 24,
+                    "body": "redesign ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "tambah project ta deadline juni high",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 27,
+                    "end": 32,
+                    "body": "juni ",
+                    "entities": []
+                },
+                {
+                    "entity": "Priority:Priority",
+                    "start": 32,
+                    "end": 36,
+                    "body": "high",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 15,
+                    "end": 17,
+                    "body": "ta",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_project"
+        },
+        {
+            "text": "tandain project app selesai",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 20,
+                    "end": 27,
+                    "body": "selesai",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 16,
+                    "end": 19,
+                    "body": "app",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_project"
+        },
+        {
+            "text": "tandain tugas pemjar selesai",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 8,
+                    "end": 13,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "task_status:task_status",
+                    "start": 21,
+                    "end": 28,
+                    "body": "selesai",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 14,
+                    "end": 21,
+                    "body": "pemjar ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_tugas"
+        },
+        {
+            "text": "terima kasih",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "terima transferan 1jt",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "terima",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 18,
+                    "end": 21,
+                    "body": "1jt",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "terima uang 500rb dari mama",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 6,
+                    "body": "terima",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 18,
+                    "end": 27,
+                    "body": "dari mama",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 12,
+                    "end": 18,
+                    "body": "500rb ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pemasukan"
+        },
+        {
+            "text": "terimakasih",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "thanks",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "tidak jadi",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "tolong ingetin kumpul tugas senin",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 28,
+                    "end": 33,
+                    "body": "senin",
+                    "entities": []
+                },
+                {
+                    "entity": "note:note",
+                    "start": 15,
+                    "end": 27,
+                    "body": "kumpul tugas",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "ingatkan"
+        },
+        {
+            "text": "transaksi bulan ini",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "transaksi kemarin",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 10,
+                    "end": 17,
+                    "body": "kemarin",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_transaksi"
+        },
+        {
+            "text": "transfer ke temen 150rb",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 0,
+                    "end": 8,
+                    "body": "transfer",
+                    "entities": []
+                },
+                {
+                    "entity": "wit$number:number",
+                    "start": 18,
+                    "end": 23,
+                    "body": "150rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "tambah_pengeluaran"
+        },
+        {
+            "text": "tugas hari ini",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 6,
+                    "end": 14,
+                    "body": "hari ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "tugas kjk deadline 20 januari",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 5,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 6,
+                    "end": 9,
+                    "body": "kjk",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 19,
+                    "end": 29,
+                    "body": "20 januari",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "tugas komber done",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 5,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "task_status:task_status",
+                    "start": 13,
+                    "end": 17,
+                    "body": "done",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 6,
+                    "end": 13,
+                    "body": "komber ",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_tugas"
+        },
+        {
+            "text": "tugas komber prak rabu depan",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 5,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 6,
+                    "end": 17,
+                    "body": "komber prak",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 18,
+                    "end": 28,
+                    "body": "rabu depan",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "tugas minggu ini",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 6,
+                    "end": 16,
+                    "body": "minggu ini",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "tugas ppl",
+            "entities": [
+                {
+                    "entity": "matkul:matkul",
+                    "start": 6,
+                    "end": 9,
+                    "body": "ppl",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "tugas ppl deadline besok",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 19,
+                    "end": 24,
+                    "body": "besok",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 6,
+                    "end": 9,
+                    "body": "ppl",
+                    "entities": []
+                },
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 5,
+                    "body": "tugas",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "tugas ppl udah selesai",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 5,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "task_status:task_status",
+                    "start": 10,
+                    "end": 22,
+                    "body": "udah selesai",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 6,
+                    "end": 9,
+                    "body": "ppl",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_tugas"
+        },
+        {
+            "text": "tugas prak ppl deadline lusa",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 5,
+                    "body": "tugas",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 24,
+                    "end": 28,
+                    "body": "lusa",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 6,
+                    "end": 14,
+                    "body": "prak ppl",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "tugas yang belum selesai",
+            "entities": [],
+            "traits": [],
+            "intent": "lihat_tugas"
+        },
+        {
+            "text": "tugas yang mau kumpul",
+            "entities": [],
+            "traits": [],
+            "intent": "deadline_terdekat"
+        },
+        {
+            "text": "uangku berapa?",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "uangku sisa berapa?",
+            "entities": [],
+            "traits": [],
+            "intent": "cek_saldo"
+        },
+        {
+            "text": "ubah deadline sister jadi jumat",
+            "entities": [
+                {
+                    "entity": "waktu:waktu",
+                    "start": 26,
+                    "end": 31,
+                    "body": "jumat",
+                    "entities": []
+                },
+                {
+                    "entity": "matkul:matkul",
+                    "start": 14,
+                    "end": 20,
+                    "body": "sister",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_tugas"
+        },
+        {
+            "text": "ubah expense terakhir jadi 50rb",
+            "entities": [
+                {
+                    "entity": "wit$number:number",
+                    "start": 27,
+                    "end": 31,
+                    "body": "50rb",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_transaksi"
+        },
+        {
+            "text": "ubah kategori expense tadi jadi food",
+            "entities": [
+                {
+                    "entity": "kategori:kategori",
+                    "start": 32,
+                    "end": 36,
+                    "body": "food",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_transaksi"
+        },
+        {
+            "text": "ubah status ta jadi completed",
+            "entities": [
+                {
+                    "entity": "project_status:project_status",
+                    "start": 20,
+                    "end": 29,
+                    "body": "completed",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 12,
+                    "end": 14,
+                    "body": "ta",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "edit_project"
+        },
+        {
+            "text": "undo",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "update progress",
+            "entities": [],
+            "traits": [],
+            "intent": "catat_progress"
+        },
+        {
+            "text": "uts kb tanggal 25",
+            "entities": [
+                {
+                    "entity": "tipe_tugas:tipe_tugas",
+                    "start": 0,
+                    "end": 3,
+                    "body": "uts",
+                    "entities": []
+                },
+                {
+                    "entity": "project:project",
+                    "start": 4,
+                    "end": 6,
+                    "body": "kb",
+                    "entities": []
+                },
+                {
+                    "entity": "waktu:waktu",
+                    "start": 7,
+                    "end": 17,
+                    "body": "tanggal 25",
+                    "entities": []
+                }
+            ],
+            "traits": [],
+            "intent": "buat_tugas"
+        },
+        {
+            "text": "weh",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "wei",
+            "entities": [],
+            "traits": [],
+            "intent": "casual"
+        },
+        {
+            "text": "yang barusan ga jadi",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        },
+        {
+            "text": "yang tadi ga jadi",
+            "entities": [],
+            "traits": [],
+            "intent": "batalkan"
+        }
+    ]
+}

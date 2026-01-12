@@ -1,0 +1,37 @@
+{
+    "name": "Priority",
+    "roles": [
+        "Priority"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "High",
+            "synonyms": [
+                "high",
+                "penting",
+                "tinggi",
+                "urgent"
+            ]
+        },
+        {
+            "keyword": "Low",
+            "synonyms": [
+                "biasa",
+                "low",
+                "rendah"
+            ]
+        },
+        {
+            "keyword": "Medium",
+            "synonyms": [
+                "medium",
+                "normal",
+                "sedang"
+            ]
+        }
+    ]
+}

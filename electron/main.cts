@@ -318,14 +318,15 @@ app.on('ready', async () => {
     ipcMain.handle('projects:list', () => projects.getAll());
     ipcMain.handle('projects:getById', (_, id) => projects.getById(id));
     ipcMain.handle('projects:create', (_, data) => {
-        const result = projects.create({
+        const newProject = {
             ...data,
             id: randomUUID(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
-        });
+        };
+        projects.create(newProject);
         if (telegramStore && telegramStore.get('paired')) syncUserDataToBackend(telegramStore, telegramSocket).catch(console.error);
-        return result;
+        return newProject;
     });
     ipcMain.handle('projects:update', (_, id, data) => {
         const result = projects.update(id, data);
@@ -346,22 +347,30 @@ app.on('ready', async () => {
     // Project Sessions
     ipcMain.handle('projectSessions:listByProject', (_, projectId) => projectSessions.getByProjectId(projectId));
     ipcMain.handle('projectSessions:getById', (_, id) => projectSessions.getById(id));
-    ipcMain.handle('projectSessions:create', (_, data) => projectSessions.create({
-        ...data,
-        id: randomUUID(),
-        createdAt: new Date().toISOString()
-    }));
+    ipcMain.handle('projectSessions:create', (_, data) => {
+        const newSession = {
+            ...data,
+            id: randomUUID(),
+            createdAt: new Date().toISOString()
+        };
+        projectSessions.create(newSession);
+        return newSession;
+    });
     ipcMain.handle('projectSessions:update', (_, id, data) => projectSessions.update(id, data));
     ipcMain.handle('projectSessions:delete', (_, id) => projectSessions.delete(id));
     ipcMain.handle('projectSessions:getStats', (_, projectId) => projectSessions.getStats(projectId));
 
     // Project Attachments
     ipcMain.handle('projectAttachments:listByProject', (_, projectId) => projectAttachments.getByProjectId(projectId));
-    ipcMain.handle('projectAttachments:create', (_, data) => projectAttachments.create({
-        ...data,
-        id: randomUUID(),
-        createdAt: new Date().toISOString()
-    }));
+    ipcMain.handle('projectAttachments:create', (_, data) => {
+        const newAttachment = {
+            ...data,
+            id: randomUUID(),
+            createdAt: new Date().toISOString()
+        };
+        projectAttachments.create(newAttachment);
+        return newAttachment;
+    });
     ipcMain.handle('projectAttachments:delete', (_, id) => projectAttachments.delete(id));
 
     // Backup & Restore
