@@ -3,7 +3,7 @@
 import { parseMessage, extractEntities, initNLP } from './nlp-service.js';
 import { schemas, getMissingFields } from './intentSchemas.js';
 import { setPending, getPending, clearPending, updatePending } from './pendingState.js';
-import { parseAmount } from './currency.js';
+import { parseAmount, formatAmount } from './currency.js';
 import { parseDate } from './dateParser.js';
 import { responses } from './personality.js';
 
@@ -21,6 +21,9 @@ const CONFIDENCE_THRESHOLD = 0.6;
 
 // Cancel keywords
 const CANCEL_KEYWORDS = ['ga jadi', 'gajadi', 'batal', 'cancel', 'skip', 'udahan', 'tidak jadi'];
+
+// Skip value keywords (for optional fields)
+const SKIP_KEYWORDS = ['ga ada', 'gak ada', 'tidak ada', 'kosong', 'skip', '-', 'ga usah', 'gak usah', 'gapapa'];
 
 // Edit keywords
 const EDIT_KEYWORDS = ['ganti', 'ubah', 'bukan', 'salah', 'koreksi'];
@@ -98,6 +101,19 @@ async function handleSlotCompletion(bot, msg, pending, text, broadcastEvent) {
         return true;
     }
 
+    // A.5 Check for skip keywords (for optional fields)
+    const currentMissing = pending.missing[0];
+    if (currentMissing && isSkipKeyword(text)) {
+        // Mark as skipped (empty string)
+        pending.filled[currentMissing] = { value: '', raw: text, confidence: 1 };
+
+        // Remove from missing
+        pending.missing.shift();
+
+        // Use general text answer flow for next check
+        text = ''; // Clear text so it doesn't trigger other parsers unexpectedly
+    }
+
     // B. Check for mid-flow edit keywords
     const editMatch = detectMidFlowEdit(text, pending);
     if (editMatch) {
@@ -105,18 +121,24 @@ async function handleSlotCompletion(bot, msg, pending, text, broadcastEvent) {
         await bot.sendMessage(chatId, responses.fieldUpdated(editMatch.field, editMatch.value));
     }
 
-    // C. Parse answer as slot completion
-    const result = await parseMessage(text);
-    const entities = extractEntities(result.entities || {});
-    const enriched = enrichEntities(entities, text);
+    // C. Parse answer as slot completion (only if text is not empty/skipped)
+    let enriched = {};
+    if (text) {
+        const result = await parseMessage(text);
+        const entities = extractEntities(result.entities || {});
+        enriched = enrichEntities(entities, text);
 
-    // D. Merge new entities to filled fields
-    Object.assign(pending.filled, enriched);
+        // D. Merge new entities to filled fields
+        Object.assign(pending.filled, enriched);
+    }
 
     // E. Handle simple text answers (when user just types an answer)
-    if (pending.missing.length > 0 && Object.keys(enriched).length === 0) {
+    if (pending.missing.length > 0 && Object.keys(enriched).length === 0 && text) {
         // User gave a plain text answer, assign to first missing field
         const missingField = pending.missing[0];
+        // Special case: if we are asking for 'project' or 'kategori' but user typed raw text that isn't an entity,
+        // we might still want to accept it if it's a valid ID or name?
+        // For now, accept as raw text.
         pending.filled[missingField] = { value: text, raw: text, confidence: 1 };
     }
 
@@ -130,7 +152,15 @@ async function handleSlotCompletion(bot, msg, pending, text, broadcastEvent) {
         return false;
     }
 
-    const stillMissing = getMissingFields(schema.required, pending.filled);
+    // Recalculate missing based on schema.required ONLY? 
+    // No, we might be asking for optional fields like 'note'.
+    // If pending.missing was set explicitly (like for note), we should respect it.
+    // So we check if the *originally* requested missing field is now filled.
+
+    const stillMissing = pending.missing.filter(field => {
+        const val = pending.filled[field];
+        return !val || val.value === undefined;
+    });
 
     if (stillMissing.length > 0) {
         pending.missing = stillMissing;
@@ -215,6 +245,11 @@ function isCancelKeyword(text) {
     return CANCEL_KEYWORDS.some(kw => lower.includes(kw));
 }
 
+function isSkipKeyword(text) {
+    const lower = text.trim().toLowerCase();
+    return SKIP_KEYWORDS.some(kw => lower === kw || lower.includes(kw));
+}
+
 function detectMidFlowEdit(text, pending) {
     const lower = text.toLowerCase();
 
@@ -288,7 +323,7 @@ async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
     const userId = msg.from.id.toString();
     const amount = entities.amount?.value || 0;
     const kategori = entities.kategori?.value || null;
-    const note = entities.note?.value || '';
+    let note = entities.note?.value || '';
 
     // If no category, ask for it
     if (!kategori) {
@@ -299,6 +334,20 @@ async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
             raw_text: msg.text
         });
         return askForMissing(bot, chatId, 'kategori', 'tambah_pengeluaran', entities);
+    }
+
+    // Check if note is provided (field 'note' exists in entities only if user provided it or we filled it with '' via skip)
+    // We check if entities.note is undefined. If undefined, we haven't asked for it yet.
+    if (entities.note === undefined) {
+        setPending(chatId, {
+            intent: 'tambah_pengeluaran',
+            filled: { ...entities, amount, kategori }, // Save cleaned values
+            missing: ['note'],
+            raw_text: msg.text
+        });
+        await bot.sendMessage(chatId, responses.confirmExpense(amount, kategori));
+        await bot.sendMessage(chatId, 'Ada catatan tambahan? (Jawab "-" jika tidak ada)');
+        return true;
     }
 
     // Create event
@@ -335,16 +384,7 @@ async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
         console.error('[NLP] Optimistic update failed:', e);
     }
 
-    await bot.sendMessage(chatId, responses.confirmExpense(amount, kategori));
-
-    // Ask for note
-    setPending(chatId, {
-        intent: 'tambah_pengeluaran_note',
-        filled: { ...entities, event },
-        missing: [],
-        raw_text: msg.text
-    });
-    await bot.sendMessage(chatId, responses.askNote());
+    await bot.sendMessage(chatId, `✅ Sip! Pengeluaran *${formatAmount(amount)}* untuk *${kategori}* berhasil dicatat.\n📝 Note: ${note || '-'}`);
 
     return true;
 }
