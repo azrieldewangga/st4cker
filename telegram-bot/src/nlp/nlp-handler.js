@@ -122,6 +122,14 @@ async function handleSlotCompletion(bot, msg, pending, text, broadcastEvent) {
 
     // F. Re-check missing fields
     const schema = schemas[pending.intent];
+
+    // Safety check: if schema not found (modified intent?), clear pending
+    if (!schema) {
+        console.warn('Pending intent schema not found:', pending.intent);
+        clearPending(chatId);
+        return false;
+    }
+
     const stillMissing = getMissingFields(schema.required, pending.filled);
 
     if (stillMissing.length > 0) {
@@ -617,6 +625,7 @@ async function handleBatalkan(bot, msg, entities, broadcastEvent) {
 }
 
 async function handleBantuan(bot, msg) {
+    const chatId = msg.chat.id;
     await bot.sendMessage(chatId, responses.help());
     return true;
 }

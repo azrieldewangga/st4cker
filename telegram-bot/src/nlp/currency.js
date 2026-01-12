@@ -44,7 +44,10 @@ export function parseAmount(text) {
     }
 
     // Plain number
-    const plainNum = parseInt(lower.replace(/\D/g, ''));
+    // Plain number
+    const cleaned = lower.replace(/[^\d.]/g, '');
+    if (!cleaned) return 0;
+    const plainNum = parseFloat(cleaned);
     return isNaN(plainNum) ? 0 : plainNum;
 }
 
