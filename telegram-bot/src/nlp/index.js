@@ -1,6 +1,7 @@
 // index.js - NLP module exports
 
-export { parseMessage, extractEntities } from './wit.js';
+export { parseMessage, extractEntities } from './nlp-service.js';
+
 export { schemas, getMissingFields } from './intentSchemas.js';
 export { setPending, getPending, clearPending, updatePending, hasPending } from './pendingState.js';
 export { handleNaturalLanguage, handleNLPCallback } from './nlp-handler.js';

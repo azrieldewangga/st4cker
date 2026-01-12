@@ -20,11 +20,11 @@ export async function parseMessage(text) {
     // Convert to Wit.ai-compatible format for minimal code changes
     return {
         intents: result.intent ? [{ name: result.intent, confidence: result.score }] : [],
-        entities: convertEntities(result.entities)
+        entities: extractEntities(result.entities)
     };
 }
 
-function convertEntities(nlpEntities) {
+export function extractEntities(nlpEntities) {
     const converted = {};
     for (const e of nlpEntities || []) {
         const name = e.entity;
