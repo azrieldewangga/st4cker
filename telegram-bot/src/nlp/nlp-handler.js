@@ -25,7 +25,7 @@ const CANCEL_KEYWORDS = ['ga jadi', 'gajadi', 'batal', 'cancel', 'skip', 'udahan
 console.log('[NLP] Handler v1.2 (Fixes: ZeroAmount, MissingIntents) Loaded');
 
 // Skip value keywords (for optional fields)
-const SKIP_KEYWORDS = ['ga ada', 'gak ada', 'tidak ada', 'kosong', 'skip', '-', 'ga usah', 'gak usah', 'gapapa'];
+const SKIP_KEYWORDS = ['ga ada', 'gak ada', 'tidak ada', 'kosong', 'skip', '-', 'ga usah', 'gak usah', 'gapapa', 'ngga', 'enggak', 'no', 'nope', 'tidak', 'gak'];
 
 // Edit keywords
 const EDIT_KEYWORDS = ['ganti', 'ubah', 'bukan', 'salah', 'koreksi'];
