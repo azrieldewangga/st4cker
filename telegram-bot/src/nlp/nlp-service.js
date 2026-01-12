@@ -26,7 +26,21 @@ export async function parseMessage(text) {
 
 export function extractEntities(nlpEntities) {
     const converted = {};
-    for (const e of nlpEntities || []) {
+    if (!nlpEntities) return converted;
+
+    // Normalize input to array
+    let entityList = [];
+    if (Array.isArray(nlpEntities)) {
+        entityList = nlpEntities;
+    } else if (typeof nlpEntities === 'object') {
+        // Handle object map format: { entityName: [results] }
+        Object.values(nlpEntities).forEach(val => {
+            if (Array.isArray(val)) entityList.push(...val);
+            else entityList.push(val);
+        });
+    }
+
+    for (const e of entityList) {
         const name = e.entity;
         if (!converted[name]) converted[name] = [];
         converted[name].push({
