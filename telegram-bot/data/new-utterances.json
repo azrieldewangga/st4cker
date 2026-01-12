@@ -1,138 +1,34 @@
 [
     {
-        "text": "salah catet pengeluaran tadi",
-        "intent": "hapus_transaksi"
+        "text": "aku barusan di transfer",
+        "intent": "tambah_pemasukan"
     },
     {
-        "text": "apus dong yg barusan",
-        "intent": "hapus_transaksi"
+        "text": "ada transferan masuk",
+        "intent": "tambah_pemasukan"
     },
     {
-        "text": "ga jadi beli itu, tolong hapus",
-        "intent": "hapus_transaksi"
+        "text": "dapet transfer duit",
+        "intent": "tambah_pemasukan"
     },
     {
-        "text": "transaksi terakhir tolong di-delete",
-        "intent": "hapus_transaksi"
+        "text": "masuk 200rb dari transfer",
+        "intent": "tambah_pemasukan"
     },
     {
-        "text": "remove expense barusan",
-        "intent": "hapus_transaksi"
+        "text": "transferan dari ortu 1jt",
+        "intent": "tambah_pemasukan"
     },
     {
-        "text": "hapus pencatatan yg tadi",
-        "intent": "hapus_transaksi"
+        "text": "terima uang transfer",
+        "intent": "tambah_pemasukan"
     },
     {
-        "text": "batalin transaksi yg barusan masuk",
-        "intent": "hapus_transaksi"
+        "text": "baru aja ditransfer temen",
+        "intent": "tambah_pemasukan"
     },
     {
-        "text": "gimana kondisi keuangan bulan ini?",
-        "intent": "minta_summary"
-    },
-    {
-        "text": "total pengeluaran minggu ini berapa?",
-        "intent": "minta_summary"
-    },
-    {
-        "text": "rekap dong duit ku sisa berapa",
-        "intent": "minta_summary"
-    },
-    {
-        "text": "coba hitung total abis berapa",
-        "intent": "minta_summary"
-    },
-    {
-        "text": "summary keuangan dong",
-        "intent": "minta_summary"
-    },
-    {
-        "text": "kasih laporan singkat bulan ini",
-        "intent": "minta_summary"
-    },
-    {
-        "text": "rangkuman duit masuk keluar",
-        "intent": "minta_summary"
-    },
-    {
-        "text": "ingetin bayar kosan tanggal 20",
-        "intent": "ingatkan"
-    },
-    {
-        "text": "jangan lupa ingetin beli token listrik",
-        "intent": "ingatkan"
-    },
-    {
-        "text": "remind me tugas sister besok pagi",
-        "intent": "ingatkan"
-    },
-    {
-        "text": "pasang pengingat buat rapat nanti sore",
-        "intent": "ingatkan"
-    },
-    {
-        "text": "tolong ingatkan kumpul tugas jam 9",
-        "intent": "ingatkan"
-    },
-    {
-        "text": "bikin reminder buat bayar wifi",
-        "intent": "ingatkan"
-    },
-    {
-        "text": "set alarm buat ngerjain skripsi",
-        "intent": "ingatkan"
-    },
-    {
-        "text": "update progress skripsi udah 50 persen",
-        "intent": "catat_progress"
-    },
-    {
-        "text": "log kerjaan backend selama 2 jam",
-        "intent": "catat_progress"
-    },
-    {
-        "text": "masukin progress project web, bikin login page",
-        "intent": "catat_progress"
-    },
-    {
-        "text": "catet progress hari ini: fixing bug",
-        "intent": "catat_progress"
-    },
-    {
-        "text": "tambahin log pengerjaan UI design",
-        "intent": "catat_progress"
-    },
-    {
-        "text": "lapor progress: integrasi API selesai",
-        "intent": "catat_progress"
-    },
-    {
-        "text": "progress barusan: meeting sama klien",
-        "intent": "catat_progress"
-    },
-    {
-        "text": "deadline apa aja yang udah mepet?",
-        "intent": "deadline_terdekat"
-    },
-    {
-        "text": "paling cepet harus kumpul tugas apa?",
-        "intent": "deadline_terdekat"
-    },
-    {
-        "text": "minggu ini ada deadline ga?",
-        "intent": "deadline_terdekat"
-    },
-    {
-        "text": "cek tenggat waktu tugas",
-        "intent": "deadline_terdekat"
-    },
-    {
-        "text": "apa aja yang harus dikumpul besok?",
-        "intent": "deadline_terdekat"
-    },
-    {
-        "text": "tugas yang prioritas apa aja?",
-        "intent": "deadline_terdekat"
+        "text": "ada dana masuk via transfer",
+        "intent": "tambah_pemasukan"
     }
 ]

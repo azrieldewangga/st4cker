@@ -259,6 +259,38 @@
     {
       "text": "dompet masih ada isi ga",
       "intent": "cek_saldo"
+    },
+    {
+      "text": "aku barusan di transfer",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "ada transferan masuk",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dapet transfer duit",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "masuk 200rb dari transfer",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "transferan dari ortu 1jt",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "terima uang transfer",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "baru aja ditransfer temen",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "ada dana masuk via transfer",
+      "intent": "tambah_pemasukan"
     }
   ]
 }

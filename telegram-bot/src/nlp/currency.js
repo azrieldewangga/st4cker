@@ -48,6 +48,13 @@ export function parseAmount(text) {
     const cleaned = lower.replace(/[^\d.]/g, '');
     if (!cleaned) return 0;
     const plainNum = parseFloat(cleaned);
+
+    // Intuitive fix: If user types "200" or "50", they usually mean "200k" or "50k"
+    // because 200 rupiah is negligible.
+    if (!isNaN(plainNum) && plainNum > 0 && plainNum < 1000) {
+        return plainNum * 1000;
+    }
+
     return isNaN(plainNum) ? 0 : plainNum;
 }
 

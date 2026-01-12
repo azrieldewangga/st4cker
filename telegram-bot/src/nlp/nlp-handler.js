@@ -312,12 +312,25 @@ function getFieldButtons(field, intent) {
     // Return inline keyboard buttons based on field
     switch (field) {
         case 'kategori':
+            if (intent === 'tambah_pemasukan') {
+                return [[
+                    { text: '💸 Salary', callback_data: 'nlp_kategori_Salary' },
+                    { text: '🎁 Grant/Gift', callback_data: 'nlp_kategori_Grant' }
+                ], [
+                    { text: '🏦 Transfer', callback_data: 'nlp_kategori_Transfer' },
+                    { text: '📈 Investment', callback_data: 'nlp_kategori_Investment' }
+                ]];
+            }
+            // For expense
             return [[
                 { text: '🍔 Food', callback_data: 'nlp_kategori_Food' },
                 { text: '🚗 Transport', callback_data: 'nlp_kategori_Transport' }
             ], [
                 { text: '🛍️ Shopping', callback_data: 'nlp_kategori_Shopping' },
                 { text: '📄 Bills', callback_data: 'nlp_kategori_Bills' }
+            ], [
+                { text: '🏦 Transfer', callback_data: 'nlp_kategori_Transfer' },
+                { text: '🎓 Education', callback_data: 'nlp_kategori_Education' }
             ]];
         case 'priority':
             return [[
@@ -382,7 +395,8 @@ async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
             type: 'expense',
             category: kategori,
             amount: amount,
-            note: note || kategori, // Use category as note if no note
+            title: note || kategori, // Desktop app likely uses 'title' for main display
+            note: note || kategori,
             date: new Date().toISOString()
         },
         source: 'telegram'
@@ -432,6 +446,7 @@ async function handleTambahPemasukan(bot, msg, entities, broadcastEvent) {
             type: 'income',
             category: kategori,
             amount: amount,
+            title: note || kategori,
             note: note || kategori,
             date: new Date().toISOString()
         },
