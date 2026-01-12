@@ -22,6 +22,8 @@ const CONFIDENCE_THRESHOLD = 0.6;
 // Cancel keywords
 const CANCEL_KEYWORDS = ['ga jadi', 'gajadi', 'batal', 'cancel', 'skip', 'udahan', 'tidak jadi'];
 
+console.log('[NLP] Handler v1.2 (Fixes: ZeroAmount, MissingIntents) Loaded');
+
 // Skip value keywords (for optional fields)
 const SKIP_KEYWORDS = ['ga ada', 'gak ada', 'tidak ada', 'kosong', 'skip', '-', 'ga usah', 'gak usah', 'gapapa'];
 
