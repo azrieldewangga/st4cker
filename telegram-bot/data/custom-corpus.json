@@ -139,6 +139,126 @@
     {
       "text": "tugas yang prioritas apa aja?",
       "intent": "deadline_terdekat"
+    },
+    {
+      "text": "abis beli nasi goreng 15rb",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "tadi jajan cilok 5k",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "keluar duit 50rb buat bensin",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "barusan bayar parkir 2000",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "beli kuota 100rb",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "abis ngopi 25rb",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "potong saldo 50k buat makan",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "expense baru 200rb",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "catet pengeluaran 15k",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "tadi beli pulsa ceban",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "keuar 50rb buat token",
+      "intent": "tambah_pengeluaran"
+    },
+    {
+      "text": "alhamdulillah gajian 5jt",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dapet transferan 200rb",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "uang masuk 500k",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dikasih ortu 1jt",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "income tambahan 50rb",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "ujang bayar utang 100rb",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dapet duit kaget 50k",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "ada tugas matkul ai",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "pr matematika deadline besok",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "bikin tugas baru",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "tambahin tugas sister",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "harus kumpul laporan lusa",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "deadline tugas pbo tanggal 20",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "ada project baru",
+      "intent": "buat_project"
+    },
+    {
+      "text": "duitku sisa berapa?",
+      "intent": "cek_saldo"
+    },
+    {
+      "text": "cek dong saldo sekarang",
+      "intent": "cek_saldo"
+    },
+    {
+      "text": "sisa uang",
+      "intent": "cek_saldo"
+    },
+    {
+      "text": "balance check",
+      "intent": "cek_saldo"
+    },
+    {
+      "text": "dompet masih ada isi ga",
+      "intent": "cek_saldo"
     }
   ]
 }
