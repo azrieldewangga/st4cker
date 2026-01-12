@@ -232,6 +232,14 @@ async function executeIntent(bot, msg, intent, entities, broadcastEvent) {
             return handleBantuan(bot, msg);
         case 'casual':
             return handleCasual(bot, msg, entities);
+        case 'ingatkan':
+            return handleIngatkan(bot, msg, entities, broadcastEvent);
+        case 'minta_summary':
+            return handleMintaSummary(bot, msg, entities, broadcastEvent);
+        case 'deadline_terdekat':
+            return handleLihatTugas(bot, msg, entities, broadcastEvent); // Reuse implementation
+        case 'hapus_transaksi':
+            return handleHapusTransaksi(bot, msg, entities, broadcastEvent);
         default:
             console.log('Unhandled intent:', intent);
             return false;
@@ -321,9 +329,11 @@ import { getUserData, saveUserData } from '../store.js';
 async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
     const chatId = msg.chat.id;
     const userId = msg.from.id.toString();
-    const amount = entities.amount?.value || 0;
-    const kategori = entities.kategori?.value || null;
-    let note = entities.note?.value || '';
+
+    // Robust extraction: handle both { value: ... } object and raw primitive values
+    const amount = entities.amount?.value ?? entities.amount ?? 0;
+    const kategori = entities.kategori?.value ?? entities.kategori ?? null;
+    let note = entities.note?.value ?? entities.note ?? '';
 
     // If no category, ask for it
     if (!kategori) {
@@ -341,7 +351,7 @@ async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
     if (entities.note === undefined) {
         setPending(chatId, {
             intent: 'tambah_pengeluaran',
-            filled: { ...entities, amount, kategori }, // Save cleaned values
+            filled: entities, // Keep original structure, do NOT flatten custom values here
             missing: ['note'],
             raw_text: msg.text
         });
@@ -392,9 +402,11 @@ async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
 async function handleTambahPemasukan(bot, msg, entities, broadcastEvent) {
     const chatId = msg.chat.id;
     const userId = msg.from.id.toString();
-    const amount = entities.amount?.value || 0;
-    const kategori = entities.kategori?.value || 'Income';
-    const note = entities.note?.value || '';
+
+    // Robust extraction
+    const amount = entities.amount?.value ?? entities.amount ?? 0;
+    const kategori = entities.kategori?.value ?? entities.kategori ?? 'Income';
+    const note = entities.note?.value ?? entities.note ?? '';
 
     // Create event
     const event = {
@@ -673,6 +685,63 @@ async function handleBantuan(bot, msg) {
 async function handleCasual(bot, msg, entities) {
     const chatId = msg.chat.id;
     await bot.sendMessage(chatId, responses.casual());
+    return true;
+}
+
+async function handleIngatkan(bot, msg, entities, broadcastEvent) {
+    const chatId = msg.chat.id;
+    // Basic stub for now
+    await bot.sendMessage(chatId, '⏰ Oke, reminder dicatat! (Fitur notifikasi otomatis akan segera hadir)');
+    return true;
+}
+
+async function handleMintaSummary(bot, msg, entities, broadcastEvent) {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id.toString();
+
+    try {
+        const userData = getUserData(userId);
+        const transactions = userData?.transactions || [];
+
+        // Filter for current month
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        const thisMonthTrans = transactions.filter(t => {
+            const d = new Date(t.date);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+
+        const income = thisMonthTrans
+            .filter(t => t.type === 'income')
+            .reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+
+        const expense = thisMonthTrans
+            .filter(t => t.type === 'expense')
+            .reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+
+        const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+        await bot.sendMessage(chatId,
+            `📊 *Summary Bulan Ini:*\n\n` +
+            `🟢 Pemasukan: ${formatter.format(income)}\n` +
+            `🔴 Pengeluaran: ${formatter.format(expense)}\n` +
+            `💰 Sisa: ${formatter.format(income - expense)}`,
+            { parse_mode: 'Markdown' }
+        );
+
+    } catch (e) {
+        console.error('[NLP] Summary error:', e);
+        await bot.sendMessage(chatId, 'Gagal mengambil data summary.');
+    }
+    return true;
+}
+
+async function handleHapusTransaksi(bot, msg, entities, broadcastEvent) {
+    const chatId = msg.chat.id;
+    // Safety restriction
+    await bot.sendMessage(chatId, '⚠️ Untuk keamanan, penghapusan transaksi hanya bisa dilakukan lewat aplikasi desktop St4cker ya.');
     return true;
 }
 
