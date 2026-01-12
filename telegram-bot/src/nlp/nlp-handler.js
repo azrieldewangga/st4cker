@@ -126,9 +126,16 @@ async function handleSlotCompletion(bot, msg, pending, text, broadcastEvent) {
     // C. Parse answer as slot completion (only if text is not empty/skipped)
     let enriched = {};
     if (text) {
-        const result = await parseMessage(text);
-        const entities = extractEntities(result.entities || {});
-        enriched = enrichEntities(entities, text);
+        // SPECIAL CASE: If we are specifically asking for 'note', treat the text as the note 
+        // regardless of whether it triggers other entities (unless it's a skip/cancel).
+        // This prevents the loop where "makan" (note) is detected as category Food.
+        if (pending.missing[0] === 'note') {
+            enriched = { note: { value: text, raw: text, confidence: 1 } };
+        } else {
+            const result = await parseMessage(text);
+            const entities = extractEntities(result.entities || {});
+            enriched = enrichEntities(entities, text);
+        }
 
         // D. Merge new entities to filled fields
         Object.assign(pending.filled, enriched);
@@ -333,7 +340,10 @@ async function handleTambahPengeluaran(bot, msg, entities, broadcastEvent) {
     const userId = msg.from.id.toString();
 
     // Robust extraction: handle both { value: ... } object and raw primitive values
-    const amount = entities.amount?.value ?? entities.amount ?? 0;
+    let amountRaw = entities.amount?.value ?? entities.amount ?? 0;
+    // Force parse if string (happens when captured via text fallback)
+    const amount = typeof amountRaw === 'string' ? parseAmount(amountRaw) : amountRaw;
+
     const kategori = entities.kategori?.value ?? entities.kategori ?? null;
     let note = entities.note?.value ?? entities.note ?? '';
 
@@ -406,7 +416,9 @@ async function handleTambahPemasukan(bot, msg, entities, broadcastEvent) {
     const userId = msg.from.id.toString();
 
     // Robust extraction
-    const amount = entities.amount?.value ?? entities.amount ?? 0;
+    let amountRaw = entities.amount?.value ?? entities.amount ?? 0;
+    const amount = typeof amountRaw === 'string' ? parseAmount(amountRaw) : amountRaw;
+
     const kategori = entities.kategori?.value ?? entities.kategori ?? 'Income';
     const note = entities.note?.value ?? entities.note ?? '';
 
