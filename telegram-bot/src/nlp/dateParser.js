@@ -4,6 +4,10 @@ const DAYS = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 const MONTHS = ['januari', 'februari', 'maret', 'april', 'mei', 'juni',
     'juli', 'agustus', 'september', 'oktober', 'november', 'desember'];
 
+function getJakartaNow() {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+}
+
 /**
  * Add days to a date
  */
@@ -23,12 +27,28 @@ function getEndOfWeek(date) {
     return result;
 }
 
-/**
- * Parse Indonesian month name to month index
- */
 function parseMonth(monthName) {
-    const idx = MONTHS.indexOf(monthName.toLowerCase());
-    return idx >= 0 ? idx : null;
+    const lower = monthName.toLowerCase();
+    const map = {
+        'jan': 0, 'januari': 0, 'january': 0,
+        'feb': 1, 'februari': 1, 'february': 1, 'pebruari': 1,
+        'mar': 2, 'maret': 2, 'march': 2,
+        'apr': 3, 'april': 3,
+        'mei': 4, 'may': 4,
+        'jun': 5, 'juni': 5, 'june': 5,
+        'jul': 6, 'juli': 6, 'july': 6,
+        'agu': 7, 'agustus': 7, 'aug': 7, 'august': 7,
+        'sep': 8, 'september': 8,
+        'okt': 9, 'oktober': 9, 'oct': 9, 'october': 9,
+        'nov': 10, 'november': 10,
+        'des': 11, 'desember': 11, 'dec': 11, 'december': 11
+    };
+
+    if (map[lower] !== undefined) return map[lower];
+    // Check startsWith for strict "jan", "feb" handling if map fails?
+    // Map should cover it.
+
+    return null;
 }
 
 /**
@@ -40,19 +60,19 @@ function parseMonth(monthName) {
 export function parseDate(text) {
     if (!text) return null;
 
-    const today = new Date();
+    const today = getJakartaNow();
     const lower = text.toLowerCase().trim();
 
     // Relative dates
-    if (lower === 'besok' || lower === 'bsk') {
+    if (/\bbesok\b|\bbsk\b/i.test(lower)) {
         return addDays(today, 1);
     }
 
-    if (lower === 'lusa') {
+    if (/\blusa\b/i.test(lower)) {
         return addDays(today, 2);
     }
 
-    if (lower === 'hari ini' || lower === 'today') {
+    if (/\bhari ini\b|\btoday\b/i.test(lower)) {
         return today;
     }
 
@@ -92,19 +112,26 @@ export function parseDate(text) {
         }
     }
 
-    // Absolute dates: "20 januari", "tanggal 25"
-    const dateMatch = lower.match(/(?:tanggal\s+)?(\d{1,2})(?:\s+(\w+))?/);
+    // Absolute dates: "20 januari", "tanggal 25", "25 mar 2026"
+    // Regex matches: Day (1-2 digits), separator, Month (word), separator, Year (4 digits, optional)
+    const dateMatch = lower.match(/(?:tanggal\s+)?(\d{1,2})(?:[\s/-]+(\w+))?(?:[\s/-]+(\d{4}))?/);
+
     if (dateMatch) {
         const day = parseInt(dateMatch[1]);
         let month = today.getMonth();
         let year = today.getFullYear();
 
+        // Check for Year (Group 3)
+        if (dateMatch[3]) {
+            year = parseInt(dateMatch[3]);
+        }
+
         if (dateMatch[2]) {
             const parsedMonth = parseMonth(dateMatch[2]);
             if (parsedMonth !== null) {
                 month = parsedMonth;
-                // If month is in the past, assume next year
-                if (month < today.getMonth()) {
+                // Only auto-increment year if NO year was provided
+                if (!dateMatch[3] && month < today.getMonth()) {
                     year++;
                 }
             }
@@ -114,7 +141,8 @@ export function parseDate(text) {
                 month++;
                 if (month > 11) {
                     month = 0;
-                    year++;
+                    // Only auto-increment year if NO year was provided
+                    if (!dateMatch[3]) year++;
                 }
             }
         }
@@ -136,7 +164,9 @@ export function formatDate(date) {
     const day = date.getDate();
     const month = MONTHS[date.getMonth()];
 
-    return `${day} ${month.charAt(0).toUpperCase() + month.slice(1)}`;
+    // Capitalize month
+    const monthCap = month.charAt(0).toUpperCase() + month.slice(1);
+    return `${day} ${monthCap}`;
 }
 
 /**
@@ -147,14 +177,23 @@ export function formatDate(date) {
 export function formatDateRelative(date) {
     if (!date) return '';
 
-    const today = new Date();
-    const diffDays = Math.floor((date - today) / (1000 * 60 * 60 * 24));
+    const today = getJakartaNow();
+
+    // Reset hours for pure day difference calculation
+    const d1 = new Date(date); d1.setHours(0, 0, 0, 0);
+    const d2 = new Date(today); d2.setHours(0, 0, 0, 0);
+
+    const diffTime = d1 - d2;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) return 'hari ini';
     if (diffDays === 1) return 'besok';
     if (diffDays === 2) return 'lusa';
-    if (diffDays < 7) {
-        return DAYS[date.getDay()].charAt(0).toUpperCase() + DAYS[date.getDay()].slice(1);
+    if (diffDays === -1) return 'kemarin';
+
+    if (diffDays > 0 && diffDays < 7) {
+        const dayName = DAYS[date.getDay()];
+        return dayName.charAt(0).toUpperCase() + dayName.slice(1);
     }
 
     return formatDate(date);

@@ -3,8 +3,8 @@
 export const schemas = {
     // Task intents
     buat_tugas: {
-        required: ['matkul', 'waktu'],
-        optional: ['tipe_tugas', 'note']
+        required: ['matkul', 'waktu', 'tipe_tugas', 'note'],
+        optional: []
     },
     edit_tugas: {
         required: ['matkul'],
@@ -25,12 +25,12 @@ export const schemas = {
 
     // Transaction intents
     tambah_pengeluaran: {
-        required: ['amount'],
-        optional: ['kategori', 'note', 'waktu']
+        required: ['amount', 'kategori', 'note'],
+        optional: ['waktu']
     },
     tambah_pemasukan: {
-        required: ['amount'],
-        optional: ['kategori', 'note', 'waktu']
+        required: ['amount', 'kategori', 'note'],
+        optional: ['waktu']
     },
     edit_transaksi: {
         required: [],
@@ -50,13 +50,14 @@ export const schemas = {
     },
 
     // Project intents
+    // Project intents
     buat_project: {
-        required: ['project'],
-        optional: ['waktu', 'priority', 'matkul']
+        required: ['project', 'project_type', 'waktu', 'priority', 'note', 'link'],
+        optional: ['matkul'] // matkul is optional (inferred or skipped for personal)
     },
     edit_project: {
         required: ['project'],
-        optional: ['project_status', 'waktu', 'priority']
+        optional: ['project_status', 'waktu', 'priority', 'note', 'link']
     },
     hapus_project: {
         required: ['project'],
@@ -67,10 +68,10 @@ export const schemas = {
         optional: ['project_status']
     },
     catat_progress: {
-        // Guided flow - minimal required
-        required: [],
-        optional: ['project', 'duration', 'persentase', 'note'],
-        guidedFlow: true
+        // Updated for Smart Extraction: all these are technically required for the full record,
+        // but NLP can fill them. If missing, we ask.
+        required: ['project', 'persentase', 'duration', 'note'],
+        optional: []
     },
 
     // Other intents

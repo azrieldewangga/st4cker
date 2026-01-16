@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useTheme } from 'next-themes';
+import { useStore } from '@/store/useStoreNew';
+
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { VariantProps } from 'class-variance-authority';
 
@@ -13,6 +14,26 @@ import {
 } from '@/components/animate-ui/primitives/effects/theme-toggler';
 import { buttonVariants } from '@/components/animate-ui/components/buttons/icon';
 import { cn } from '@/lib/utils';
+
+// Helper to get resolved theme (Store Integration)
+const useResolvedTheme = (theme: string) => {
+  const [resolved, setResolved] = React.useState<'light' | 'dark'>('light');
+
+  React.useEffect(() => {
+    if (theme !== 'system') {
+      setResolved(theme as 'light' | 'dark');
+      return;
+    }
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setResolved(media.matches ? 'dark' : 'light');
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [theme]);
+
+  return resolved;
+};
 
 const getIcon = (
   effective: ThemeSelection,
@@ -58,7 +79,9 @@ const ThemeTogglerButton = React.forwardRef<HTMLButtonElement, ThemeTogglerButto
   },
   ref
 ) => {
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const theme = useStore(state => state.theme);
+  const setTheme = useStore(state => state.setTheme);
+  const resolvedTheme = useResolvedTheme(theme);
 
   return (
     <ThemeTogglerPrimitive

@@ -82,8 +82,9 @@ const createWindow = () => {
         minHeight: 768,
         frame: false,
         transparent: true, // Enable transparency
-        backgroundMaterial: 'none', // EXPLICITLY DISABLE to prevent gray box in prod
-        backgroundColor: '#00000000', // Start fully transparent
+        backgroundMaterial: 'none',
+        backgroundColor: '#1a1b1e', // Force solid dark background
+
         show: false, // Don't show immediately
         icon: path.join(__dirname, app.isPackaged ? '../dist/icon.ico' : '../public/icon.ico'),
         webPreferences: {
@@ -655,28 +656,90 @@ app.on('ready', async () => {
                         }
 
                         else if (event.eventType === 'task.updated') {
-                            const { id, status } = event.payload;
-                            console.log(`[Telegram] Received task.updated for ${id} to ${status}`);
+                            const { id, status, ...rest } = event.payload;
+                            console.log(`[Telegram Debug] processing task.updated for ID: ${id}`);
+                            console.log('[Telegram Debug] Payload keys:', Object.keys(rest));
 
-                            let appStatus = status;
-                            const statusMap: Record<string, string> = {
-                                'pending': 'to-do',
-                                'in-progress': 'progress',
-                                'completed': 'done'
-                            };
-                            if (statusMap[status]) appStatus = statusMap[status];
+                            const updates: any = {};
 
-                            if (assignments.updateStatus(id, appStatus)) {
-                                const displayStatusMap: Record<string, string> = {
-                                    'to-do': 'To Do',
-                                    'progress': 'In Progress',
-                                    'done': 'Done'
+                            // Map Status
+                            if (status) {
+                                const statusMap: Record<string, string> = {
+                                    'pending': 'to-do',
+                                    'in-progress': 'progress', // Frontend expects 'progress' NOT 'in-progress'
+                                    'completed': 'done'        // Frontend expects 'done' NOT 'completed'
                                 };
-                                const displayStatus = displayStatusMap[appStatus as string] || appStatus;
+                                updates.status = statusMap[status] || status;
+                            }
 
+                            // Map Other Fields
+                            if (rest.title) updates.title = rest.title;
+                            if (rest.type) updates.type = rest.type;
+                            if (rest.course) updates.course = rest.course;
+                            if (rest.note !== undefined) updates.note = rest.note;
+
+                            console.log('[Telegram Debug] Constructing DB update:', updates);
+
+                            if (Object.keys(updates).length > 0) {
+                                try {
+                                    const result = assignments.update(id, updates);
+                                    console.log(`[Telegram Debug] assignments.update result: ${result}`);
+                                    if (result) {
+                                        new (require('electron').Notification)({
+                                            title: 'Task Updated',
+                                            body: `Task updated successfully`
+                                        }).show();
+                                        success = true;
+                                    } else {
+                                        console.error(`[Telegram Error] Update failed - Task ID ${id} not found or no changes made.`);
+                                    }
+                                } catch (updateErr) {
+                                    console.error('[Telegram Error] DB Update Exception:', updateErr);
+                                }
+                            } else {
+                                console.warn('[Telegram Debug] No valid updates found in payload.');
+                            }
+                        }
+
+                        else if (event.eventType === 'task.deleted') {
+                            const { id } = event.payload;
+                            console.log(`[Telegram] Received task.deleted for ${id}`);
+
+                            if (assignments.delete(id)) {
                                 new (require('electron').Notification)({
-                                    title: 'Task Updated',
-                                    body: `Task updated to: ${displayStatus}`
+                                    title: 'Task Deleted',
+                                    body: 'Active task removed'
+                                }).show();
+                                success = true;
+                            }
+                        }
+
+                        else if (event.eventType === 'transaction.deleted') {
+                            const { id } = event.payload;
+                            console.log(`[Telegram] Received transaction.deleted for ${id}`);
+                            if (transactions.delete(id)) {
+                                new (require('electron').Notification)({
+                                    title: 'Transaction Deleted',
+                                    body: 'Transaction removed'
+                                }).show();
+                                success = true;
+                            }
+                        }
+
+                        else if (event.eventType === 'transaction.updated') {
+                            const { id, updates } = event.payload;
+                            console.log(`[Telegram] Received transaction.updated for ${id}`, updates);
+
+                            const dbUpdates: any = {};
+                            if (updates.amount) dbUpdates.amount = updates.amount;
+                            if (updates.note) {
+                                dbUpdates.title = updates.note;
+                            }
+
+                            if (transactions.update(id, dbUpdates)) {
+                                new (require('electron').Notification)({
+                                    title: 'Transaction Updated',
+                                    body: 'Transaction details updated'
                                 }).show();
                                 success = true;
                             }
@@ -689,7 +752,7 @@ app.on('ready', async () => {
                             // Map incoming priority/status if needed
                             const newProject = {
                                 id: randomUUID(),
-                                title: title,
+                                title: title || 'Untitled Project', // Fallback for legacy events
                                 description: description || '',
                                 deadline: deadline,
                                 priority: priority || 'medium', // low, medium, high
@@ -705,11 +768,82 @@ app.on('ready', async () => {
                             projects.create(newProject);
                             console.log('[Telegram] Project created from event:', newProject.id);
 
+                            // Handle Attachments
+                            if (event.payload.attachments && Array.isArray(event.payload.attachments)) {
+                                console.log(`[Telegram] Processing ${event.payload.attachments.length} attachments for project ${newProject.id}`);
+                                for (const att of event.payload.attachments) {
+                                    try {
+                                        projectAttachments.create({
+                                            id: att.id || randomUUID(),
+                                            projectId: newProject.id,
+                                            type: att.type || 'link',
+                                            name: att.title || att.name || 'Attachment',
+                                            path: att.url || att.path,
+                                            size: null,
+                                            createdAt: new Date().toISOString()
+                                        });
+                                        console.log('[Telegram] Attachment created:', att.title);
+                                    } catch (attErr) {
+                                        console.error('[Telegram] Failed to create attachment:', attErr);
+                                    }
+                                }
+                            }
+
                             new (require('electron').Notification)({
                                 title: 'New Project Created',
                                 body: `${title}\nDue: ${deadline}`
                             }).show();
                             success = true;
+                        }
+
+                        else if (event.eventType === 'project.updated') {
+                            const { id, updates } = event.payload;
+                            console.log(`[Telegram] Received project.updated for ${id}`, updates);
+
+                            const dbUpdates: any = {};
+                            if (updates.name) dbUpdates.title = updates.name; // Map name -> title
+                            if (updates.deadline) dbUpdates.deadline = updates.deadline;
+                            if (updates.priority) dbUpdates.priority = updates.priority;
+
+                            // Map Status specifically if present
+                            if (updates.status) {
+                                let dbStatus = 'active';
+                                if (updates.status === 'completed') dbStatus = 'completed';
+                                if (updates.status === 'on_hold') dbStatus = 'on_hold';
+                                if (updates.status === 'in_progress') dbStatus = 'active'; // Map specifically
+                                dbUpdates.status = dbStatus;
+                            }
+
+                            if (Object.keys(dbUpdates).length > 0) {
+                                try {
+                                    if (projects.update(id, dbUpdates)) {
+                                        new (require('electron').Notification)({
+                                            title: 'Project Updated',
+                                            body: `Project updated from Telegram`
+                                        }).show();
+                                        success = true;
+                                    }
+                                } catch (e) {
+                                    console.error('[Telegram] Failed to update project:', e);
+                                }
+                            }
+                        }
+
+                        else if (event.eventType === 'project.deleted') {
+                            const { id } = event.payload;
+                            console.log(`[Telegram] Received project.deleted for ${id}`);
+
+                            try {
+                                if (projects.delete(id)) {
+                                    new (require('electron').Notification)({
+                                        title: 'Project Deleted',
+                                        body: 'Project removed via Telegram'
+                                    }).show();
+                                    success = true;
+                                }
+                            } catch (e) {
+                                console.error('[Telegram] Failed to delete project:', e);
+                            }
                         }
 
                         else if (event.eventType === 'progress.logged') {
@@ -756,6 +890,11 @@ app.on('ready', async () => {
                                     db.prepare('UPDATE projects SET status = ? WHERE id = ?').run(dbStatus, projectId);
                                 }
 
+                                // 4. Force UI Refresh Immediately
+                                BrowserWindow.getAllWindows().forEach(win => {
+                                    if (!win.isDestroyed()) win.webContents.send('refresh-data');
+                                });
+
                                 new (require('electron').Notification)({
                                     title: 'Progress Logged',
                                     body: `${project.title}: ${newProgress}% (${duration}m)`
@@ -763,6 +902,10 @@ app.on('ready', async () => {
                                 success = true;
                             } else {
                                 console.error('[Telegram] Project not found for progress log:', projectId);
+                                // Force refresh anyway, maybe the project list is just stale?
+                                BrowserWindow.getAllWindows().forEach(win => {
+                                    if (!win.isDestroyed()) win.webContents.send('refresh-data');
+                                });
                             }
                         }
                         else if (event.eventType === 'transaction.created') {
@@ -771,7 +914,7 @@ app.on('ready', async () => {
 
                             const newTransaction = {
                                 id: event.eventId, // Using eventId as transaction ID to safe-guard duplication naturally
-                                title: payload.description || payload.type,
+                                title: payload.note || payload.description || payload.type,
                                 type: payload.type,
                                 category: payload.category,
                                 amount: payload.amount,
@@ -788,6 +931,33 @@ app.on('ready', async () => {
                                 body: `${payload.type === 'income' ? '+' : '-'} Rp ${payload.amount.toLocaleString('id-ID')} (${payload.category})`
                             }).show();
                             success = true;
+                        }
+
+                        else if (event.eventType === 'transaction.deleted') {
+                            const { id } = event.payload;
+                            if (id) {
+                                console.log('[Telegram] Deleting transaction:', id);
+                                transactions.delete(id);
+                                success = true;
+                            }
+                        }
+
+                        else if (event.eventType === 'transaction.updated') {
+                            const { id, updates } = event.payload;
+                            // updates should map to DB columns: amount, category, note (title)
+                            if (id && updates) {
+                                console.log('[Telegram] Updating transaction:', id, updates);
+
+                                // Map 'note' from bot to 'title' in DB if present
+                                const dbUpdates: any = { ...updates };
+                                if (dbUpdates.note) {
+                                    dbUpdates.title = dbUpdates.note;
+                                    delete dbUpdates.note;
+                                }
+
+                                transactions.update(id, dbUpdates);
+                                success = true;
+                            }
                         }
 
                         // --- POST PROCESSING ---
@@ -908,8 +1078,13 @@ app.on('ready', async () => {
 
     ipcMain.handle('telegram:sync-now', async () => {
         if (!telegramStore || !telegramStore.get('paired')) return { success: false, error: 'Not paired' };
-        await syncUserDataToBackend(telegramStore, telegramSocket);
-        return { success: true };
+        try {
+            await syncUserDataToBackend(telegramStore, telegramSocket);
+            return { success: true };
+        } catch (error: any) {
+            console.error('[Telegram] Sync failed:', error);
+            return { success: false, error: error.message };
+        }
     });
 
     ipcMain.handle('telegram:unpair', async () => {

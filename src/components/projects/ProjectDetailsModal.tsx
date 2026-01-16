@@ -65,8 +65,12 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
 
     const handleOpenAttachment = (att: ProjectAttachment) => {
         if (att.type === 'link') {
+            let url = att.path;
+            if (url && !/^https?:\/\//i.test(url)) {
+                url = 'https://' + url;
+            }
             // @ts-ignore
-            window.electronAPI.utils.openExternal(att.path);
+            window.electronAPI.utils.openExternal(url);
         } else {
             // @ts-ignore
             window.electronAPI.utils.openPath(att.path);
@@ -197,9 +201,15 @@ const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({ isOpen, onClo
                                                     <Badge variant="outline" className="font-mono text-[10px]">
                                                         {Math.floor(session.duration / 60)}h {session.duration % 60}m
                                                     </Badge>
-                                                    <span className={`font-medium ${(session.progressAfter - session.progressBefore) > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                        {(session.progressAfter - session.progressBefore) > 0 ? '+' : ''}{session.progressAfter - session.progressBefore}%
-                                                    </span>
+
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="font-medium">{session.progressAfter}%</span>
+                                                        {(session.progressAfter - session.progressBefore) !== 0 && (
+                                                            <span className={`text-xs ${(session.progressAfter - session.progressBefore) > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                                ({(session.progressAfter - session.progressBefore) > 0 ? '+' : ''}{session.progressAfter - session.progressBefore}%)
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="text-sm text-muted-foreground bg-muted/40 p-3 rounded-md mt-2">

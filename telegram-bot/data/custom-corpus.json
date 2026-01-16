@@ -291,6 +291,86 @@
     {
       "text": "ada dana masuk via transfer",
       "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dikasih uang jajan",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "barusan dikasih duit",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dikasih 50rb sama ortu",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "ada yang ngasih uang",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dikasih rejeki nomplok",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "tadi dikasih 100k",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "dikasih tunjangan",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "alhamdulillah dikasih bonus",
+      "intent": "tambah_pemasukan"
+    },
+    {
+      "text": "Buat tugas KJK deadline besok",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "Buat lapres WSPK hari jumat",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "Buat lapres KJK besok",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "Ada tugas baru",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "Tambah tugas matkul KJK",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "input tugas spk",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "tugas baru lapres",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "Deadline tugas keamanan jaringan besok",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "ingetin tugas workshop",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "tambah deadline",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "ada lapsem workshop sistem pendukung keputusan",
+      "intent": "buat_tugas"
+    },
+    {
+      "text": "buat laporan pendahuluan prak kjk besok",
+      "intent": "buat_tugas"
     }
   ]
 }

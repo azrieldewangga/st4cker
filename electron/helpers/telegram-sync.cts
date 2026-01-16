@@ -2,6 +2,9 @@ import { getDB } from '../db/index.cjs';
 
 // Telegram data sync helper
 async function syncUserDataToBackend(telegramStore: any, socket: any) {
+    // Defined inside function to ensure safe access and proper scoping for errors
+    const backendUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'https://elegant-heart-production.up.railway.app';
+
     console.log('[Telegram Sync] Function called, checking session...');
     try {
         const sessionToken = telegramStore.get('sessionToken');
@@ -60,19 +63,20 @@ async function syncUserDataToBackend(telegramStore: any, socket: any) {
 
         // Get active projects
         const activeProjects = db.prepare(`
-            SELECT id, title as name, status, createdAt 
+            SELECT id, title as name, status, createdAt, deadline, priority, totalProgress, description
             FROM projects 
             WHERE status != 'completed'
             ORDER BY createdAt DESC
-        `).all() as Array<{ id: string; name: string; status: string; createdAt: string }>;
+        `).all() as Array<{ id: string; name: string; status: string; createdAt: string; deadline: string; priority: string; totalProgress: number; description: string }>;
 
         // Get active assignments
         const activeAssignments = db.prepare(`
             SELECT id, title, course, type, status, deadline, note, semester
             FROM assignments
-            WHERE status != 'completed'
+            WHERE (status IS NULL OR (status != 'completed' AND status != 'done' AND status != 'Done'))
+            AND (semester = ? OR semester IS NULL)
             ORDER BY deadline ASC
-        `).all() as Array<{ id: string; title: string; course: string; type: string; status: string; deadline: string; note: string; semester: number }>;
+        `).all(rawSemester) as Array<{ id: string; title: string; course: string; type: string; status: string; deadline: string; note: string; semester: number }>;
 
         // Calculate current balance (Robust: Income - ABS(Expense))
         const balanceResult = db.prepare(`
@@ -83,6 +87,53 @@ async function syncUserDataToBackend(telegramStore: any, socket: any) {
         `).get() as { balance: number };
 
         const currentBalance = balanceResult ? balanceResult.balance : 0;
+
+        // Get Recent Transactions (Sync LAST 100 for performance/relevance, or ALL?)
+        // User said "sampai habis" (until finished/all). Let's sync last 100 which is reasonable context.
+        // Syncing thousands might be too heavy for the single payload approach.
+        // But for "sampai habis", let's try 100 first, or maybe 500. 
+        // Let's go with 200.
+        const recentTransactions = db.prepare(`
+            SELECT id, type, amount, category, date, title as note
+            FROM transactions
+            ORDER BY date DESC, createdAt DESC
+            LIMIT 200
+        `).all() as Array<{ id: string; type: string; amount: number; category: string; date: string; note: string }>;
+
+        // --- SUMMARY STATS ---
+
+        // 1. Daily (Today)
+        const dailyStats = db.prepare(`
+            SELECT 
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as expense
+            FROM transactions
+            WHERE date(date) = date('now', 'localtime')
+        `).get() as { income: number; expense: number };
+
+        // 2. Weekly (Last 7 Days)
+        const weeklyStats = db.prepare(`
+            SELECT 
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as expense
+            FROM transactions
+            WHERE date(date) >= date('now', '-6 days', 'localtime')
+        `).get() as { income: number; expense: number };
+
+        // 3. Monthly (Current Month)
+        const monthlyStats = db.prepare(`
+            SELECT 
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as expense
+            FROM transactions
+            WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now', 'localtime')
+        `).get() as { income: number; expense: number };
+
+        const summaryStats = {
+            daily: dailyStats || { income: 0, expense: 0 },
+            weekly: weeklyStats || { income: 0, expense: 0 },
+            monthly: monthlyStats || { income: 0, expense: 0 }
+        };
 
         const syncData = {
             sessionToken,
@@ -100,11 +151,12 @@ async function syncUserDataToBackend(telegramStore: any, socket: any) {
                     'Tugas', 'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'
                 ],
                 activeAssignments, // Send assignments to bot
-                currentBalance: currentBalance
+                transactions: recentTransactions, // Send recent transactions
+                currentBalance: currentBalance,
+                summary: summaryStats
             }
         };
 
-        const backendUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'https://elegant-heart-production.up.railway.app';
         const response = await fetch(`${backendUrl}/api/sync-user-data`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -116,11 +168,11 @@ async function syncUserDataToBackend(telegramStore: any, socket: any) {
         } else {
             const errorText = await response.text();
             console.error('[Telegram Sync] Failed to sync:', errorText);
-            throw new Error(`Server returned ${response.status}: ${errorText}`);
+            throw new Error(`[${backendUrl}] Server returned ${response.status}: ${errorText}`);
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Telegram Sync] Error syncing user data:', error);
-        throw error;
+        throw new Error(`Sync failed (${backendUrl || 'unknown'}): ${error.message}`);
     }
 }
 

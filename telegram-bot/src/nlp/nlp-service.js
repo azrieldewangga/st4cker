@@ -13,6 +13,10 @@ export async function initNLP() {
     console.log('[NLP] Model loaded');
 }
 
+export function getManager() {
+    return manager;
+}
+
 export async function parseMessage(text) {
     if (!manager) await initNLP();
 

@@ -1,34 +1,34 @@
 [
     {
-        "text": "aku barusan di transfer",
+        "text": "dikasih uang jajan",
         "intent": "tambah_pemasukan"
     },
     {
-        "text": "ada transferan masuk",
+        "text": "barusan dikasih duit",
         "intent": "tambah_pemasukan"
     },
     {
-        "text": "dapet transfer duit",
+        "text": "dikasih 50rb sama ortu",
         "intent": "tambah_pemasukan"
     },
     {
-        "text": "masuk 200rb dari transfer",
+        "text": "ada yang ngasih uang",
         "intent": "tambah_pemasukan"
     },
     {
-        "text": "transferan dari ortu 1jt",
+        "text": "dikasih rejeki nomplok",
         "intent": "tambah_pemasukan"
     },
     {
-        "text": "terima uang transfer",
+        "text": "tadi dikasih 100k",
         "intent": "tambah_pemasukan"
     },
     {
-        "text": "baru aja ditransfer temen",
+        "text": "dikasih tunjangan",
         "intent": "tambah_pemasukan"
     },
     {
-        "text": "ada dana masuk via transfer",
+        "text": "alhamdulillah dikasih bonus",
         "intent": "tambah_pemasukan"
     }
 ]

@@ -467,7 +467,7 @@ const Cashflow = () => {
                                             {sortedTransactions.length === 0 ? (
                                                 <p className="text-sm text-center text-muted-foreground py-10">No transactions recorded.</p>
                                             ) : (
-                                                sortedTransactions.map((tx) => {
+                                                sortedTransactions.slice(0, 10).map((tx) => {
                                                     const Icon = getIcon(tx.category);
                                                     const isIncome = tx.type === 'income';
                                                     return (

@@ -25,6 +25,11 @@ export function handleBalanceCommand(bot, msg) {
     const formattedBalance = formatter.format(balance || 0);
 
     bot.sendMessage(chatId, `💰 *Current Balance:*\n${formattedBalance}`, {
-        parse_mode: 'Markdown'
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '📜 Lihat Riwayat', callback_data: 'list_tx_page_1' }]
+            ]
+        }
     });
 }

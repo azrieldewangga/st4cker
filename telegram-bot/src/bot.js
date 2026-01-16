@@ -1,12 +1,13 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { createPairingCode, verifyPairingCode, hasActiveSession, getSessionInfo, revokeSession, getUserSessions } from './pairing.js';
-import { handleTaskCommand, handleTaskCallback, handleTaskInput } from './commands/task.js';
-import handleListTasks from './commands/listtasks.js';
+import { handleTaskCommand, handleTaskCallback, handleTaskInput, clearSession as clearTaskSession } from './commands/task.js';
+import { handleListTasks, handleTaskListCallback } from './commands/listtasks.js';
 import { handleEditTaskCommand, handleEditTaskCallback } from './commands/edittask.js';
 import { handleBalanceCommand } from './commands/balance.js';
-import { handleTransactionCommand, handleTransactionCallback, handleTransactionInput, handleTransactionNote } from './commands/transaction.js';
-import { handleProjectsCommand, handleLogCommand, handleProjectCallback, handleProjectInput, handleCreateProjectCommand } from './commands/project.js';
+import { handleTransactionCommand, handleTransactionCallback, handleTransactionInput, handleTransactionNote, clearSession as clearTxSession } from './commands/transaction.js';
+import { handleProjectsCommand, handleLogCommand, handleProjectCallback, handleProjectInput, handleCreateProjectCommand, clearSession as clearProjSession } from './commands/project.js';
 import { handleNaturalLanguage, handleNLPCallback } from './nlp/index.js';
+import { initScheduler } from './scheduler.js';
 
 import { broadcastEvent } from './server.js';
 import crypto from 'crypto';
@@ -21,20 +22,42 @@ if (!token) {
 // Create bot instance
 const bot = new TelegramBot(token, { polling: true });
 
+// Initialize Scheduler (Morning Brief)
+initScheduler(bot);
+
+// Set Telegram Command Menu
+bot.setMyCommands([
+    { command: 'start', description: 'Generate pairing code & connect desktop' },
+    { command: 'help', description: 'See all available commands' },
+    { command: 'status', description: 'Check connection status' },
+    { command: 'unpair', description: 'Disconnect desktop app' },
+    { command: 'task', description: 'Add new assignment' },
+    { command: 'edittask', description: 'Edit task status' },
+    { command: 'listtasks', description: 'View all tasks' },
+    { command: 'project', description: 'Create new project' },
+    { command: 'projects', description: 'List active projects' },
+    { command: 'editproject', description: 'Edit existing project' },
+    { command: 'deleteproject', description: 'Delete a project' },
+    { command: 'progress', description: 'Log project progress' },
+    { command: 'log', description: 'Log project progress (alias)' },
+    { command: 'expense', description: 'Record expense' },
+    { command: 'income', description: 'Record income' },
+    { command: 'balance', description: 'View your balance' }
+]).catch(err => console.error('[Bot] Failed to set commands:', err.message));
+
 console.log('[Bot] st4cker Telegram bot started');
 
-// Helper: Create event structure
-function createEvent(eventType, telegramUserId, payload) {
-    return {
-        eventId: crypto.randomUUID(),
-        eventType,
-        telegramUserId,
-        timestamp: new Date().toISOString(),
-        payload,
-        source: 'telegram'
-    };
-}
+// Debounce Map: userId -> { text, timestamp }
+const messageDebounce = new Map();
+const DEBOUNCE_WINDOW = 2000; // 2 seconds
 
+// Helper: Clear ALL sessions (Last One Wins)
+function clearAllSessions(userId) {
+    clearTaskSession(userId);
+    clearTxSession(userId);
+    clearProjSession(userId);
+    // Add editTask session clearing if/when exposed
+}
 
 // /start command - Generate pairing code
 bot.onText(/\/start/, async (msg) => {
@@ -107,11 +130,40 @@ bot.on('callback_query', async (query) => {
     // Handle task command callbacks
     if (query.data.startsWith('task_') || query.data.startsWith('course_')) {
         handleTaskCallback(bot, query);
-    } else if (query.data.startsWith('EDIT_TASK:') || query.data.startsWith('SET_STATUS:') || query.data === 'CANCEL_EDIT') {
-        handleEditTaskCallback(bot, query, broadcastEvent);
+    } else if (query.data.startsWith('list_task_page_') ||
+        query.data.startsWith('del_task_') ||
+        query.data.startsWith('confirm_del_task_') ||
+        query.data.startsWith('edit_task_') ||
+        query.data.startsWith('EDIT_TASK_') ||
+        query.data.startsWith('SET_TASK_STATUS_') ||
+        query.data.startsWith('SELECT_COURSE_') ||
+        query.data.startsWith('SELECT_TYPE_') ||
+        query.data === 'cancel_task_action' ||
+        query.data === 'cancel_edit_task') {
+        handleTaskListCallback(bot, query, broadcastEvent);
     } else if (query.data.startsWith('tx_cat_')) {
         handleTransactionCallback(bot, query, broadcastEvent);
-    } else if (query.data.startsWith('log_proj_') || query.data.startsWith('K_PRIORITY_') || query.data.startsWith('LOG_STATUS_') || query.data.startsWith('TYPE_') || query.data.startsWith('COURSE_')) {
+    } else if (query.data.startsWith('list_tx_page_') ||
+        query.data.startsWith('del_tx_') ||
+        query.data.startsWith('edit_tx_') ||
+        query.data.startsWith('cancel_tx_') ||
+        query.data.startsWith('EDIT_FIELD_') ||
+        query.data === 'cancel_edit' ||
+        query.data.startsWith('confirm_del_tx_')) {
+        const { handleTransactionListCallback } = await import('./commands/transaction.js');
+        handleTransactionListCallback(bot, query, broadcastEvent);
+    } else if (query.data.startsWith('log_proj_') ||
+        query.data.startsWith('K_PRIORITY_') ||
+        query.data.startsWith('LOG_STATUS_') ||
+        query.data.startsWith('TYPE_') ||
+        query.data.startsWith('COURSE_') ||
+        query.data.startsWith('del_proj_') ||
+        query.data.startsWith('confirm_del_proj_') ||
+        query.data.startsWith('edit_proj_') ||
+        query.data.startsWith('EDIT_PROJ_') ||
+        query.data.startsWith('SET_PROJ_') ||
+        query.data.startsWith('list_proj_page_') ||
+        query.data === 'cancel_proj_action') {
         handleProjectCallback(bot, query, broadcastEvent);
     } else if (query.data.startsWith('nlp_')) {
         // NLP callback handlers
@@ -198,15 +250,52 @@ bot.onText(/\/task/, (msg) => {
     handleTaskCommand(bot, msg);
 });
 
-// Handle text messages (for command flow inputs)
-bot.on('message', async (msg) => {
-    // Skip commands
-    // Skip commands (except /skip which is used in flow)
-    if (msg.text && msg.text.startsWith('/') && msg.text !== '/skip') return;
+const KNOWN_COMMANDS = [
+    '/start', '/help', '/status', '/unpair',
+    '/task', '/listtasks', '/edittask',
+    '/project', '/projects', '/log', '/progress',
+    '/expense', '/income', '/balance',
+    '/editproject', '/deleteproject',
+    '/summary',
+    '/skip' // Special case
+];
 
+// Handle text messages (for command flow inputs AND unknown commands)
+bot.on('message', async (msg) => {
+    if (!msg.text) return;
     const userId = msg.from.id.toString();
+
+    // 1. DEBOUNCING
+    // 1. DEBOUNCING (DISABLED - Causes issues with rapid "ga" replies)
+    // const lastMsg = messageDebounce.get(userId);
+    // const now = Date.now();
+    // if (lastMsg && lastMsg.text === msg.text && (now - lastMsg.timestamp) < DEBOUNCE_WINDOW) {
+    //     // Drop duplicate
+    //     return;
+    // }
+    // messageDebounce.set(userId, { text: msg.text, timestamp: now });
+
+    // 2. CHECK FOR KNOWN COMMANDS (Interruption)
+    if (msg.text.startsWith('/')) {
+        const command = msg.text.split(' ')[0].toLowerCase();
+
+        if (KNOWN_COMMANDS.includes(command)) {
+            // Only interrupt if it's NOT /skip (which is part of flow)
+            if (command !== '/skip') {
+                clearAllSessions(userId); // Last One Wins!
+                return; // Let the specific onText handler run
+            }
+        } else {
+            // UNKNOWN COMMAND -> Stripping Slash for NLP
+            // e.g. /buat_tugas -> buat_tugas
+            console.log(`[Bot] Unknown command ${command} passed to NLP`);
+            msg.text = msg.text.substring(1); // Rewrite for handlers
+        }
+    }
+
     if (!hasActiveSession(userId)) return;
 
+    // 3. HANDLER CHAIN
     // Try handling as task input first
     const handledTask = await handleTaskInput(bot, msg, broadcastEvent);
     if (handledTask) return;
@@ -216,7 +305,6 @@ bot.on('message', async (msg) => {
     if (handledTxInput) return;
 
     // Try handling as transaction note
-    // Try handling as transaction note
     const handledTxNote = await handleTransactionNote(bot, msg, broadcastEvent);
     if (handledTxNote) return;
 
@@ -224,7 +312,7 @@ bot.on('message', async (msg) => {
     const handledProjInput = await handleProjectInput(bot, msg, broadcastEvent);
     if (handledProjInput) return;
 
-    // NLP Fallback - try natural language processing
+    // 4. NLP FALLBACK
     try {
         const handledNLP = await handleNaturalLanguage(bot, msg, broadcastEvent);
         if (handledNLP) return;
@@ -250,20 +338,6 @@ bot.onText(/\/expense/, (msg) => {
 
 // /projects command (List)
 bot.onText(/\/projects/, (msg) => {
-    // If msg.text is exactly /project (singular), do NOT trigger this handler as regex matches partial?
-    // Regex /\/projects/ matches /projects but also /projectssss
-    // We want explicit separation.
-
-    // Actually, bot.onText uses regex.
-    // /\/projects/ will match "/projects".
-    // /\/project/ will match "/project" AND "/projects".
-
-    // To match strict, use anchor or check text manually.
-    // Better:
-    // /project (singular) -> CREATE
-    // /projects (plural) -> LIST
-
-    // We'll trust the user types correctly or use regex anchors.
     handleProjectsCommand(bot, msg);
 });
 
@@ -271,7 +345,24 @@ bot.onText(/\/projects/, (msg) => {
 bot.onText(/\/project$/, (msg) => {
     handleCreateProjectCommand(bot, msg);
 });
-// Also handle /project with arguments if we implement quick add later, but for now interactive.
+
+// /editproject
+bot.onText(/\/editproject/, async (msg) => {
+    const { processEditProject } = await import('./commands/project.js');
+    processEditProject(bot, msg.chat.id, msg.from.id.toString());
+});
+
+// /deleteproject
+bot.onText(/\/deleteproject/, async (msg) => {
+    const { processDeleteProject } = await import('./commands/project.js');
+    processDeleteProject(bot, msg.chat.id, msg.from.id.toString());
+});
+
+// /summary
+bot.onText(/\/summary/, async (msg) => {
+    const { processSummary } = await import('./commands/summary.js');
+    processSummary(bot, msg.chat.id, msg.from.id.toString(), msg.text);
+});
 
 // /log command
 bot.onText(/\/log/, (msg) => {
@@ -285,7 +376,20 @@ bot.onText(/\/progress/, (msg) => {
 
 // Error handling
 bot.on('polling_error', (error) => {
-    console.error('[Bot] Polling error:', error.message);
+    const code = error.code || error.response?.body?.error_code;
+    const msg = error.message;
+
+    // Filter common network errors
+    if (['EFATAL', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNABORTED'].includes(code) ||
+        (msg && (msg.includes('ECONNRESET') || msg.includes('ENOTFOUND') || msg.includes('ECONNABORTED')))) {
+        // Check if we should log (throttle?)
+        // For now, just a simpler log
+        // console.log(`[Bot] Network error (${code}): Retrying...`);
+        return; // Silent retry for common net errors to avoid spam
+    }
+
+    console.error('[Bot] Polling error:', error);
 });
 
 export default bot;
+

@@ -237,8 +237,13 @@ app.post('/api/sync-user-data', (req, res) => {
         }
 
         console.log(`[API] Syncing data for user: ${session.telegram_user_id}`);
-        // Save to user_data table
+
+        // 1. Save to user_data table
         saveUserData(session.telegram_user_id, data);
+
+        // 2. Update session last_activity so /status is accurate
+        db.prepare('UPDATE sessions SET last_activity = ? WHERE session_token = ?')
+            .run(Date.now(), sessionToken);
 
         res.json({ success: true });
     } catch (error) {
@@ -347,6 +352,12 @@ io.on('connection', (socket) => {
     });
 });
 
+// Check if user is connected
+export function isUserOnline(telegramUserId) {
+    const room = io.sockets.adapter.rooms.get(`user-${telegramUserId}`);
+    return room && room.size > 0;
+}
+
 // Broadcast event to user's connected devices
 export function broadcastEvent(telegramUserId, event) {
     // 1. Persist event first
@@ -359,8 +370,11 @@ export function broadcastEvent(telegramUserId, event) {
     }
 
     // 2. Broadcast
+    const online = isUserOnline(telegramUserId);
     io.to(`user-${telegramUserId}`).emit('telegram-event', event);
-    console.log(`[WebSocket] Broadcast event ${event.eventType} to user ${telegramUserId}`);
+    console.log(`[WebSocket] Broadcast event ${event.eventType} to user ${telegramUserId} (Online: ${online})`);
+
+    return { success: true, online };
 }
 
 const PORT = process.env.PORT || 3000;
