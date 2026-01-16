@@ -69,7 +69,7 @@ export function SpendingHabitChart() {
             <CardContent className="pb-0 flex-1 flex items-center justify-center">
                 <ChartContainer
                     config={spendingConfig}
-                    className="mx-auto aspect-square max-h-[250px] w-full"
+                    className="mx-auto aspect-square max-h-[180px] w-full"
                 >
                     <RadarChart data={spendingData}>
                         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
@@ -78,13 +78,14 @@ export function SpendingHabitChart() {
                         <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
                         <Radar
                             dataKey="amount"
-                            fill="hsl(var(--chart-1))"
+                            fill="#60a5fa"
                             fillOpacity={0.6}
-                            stroke="hsl(var(--chart-1))"
+                            stroke="#2563eb"
                             strokeWidth={2}
                             dot={{
                                 r: 4,
                                 fillOpacity: 1,
+                                fill: "#2563eb"
                             }}
                         />
                     </RadarChart>

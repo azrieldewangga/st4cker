@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Project } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Calendar, Clock, Maximize2, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Calendar, Clock, Maximize2, Trash2, Edit2, MoreVertical } from 'lucide-react';
 import {
     Select,
     SelectContent,
@@ -34,6 +34,13 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination";
+
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import ProjectModal from './ProjectModal';
 import ProjectDetailsModal from './ProjectDetailsModal';
@@ -224,75 +231,100 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                 </div>
             ) : (
                 <>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 max-w-3xl">
                         {filteredProjects.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((project) => {
                             const daysLeft = getDaysRemaining(project.deadline);
+                            // Auto-generate color from priority
+                            const priorityColors = {
+                                high: '#ef4444',
+                                medium: '#3b82f6',
+                                low: '#10b981'
+                            };
+                            const headerColor = priorityColors[project.priority];
+
                             return (
                                 <div
                                     key={project.id}
-                                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                                    className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow group relative"
                                     onContextMenu={(e) => handleContextMenu(e, project.id)}
                                 >
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className={getPriorityColor(project.priority)}>{getPriorityIcon(project.priority)}</span>
-                                                <h3 className="font-semibold text-sm line-clamp-1">{project.title || "Untitled Project"}</h3>
+                                    {/* Colored Header Block - No Text */}
+                                    <div
+                                        className="w-full aspect-[2.5/1]"
+                                        style={{ backgroundColor: headerColor }}
+                                    />
+
+                                    {/* Content Section */}
+                                    <div className="p-3 pb-8">
+                                        {/* Title & Status */}
+                                        <div className="flex items-start justify-between mb-2 gap-2">
+                                            <h3 className="font-semibold text-base line-clamp-1 flex-1">{project.title || "Untitled Project"}</h3>
+                                            {getStatusBadge(project.status)}
+                                        </div>
+
+                                        {/* Description - Fixed Height */}
+                                        <div className="h-10 mb-3">
+                                            {project.description && (
+                                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                                    {project.description.length > 100
+                                                        ? project.description.substring(0, 100) + '...'
+                                                        : project.description}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Progress Bar with Percentage */}
+                                        <div className="mb-2 relative">
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                                                    <div
+                                                        className={cn("h-full transition-all", project.status === 'completed' ? "bg-green-500" : "bg-primary")}
+                                                        style={{ width: `${project.totalProgress}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-sm font-medium min-w-[3rem] text-right">{project.totalProgress}%</span>
                                             </div>
-                                            <p className="text-xs text-muted-foreground">{getProjectType(project)}</p>
-                                        </div>
-                                        {getStatusBadge(project.status)}
-                                    </div>
-                                    <div className="mb-3">
-                                        <div className="flex justify-between text-xs mb-1">
-                                            <span className="text-muted-foreground">Progress</span>
-                                            <span className="font-medium">{project.totalProgress}%</span>
-                                        </div>
-                                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                            <div
-                                                className={cn("h-full transition-all", project.status === 'completed' ? "bg-green-500" : "bg-primary")}
-                                                style={{ width: `${project.totalProgress}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                        <div className="flex items-center gap-1">
-                                            <Calendar className="w-3 h-3" />
-                                            <span>{daysLeft > 0 ? `${daysLeft} days left` : daysLeft === 0 ? 'Due today' : `${Math.abs(daysLeft)} days overdue`}</span>
-                                        </div>
-                                        {project.lastSessionDate && (
-                                            <div className="flex items-center gap-1">
-                                                <Clock className="w-3 h-3" />
-                                                <span>{format(new Date(project.lastSessionDate), 'MMM d')}</span>
+                                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                                <span>{project.status === 'completed' ? 'Completed' : 'In Progress'}</span>
+                                                <span>{daysLeft > 0 ? `${daysLeft} days left` : daysLeft === 0 ? 'Due today' : `${Math.abs(daysLeft)} days overdue`}</span>
                                             </div>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center justify-center gap-2 mt-3 w-full">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-8 text-xs px-4"
-                                            onClick={(e: React.MouseEvent) => {
-                                                e.stopPropagation();
-                                                setViewingProjectId(project.id);
-                                            }}
-                                        >
-                                            <Maximize2 className="w-3 h-3 mr-1" />
-                                            Detail
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-8 text-xs px-4"
-                                            onClick={(e: React.MouseEvent) => {
-                                                e.stopPropagation();
-                                                setLogProgressProjectId(project.id);
-                                                setLogProgressCurrent(project.totalProgress);
-                                            }}
-                                        >
-                                            <Clock className="w-3 h-3 mr-1" />
-                                            Log Progress
-                                        </Button>
+
+                                            {/* Triple Dot Menu - Bottom Right */}
+                                            <div className="absolute -bottom-8 -right-1">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity"
+                                                        >
+                                                            <MoreVertical className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setViewingProjectId(project.id);
+                                                            }}
+                                                        >
+                                                            <Maximize2 className="w-4 h-4 mr-2" />
+                                                            Detail
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setLogProgressProjectId(project.id);
+                                                                setLogProgressCurrent(project.totalProgress);
+                                                            }}
+                                                        >
+                                                            <Clock className="w-4 h-4 mr-2" />
+                                                            Log Progress
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             );

@@ -93,7 +93,7 @@ export function CashflowChart() {
     }
 
     return (
-        <Card className="h-full flex flex-col">
+        <Card className="h-full max-h-[500px] flex flex-col">
             <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
                 <div className="grid flex-1 gap-1">
                     <CardTitle>Cashflow</CardTitle>

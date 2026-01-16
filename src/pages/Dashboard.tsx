@@ -179,19 +179,19 @@ export default function Dashboard() {
                         <MetricCards />
                     </FadeIn>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <FadeIn delay={0.6} className="col-span-4" fullWidth>
+                        <FadeIn delay={0.6} className="col-span-4 max-h-[500px]" fullWidth>
                             <CashflowChart />
                         </FadeIn>
                         <FadeIn delay={0.8} className="col-span-3" fullWidth>
-                            <Card className="h-full">
-                                <CardHeader>
+                            <Card className="h-full max-h-[500px]">
+                                <CardHeader className="pb-3">
                                     <CardTitle>Wallet</CardTitle>
                                     <CardDescription>
                                         Recent transactions and card status.
                                     </CardDescription>
                                 </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-3 mb-6">
+                                <CardContent className="pb-4">
+                                    <div className="space-y-2 mb-4">
                                         <div className="flex items-center justify-between text-sm">
                                             <div className="flex items-center gap-2">
                                                 <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
@@ -241,7 +241,7 @@ export default function Dashboard() {
                                         </div>
                                     </div>
 
-                                    <div className="w-full aspect-[1.58/1] mt-4">
+                                    <div className="w-full aspect-[1.7/1] max-w-[600px] mx-auto">
                                         <CreditCard />
                                     </div>
                                 </CardContent>

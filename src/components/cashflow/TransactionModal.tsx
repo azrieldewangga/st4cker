@@ -229,11 +229,13 @@ const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => {
                         </div>
                     </div>
 
-                    {/* Submit Button */}
-                    <div className="pt-4">
+                    {/* Actions */}
+                    <div className="flex justify-end gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Cancel
+                        </Button>
                         <Button
                             type="submit"
-                            className="w-full"
                             disabled={!isFormValid}
                         >
                             Add Transaction

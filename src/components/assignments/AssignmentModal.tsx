@@ -202,9 +202,12 @@ const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) =
                         />
                     </div>
 
-                    {/* Submit Button */}
-                    <div className="pt-4">
-                        <Button type="submit" className="w-full">
+                    {/* Actions */}
+                    <div className="flex justify-end gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Cancel
+                        </Button>
+                        <Button type="submit">
                             {editingId ? 'Update Assignment' : 'Create Assignment'}
                         </Button>
                     </div>

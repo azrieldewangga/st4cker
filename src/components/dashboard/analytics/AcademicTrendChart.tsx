@@ -72,7 +72,7 @@ export function AcademicTrendChart() {
                 <CardDescription>IPS History (Semester 1 - Now)</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 pb-0">
-                <ChartContainer config={academicConfig} className="w-full h-[250px]">
+                <ChartContainer config={academicConfig} className="w-full h-[180px]">
                     <LineChart
                         accessibilityLayer
                         data={academicData}
