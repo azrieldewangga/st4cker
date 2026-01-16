@@ -9,7 +9,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies including native builds
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy app source
 COPY . .
