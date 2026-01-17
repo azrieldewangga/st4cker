@@ -72,13 +72,18 @@ export async function processListTasks(bot, chatId, userId, page = 0, mode = 'vi
     // Render Items
     pageItems.forEach((task, index) => {
         const globalIndex = start + index + 1;
-        const deadline = new Date(task.deadline);
-        const isOverdue = deadline < now && (task.status !== 'completed' && task.status !== 'Done');
+        const deadlineDate = new Date(task.deadline);
+        const isOverdue = deadlineDate < now && (task.status !== 'completed' && task.status !== 'Done');
 
         // Days Left calc
-        const diffTime = deadline - now;
+        const diffTime = deadlineDate - now;
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const deadlineStr = formatDate(deadline);
+        // Force Jakarta Timezone for Display
+        const deadlineStr = deadlineDate.toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'long',
+            timeZone: 'Asia/Jakarta'
+        });
 
         let statusIcon = '⬜';
         if (task.status === 'in-progress' || task.status === 'In Progress') statusIcon = '⏳';

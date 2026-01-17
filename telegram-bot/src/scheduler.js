@@ -28,11 +28,18 @@ async function sendMorningBrief(bot) {
         // Fix: Read from SQLite instead of JSON files
         const users = db.prepare('SELECT telegram_user_id, data FROM user_data').all();
 
-        const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
-        const lusa = new Date(today);
-        lusa.setDate(today.getDate() + 2);
+        // Fix: Use Jakarta Timezone (UTC+7) for "Today"
+        // Create a date object relative to Jakarta time
+        const now = new Date();
+        const jakartaOffset = 7 * 60 * 60 * 1000;
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const jakartaTime = new Date(utc + jakartaOffset);
+
+        const today = new Date(jakartaTime);
+        const tomorrow = new Date(jakartaTime);
+        tomorrow.setDate(jakartaTime.getDate() + 1);
+        const lusa = new Date(jakartaTime);
+        lusa.setDate(jakartaTime.getDate() + 2);
 
         const tomorrowStr = getLocalYMD(tomorrow);
         const lusaStr = getLocalYMD(lusa);
