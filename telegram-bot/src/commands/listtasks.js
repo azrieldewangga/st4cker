@@ -91,7 +91,14 @@ export async function processListTasks(bot, chatId, userId, page = 0, mode = 'vi
         else if (diffDays === 1) timeStatus = 'Besok!';
         else timeStatus = `${diffDays} hari lagi`;
 
-        message += `${globalIndex}. ${statusIcon} **[${task.course}]** ${task.title}\n`;
+        // Fix Course Name Display (Resolve ID to Name)
+        let displayCourse = task.course;
+        if (displayCourse.startsWith('course-') && userData.courses) {
+            const foundC = userData.courses.find(c => c.id === displayCourse);
+            if (foundC) displayCourse = foundC.name;
+        }
+
+        message += `${globalIndex}. ${statusIcon} **[${displayCourse}]** ${task.title}\n`;
         message += `   📅 ${deadlineStr} (${timeStatus})\n`;
         if (task.note) message += `   📝 Note: ${task.note}\n`;
         message += `\n`;

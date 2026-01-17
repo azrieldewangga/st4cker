@@ -231,7 +231,7 @@ export function findCourse(text, courses) {
     const acronymHelper = (name, skipStopWords = false) => {
         let words = name.toLowerCase().split(/[^a-z0-9]+/);
         if (skipStopWords) {
-            const stopWords = ['dan', 'and', '&', 'of', 'the', 'praktikum', 'workshop', 'teori', 'pengantar'];
+            const stopWords = ['dan', 'and', '&', 'of', 'the', 'praktikum', 'workshop', 'teori', 'pengantar', 'bes', 'bang', 'mas', 'kang', 'coy', 'ler'];
             words = words.filter(w => !stopWords.includes(w));
         }
         return words.map(w => w[0]).join('');
@@ -248,6 +248,25 @@ export function findCourse(text, courses) {
         return false;
     });
     if (acronym) return acronym;
+
+    // 5. Acronym Scanning Loop (NEW)
+    // Checks if the acronym exists as a standalone word in the text "prak kjk"
+    for (const c of courses) {
+        const acroStandard = acronymHelper(c.name, false);
+        const acroSmart = acronymHelper(c.name, true);
+
+        // Standard Acronym (all first letters)
+        if (acroStandard.length >= 3 && new RegExp(`\\b${acroStandard}\\b`, 'i').test(rawLower)) {
+            console.log(`[findCourse] Acronym found in text: ${acroStandard} -> ${c.name}`);
+            return c;
+        }
+
+        // Smart Acronym (skip common words)
+        if (acroSmart.length >= 3 && new RegExp(`\\b${acroSmart}\\b`, 'i').test(rawLower)) {
+            console.log(`[findCourse] Smart Acronym found in text: ${acroSmart} -> ${c.name}`);
+            return c;
+        }
+    }
 
     return null;
 }

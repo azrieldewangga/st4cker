@@ -1,12 +1,5 @@
-
 import cron from 'node-cron';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { responses } from './nlp/personality.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.join(__dirname, '../data');
+import db from './database.js';
 
 // Helper: Get local YYYY-MM-DD
 const getLocalYMD = (d) => {
@@ -32,7 +25,8 @@ export const initScheduler = (bot) => {
 
 async function sendMorningBrief(bot) {
     try {
-        const files = fs.readdirSync(dataDir).filter(f => f.endsWith('.json'));
+        // Fix: Read from SQLite instead of JSON files
+        const users = db.prepare('SELECT telegram_user_id, data FROM user_data').all();
 
         const today = new Date();
         const tomorrow = new Date(today);
@@ -43,12 +37,16 @@ async function sendMorningBrief(bot) {
         const tomorrowStr = getLocalYMD(tomorrow);
         const lusaStr = getLocalYMD(lusa);
 
-        for (const file of files) {
-            const userId = file.replace('.json', '');
-            if (!userId || isNaN(userId)) continue; // Skip non-user files
+        for (const user of users) {
+            const userId = user.telegram_user_id;
+            let userData;
 
-            const rawData = fs.readFileSync(path.join(dataDir, file), 'utf-8');
-            const userData = JSON.parse(rawData);
+            try {
+                userData = JSON.parse(user.data);
+            } catch (e) {
+                console.error(`[Scheduler] Failed to parse data for ${userId}`);
+                continue;
+            }
 
             if (!userData.activeAssignments || userData.activeAssignments.length === 0) continue;
 
@@ -69,12 +67,26 @@ async function sendMorningBrief(bot) {
                 let msg = `☀️ **Morning Briefing**\n\n`;
                 msg += `⚠️ **BESOK (${tomorrowStr})** ada deadline:\n`;
                 dueTomorrow.forEach(t => {
-                    msg += `• **${t.title}** (${t.course})\n`;
+                    // Resolve course name if ID
+                    let cName = t.course;
+                    if (cName.startsWith('course-') && userData.courses) {
+                        const found = userData.courses.find(c => c.id === cName);
+                        if (found) cName = found.name;
+                    }
+
+                    msg += `• **${t.title}** (${cName})\n`;
                 });
 
                 if (dueLusa.length > 0) {
                     msg += `\n📅 Lusa juga ada:\n`;
-                    dueLusa.forEach(t => msg += `• ${t.title} (${t.course})\n`);
+                    dueLusa.forEach(t => {
+                        let cName = t.course;
+                        if (cName.startsWith('course-') && userData.courses) {
+                            const found = userData.courses.find(c => c.id === cName);
+                            if (found) cName = found.name;
+                        }
+                        msg += `• ${t.title} (${cName})\n`;
+                    });
                 }
 
                 msg += `\n_Yuk dicicil hari ini, biar besok santai! 🔥_`;

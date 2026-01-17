@@ -90,6 +90,9 @@ export function NotificationsTab() {
         }).format(amount);
     };
 
+    // 0. Get Courses (NEW)
+    const courses = useStore(state => state.courses);
+
     const notifications = useMemo(() => {
         const items: NotificationItem[] = [];
         const now = new Date();
@@ -100,6 +103,9 @@ export function NotificationsTab() {
 
             const dueDate = new Date(a.deadline);
             const daysLeft = differenceInDays(dueDate, now);
+
+            // Resolve Course Name
+            const courseName = courses?.find(c => c.id === a.courseId)?.name || a.courseId;
 
             // Overdue
             if (isPast(dueDate) && !isToday(dueDate)) {
@@ -121,7 +127,7 @@ export function NotificationsTab() {
                     id: `due-${a.id}`,
                     type: 'assignment',
                     title: `Due ${timeStr}: ${a.title}`,
-                    description: `Don't forget to submit your ${a.type} for ${a.courseId}.`,
+                    description: `Don't forget to submit your ${a.type} for ${courseName}.`,
                     date: dueDate,
                     priority: priority,
                 });

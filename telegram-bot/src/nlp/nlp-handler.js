@@ -39,7 +39,7 @@ import { getUserData } from '../store.js';
 const CONFIDENCE_THRESHOLD = 0.6;
 
 // Cancel keywords
-const CANCEL_KEYWORDS = ['ga jadi', 'gajadi', 'batal', 'cancel', 'skip', 'udahan', 'tidak jadi'];
+const CANCEL_KEYWORDS = ['ga jadi', 'gajadi', 'batal', 'cancel', 'skip', 'udahan', 'tidak jadi', 'gasido'];
 const SKIP_KEYWORDS = ['ga ada', 'gak ada', 'tidak ada', 'kosong', 'skip', '-', 'ga usah', 'gak usah', 'gapapa', 'ngga', 'enggak', 'no', 'nope', 'tidak', 'gak', 'ga'];
 const EDIT_KEYWORDS = ['ganti', 'ubah', 'bukan', 'salah', 'koreksi'];
 
@@ -295,7 +295,9 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
             // Conjunctions / Demonstratives
             'adalah', 'yaitu', 'yakni', 'ini', 'itu', 'yang', 'dan', 'atau',
             // Particles / Fillers
-            'dong', 'sih', 'deh', 'kan', 'ya', 'ni', 'nih', 'tuh', 'cuma', 'hanya', 'cuman', 'si', 'sang', 'para'
+            'dong', 'sih', 'deh', 'kan', 'ya', 'ni', 'nih', 'tuh', 'cuma', 'hanya', 'cuman', 'si', 'sang', 'para',
+            // Custom Fillers
+            'bes', 'bang', 'mas', 'kang', 'coy', 'ler'
         ];
 
         // Sort by length desc to handle phrases first ("baru aja" before "baru")

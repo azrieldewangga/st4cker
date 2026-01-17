@@ -123,20 +123,32 @@ export const responses = {
     casual: (text, suffix = '') => {
         if (!text) return 'Haii 👋';
 
-        // Remove suffix from text for pattern matching if needed, 
-        // to avoid "Pagi juga! bang" getting double suffix if we append it manually.
-        // Actually, the previous regex implementation replaced the keyword IN PLACE.
-        // "pagi bang" -> "Pagi juga! bang"
-        // User wants: "Pagi juga bang!"
-
         let response = text;
+        const lowerText = text.toLowerCase();
+
+        // 1. Detect Fillers (to append to response)
+        const FILLERS = ['bes', 'bang', 'mas', 'kang', 'coy', 'ler'];
+        let detectedFiller = '';
+
+        // Check if text ends with a filler
+        for (const f of FILLERS) {
+            if (lowerText.endsWith(f) || suffix.toLowerCase() === f) {
+                detectedFiller = f;
+                break;
+            }
+        }
+
+        // If suffix was passed from NLP handler (e.g. "pagi bang" -> suffix="bang")
+        if (!detectedFiller && suffix && FILLERS.includes(suffix.toLowerCase())) {
+            detectedFiller = suffix;
+        }
 
         // Dynamic Greeting Patterns (Handles repeated chars like "haiii")
         const patterns = [
             { regex: /h+a+l+o+/i, replace: 'Halo jugaa' },
             { regex: /h+a+i+/i, replace: 'Hai jugaa' },
             { regex: /o+i+/i, replace: 'Oii' },
-            { regex: /p+a+g+i+/i, replace: 'Pagi juga' }, // Removed ! to control punctuation
+            { regex: /p+a+g+i+/i, replace: 'Pagi juga' },
             { regex: /s+i+a+n+g+/i, replace: 'Siang juga' },
             { regex: /s+o+r+e+/i, replace: 'Sore juga' },
             { regex: /m+a+l+a+m+/i, replace: 'Malam juga' },
@@ -146,11 +158,16 @@ export const responses = {
 
         let matched = false;
         for (const p of patterns) {
+            // Test against the text (flexible match)
             if (p.regex.test(text)) {
-                // If we match, we replace the keyword.
-                // Case: "pagi bang" -> match "pagi" -> replace "Pagi juga"
-                // Result: "Pagi juga bang"
-                response = text.replace(p.regex, p.replace);
+                // Base response from pattern
+                response = p.replace;
+
+                // Append filler if detected
+                if (detectedFiller) {
+                    response += ` ${detectedFiller}`;
+                }
+
                 matched = true;
                 break;
             }
