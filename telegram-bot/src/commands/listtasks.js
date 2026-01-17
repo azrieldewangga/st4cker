@@ -103,7 +103,23 @@ export async function processListTasks(bot, chatId, userId, page = 0, mode = 'vi
             if (foundC) displayCourse = foundC.name;
         }
 
-        message += `${globalIndex}. ${statusIcon} **[${displayCourse}]** ${task.title}\n`;
+        // Clean Title: Remove course name if present to avoid redundancy
+        // Example: "Keamanan Jaringan Tugas" -> "Tugas"
+        let cleanTitle = task.title;
+        if (cleanTitle && displayCourse) {
+            const normTitle = cleanTitle.toLowerCase();
+            const normCourse = displayCourse.toLowerCase();
+            if (normTitle.includes(normCourse)) {
+                cleanTitle = cleanTitle.replace(new RegExp(displayCourse, 'gi'), '').trim();
+                // Remove leading/trailing non-word chars (like " - ")
+                cleanTitle = cleanTitle.replace(/^[\s\W]+|[\s\W]+$/g, '');
+            }
+        }
+        if (!cleanTitle) cleanTitle = task.type || 'Tugas';
+
+        // Format: 1. Icon Title - Course
+        message += `${globalIndex}. ${statusIcon} ${cleanTitle} - ${displayCourse}\n`;
+        // message += `   📅 ${deadlineStr} (${timeStatus})\n`; // This line is next, ensuring we don't break it
         message += `   📅 ${deadlineStr} (${timeStatus})\n`;
         if (task.note) message += `   📝 Note: ${task.note}\n`;
         message += `\n`;

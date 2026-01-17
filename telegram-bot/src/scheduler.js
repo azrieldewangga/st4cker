@@ -81,7 +81,17 @@ async function sendMorningBrief(bot) {
                         if (found) cName = found.name;
                     }
 
-                    msg += `• **${t.title}** (${cName})\n`;
+                    // Clean Title Logic
+                    let cleanTitle = t.title;
+                    if (cleanTitle && cName) {
+                        if (cleanTitle.toLowerCase().includes(cName.toLowerCase())) {
+                            cleanTitle = cleanTitle.replace(new RegExp(cName, 'gi'), '').trim();
+                            cleanTitle = cleanTitle.replace(/^[\s\W]+|[\s\W]+$/g, '');
+                        }
+                    }
+                    if (!cleanTitle) cleanTitle = t.type || 'Tugas';
+
+                    msg += `• ${cleanTitle} - ${cName}\n`;
                 });
 
                 if (dueLusa.length > 0) {
@@ -92,7 +102,18 @@ async function sendMorningBrief(bot) {
                             const found = userData.courses.find(c => c.id === cName);
                             if (found) cName = found.name;
                         }
-                        msg += `• ${t.title} (${cName})\n`;
+
+                        // Clean Title Logic
+                        let cleanTitle = t.title;
+                        if (cleanTitle && cName) {
+                            if (cleanTitle.toLowerCase().includes(cName.toLowerCase())) {
+                                cleanTitle = cleanTitle.replace(new RegExp(cName, 'gi'), '').trim();
+                                cleanTitle = cleanTitle.replace(/^[\s\W]+|[\s\W]+$/g, '');
+                            }
+                        }
+                        if (!cleanTitle) cleanTitle = t.type || 'Tugas';
+
+                        msg += `• ${cleanTitle} - ${cName}\n`;
                     });
                 }
 

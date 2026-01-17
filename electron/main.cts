@@ -490,7 +490,8 @@ app.on('ready', async () => {
             initTelegramWebSocket = (token: string) => {
 
                 if (telegramSocket) {
-                    console.log('[Telegram] Socket instance already exists. Skipping initialization.');
+                    console.log('[Telegram] Socket instance already exists. Updating token and connecting...');
+                    telegramSocket.auth = { token: token }; // Force update token
                     if (!telegramSocket.connected) {
                         telegramSocket.connect();
                     }
@@ -1065,6 +1066,14 @@ app.on('ready', async () => {
                 if (initTelegramWebSocket) {
                     initTelegramWebSocket(data.sessionToken);
                 }
+
+                // FORCE SYNC (NEW)
+                setTimeout(() => {
+                    if (telegramStore && telegramSocket) {
+                        console.log('[Telegram] Force syncing data after pairing...');
+                        syncUserDataToBackend(telegramStore, telegramSocket).catch(console.error);
+                    }
+                }, 2000);
 
                 return { success: true };
             }

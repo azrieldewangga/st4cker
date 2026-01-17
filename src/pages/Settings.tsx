@@ -93,6 +93,24 @@ const Settings = () => {
     const [telegramStatus, setTelegramStatus] = useState<'connected' | 'disconnected' | 'unknown'>('unknown');
     const [isVerifying, setIsVerifying] = useState(false);
     const [showOTPDialog, setShowOTPDialog] = useState(false);
+    const [telegramSyncLoading, setTelegramSyncLoading] = useState(false);
+
+    const handleTelegramSyncNow = async () => {
+        setTelegramSyncLoading(true);
+        try {
+            // @ts-ignore
+            const result = await window.electronAPI.telegramSync.syncNow();
+            if (result.success) {
+                toast.success('Sync with Telegram successful!', { icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> });
+            } else {
+                toast.error('Sync failed: ' + (result.error || 'Unknown error'));
+            }
+        } catch (error: any) {
+            toast.error('Sync error: ' + error.message);
+        } finally {
+            setTelegramSyncLoading(false);
+        }
+    };
 
     useEffect(() => {
         if (userProfile && !formData.name) {
@@ -576,10 +594,10 @@ const Settings = () => {
                             <CardHeader>
                                 <div className="flex flex-col gap-2">
                                     <CardTitle className="flex items-center gap-2 text-base">
-                                        Backups
+                                        Backups & Sync
                                     </CardTitle>
                                     <CardDescription>
-                                        Manage local and cloud backups
+                                        Manage local, cloud backups, and data sync
                                     </CardDescription>
                                 </div>
                             </CardHeader>
@@ -626,6 +644,30 @@ const Settings = () => {
                                     </div>
                                 )}
 
+                                {/* Telegram Sync (Only if Paired) */}
+                                {isPaired && (
+                                    <div className="flex items-center justify-between rounded-lg border p-3 bg-blue-50/50 dark:bg-blue-950/10 border-blue-100 dark:border-blue-900">
+                                        <div className="space-y-0.5">
+                                            <div className="text-sm font-medium text-blue-700 dark:text-blue-400">Telegram Data</div>
+                                            <div className="text-xs text-muted-foreground">Force sync to bot</div>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950 dark:text-blue-400 dark:border-blue-900"
+                                            onClick={handleTelegramSyncNow}
+                                            disabled={telegramSyncLoading}
+                                        >
+                                            {telegramSyncLoading ? (
+                                                <><RefreshCw className="h-3 w-3 animate-spin mr-1" /> Syncing</>
+                                            ) : (
+                                                'Sync Now'
+                                            )}
+                                        </Button>
+                                    </div>
+                                )}
+
+
                                 {/* Local Restore */}
                                 <div className="flex items-center justify-between rounded-lg border p-3">
                                     <div className="space-y-0.5">
@@ -657,7 +699,8 @@ const Settings = () => {
 
 
                 </>
-            )}
+            )
+            }
 
             <Dialog open={isCropperOpen} onOpenChange={setIsCropperOpen}>
                 <DialogContent className="sm:max-w-xl">
@@ -721,7 +764,7 @@ const Settings = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 };
 
