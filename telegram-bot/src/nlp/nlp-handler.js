@@ -9,22 +9,23 @@ import { parseAmount, formatAmount } from './currency.js';
 import { parseDate } from './dateParser.js';
 import { responses } from './personality.js';
 
-// Shared Command Logic
+import { handleTransactionIntent } from './handlers/transactionHandler.js';
+import { handleTaskIntent } from './handlers/taskHandler.js';
+import { handleProjectIntent } from './handlers/projectHandler.js';
+import { handleGeneralIntent } from './handlers/generalHandler.js';
+import { getUserData } from '../store.js';
+
+// Legacy Imports (Required for Regex/Session Checks)
 import {
-    handleTransactionCommand,
-    handleTransactionCallback,
-    handleTransactionInput,
     handleTransactionNote,
-    processListTransactions, // Keep this
-    handleTransactionListCallback,
+    handleEditTransactionInput,
     processDeleteTransaction,
     processEditTransaction,
-    handleEditTransactionInput
+    processListTransactions
 } from '../commands/transaction.js';
-import { processProjectCreation, processLogProgress, processListProjects } from '../commands/project.js';
-import { handleListTasks, processDeleteTask, processEditTask, handleEditTaskInput } from '../commands/listtasks.js';
-import { processTaskCreation, findCourse, normalizeTaskType } from '../commands/task.js';
-import { getUserData } from '../store.js';
+import { handleEditTaskInput, processDeleteTask, processEditTask } from '../commands/listtasks.js';
+import { findCourse, normalizeTaskType } from '../commands/task.js';
+import { processProjectCreation, processLogProgress } from '../commands/project.js';
 
 // Initialize NLP
 (async () => {
@@ -1320,156 +1321,22 @@ async function executeConfirmedIntent(bot, msg, intent, entities, broadcastEvent
     if (data.amount && typeof data.amount === 'string') data.amount = parseAmount(data.amount);
 
     // Route to Handlers (Shared Logic)
-    switch (intent) {
-        case 'tambah_pengeluaran':
-        case 'tambah_pemasukan': {
-            const type = intent === 'tambah_pemasukan' ? 'income' : 'expense';
+    // Route to Handlers
+    // 1. Transaction Handlers
+    if (await handleTransactionIntent(bot, msg, intent, data, broadcastEvent)) return true;
 
-            // 1. Infer Category from text if missing (Safety check)
-            const inferredCategory = data.kategori || inferCategory((msg.text || '').toLowerCase());
-            if (inferredCategory) data.kategori = inferredCategory;
+    // 2. Task Handlers
+    if (await handleTaskIntent(bot, msg, intent, data, broadcastEvent)) return true;
 
-            // Final fallback to Salary/Food strictly if null, but it should be confirmed by now.
-            const cat = data.kategori || (type === 'income' ? 'Salary' : 'Food');
+    // 3. Project Handlers
+    if (await handleProjectIntent(bot, msg, intent, data, broadcastEvent)) return true;
 
-            const res = await processTransaction(bot, chatId, userId, {
-                type,
-                amount: data.amount,
-                category: cat,
-                note: data.note || '',
-                date: new Date().toISOString()
-            }, broadcastEvent);
+    // 4. General Handlers
+    if (await handleGeneralIntent(bot, msg, intent, data, broadcastEvent)) return true;
 
-            if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
-            else bot.sendMessage(chatId, `❌ ${res.message}`);
-            return true;
-        }
+    // If no handler matched (and confidence was checked before), maybe log?
+    return false;
 
-        case 'buat_tugas': {
-            // Helper for Local Date Format YYYY-MM-DD
-            const toLocalYMD = (d) => {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const dy = String(d.getDate()).padStart(2, '0');
-                return `${y}-${m}-${dy}`;
-            };
-
-            const rawDate = data.parsedDate || new Date();
-            const dateStr = toLocalYMD(rawDate);
-
-            const res = await processTaskCreation(bot, chatId, userId, {
-                courseId: data.courseId,
-                courseName: data.matkul || data.course || 'General',
-                type: data.tipe_tugas || 'Tugas',
-                deadline: dateStr,
-                notes: data.note || '',
-                semester: ''
-            }, broadcastEvent);
-
-            if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
-            else bot.sendMessage(chatId, `❌ ${res.message}`);
-            return true;
-        }
-
-        case 'buat_project': {
-            console.log('[NLP DEBUG] Confirmed Project Data:', JSON.stringify(data, null, 2));
-
-            // Helper for Local Date Format YYYY-MM-DD
-            const toLocalYMD = (d) => {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const dy = String(d.getDate()).padStart(2, '0');
-                return `${y}-${m}-${dy}`;
-            };
-
-            const rawDate = data.parsedDate || new Date();
-            const dateStr = toLocalYMD(rawDate);
-
-            const res = await processProjectCreation(bot, chatId, userId, {
-                title: data.project || data.judul,
-                deadline: dateStr,
-                priority: data.priority || 'medium',
-                projectType: data.project_type || 'personal',
-                courseId: data.courseId,
-                description: data.note || '',
-                courseName: data.matkul || '',
-                link: data.link || '',
-                linkTitle: data.link_title || '',
-                links: data.links || [] // Use the array we synced
-            }, broadcastEvent);
-
-            if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
-            else bot.sendMessage(chatId, `❌ ${res.message}`);
-            return true;
-        }
-
-        case 'catat_progress': {
-            const projects = getUserData(userId)?.projects || [];
-            let targetProject = null;
-            if (data.project) {
-                const search = data.project.toLowerCase();
-                targetProject = projects.find(p => p.name.toLowerCase().includes(search));
-            }
-
-            if (!targetProject) {
-                const buttons = projects.slice(0, 10).map(p => [{
-                    text: p.name,
-                    callback_data: `nlp_progress_${p.id}`
-                }]);
-
-                if (buttons.length === 0) {
-                    bot.sendMessage(chatId, 'Belum ada project aktif. Buat dulu ya!');
-                    return true;
-                }
-                bot.sendMessage(chatId, 'Pilih project yg mau dicatat:', {
-                    reply_markup: { inline_keyboard: buttons }
-                });
-                return true;
-            }
-
-            if (data.persentase == 100) data.newStatus = 'completed';
-
-            const res = await processLogProgress(bot, chatId, userId, {
-                projectId: targetProject.id,
-                projectName: targetProject.name,
-                duration: typeof data.duration === 'string' ? parseInt(data.duration) : (data.duration || 60),
-                note: data.note || 'Progress Log',
-                newStatus: data.newStatus || 'in_progress',
-                newProgress: parseInt(data.persentase)
-            }, broadcastEvent);
-
-            if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
-            return true;
-        }
-
-        case 'lihat_project':
-            return processListProjects(bot, chatId, userId, 1);
-        case 'lihat_tugas':
-        case 'deadline_terdekat':
-            return handleListTasks(bot, msg, 0);
-        case 'lihat_transaksi':
-            return handleLihatTransaksi(bot, msg, entities, broadcastEvent);
-        case 'minta_summary':
-        case 'summary':
-            return handleSummary(bot, msg, entities, broadcastEvent);
-
-        case 'hapus_transaksi':
-            return processDeleteTransaction(bot, chatId, userId);
-        case 'edit_transaksi':
-            return processEditTransaction(bot, chatId, userId);
-
-        case 'cek_saldo':
-            return handleCekSaldo(bot, msg, entities);
-        case 'batalkan':
-            return handleFallbackIntents(bot, msg, intent);
-        case 'bantuan':
-            return handleFallbackIntents(bot, msg, intent);
-        case 'casual':
-            return bot.sendMessage(chatId, responses.casual(msg.text));
-        default:
-            console.log('Unhandled intent:', intent);
-            return false;
-    }
 }
 
 // ============ Utility Functions ============

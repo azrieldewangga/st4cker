@@ -384,4 +384,18 @@ httpServer.listen(PORT, () => {
     console.log(`[Server] WebSocket ready for connections`);
 });
 
+// Graceful Shutdown
+const shutdown = () => {
+    console.log('[Server] Shutting down...');
+    httpServer.close(() => {
+        console.log('[Server] HTTP server closed.');
+        try { db.close(); } catch (e) { }
+        console.log('[DB] Database connection closed.');
+        process.exit(0);
+    });
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
 export { app, io };

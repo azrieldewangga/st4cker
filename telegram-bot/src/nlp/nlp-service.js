@@ -1,16 +1,48 @@
+import fs from 'fs';
 // src/nlp/nlp-service.js - Replaces wit.js
-import { NlpManager } from 'node-nlp';
+import nodeNlp from 'node-nlp';
+const { NlpManager } = nodeNlp;
 
 let manager = null;
 
 export async function initNLP() {
     manager = new NlpManager({ languages: ['id'], forceNER: true, nlu: { useNoneFeature: true } });
     if (process.env.NODE_ENV === 'test') {
-        return; // Skip loading in test environment if needed, or handle path differently
+        return;
     }
-    // Adjust path if running from dist or root
-    manager.load('./corpus.json');
-    console.log('[NLP] Model loaded');
+
+    // 1. Load existing model/corpus
+    // We try/catch in case corpus doesn't exist yet
+    try {
+        if (fs.existsSync('./corpus.json')) {
+            manager.load('./corpus.json');
+        }
+    } catch (e) { console.log('[NLP] No corpus found, starting fresh.'); }
+
+    // 2. Add New Synonyms (Runtime updates)
+    manager.addDocument('id', 'list project', 'lihat_project');
+    manager.addDocument('id', 'list projects', 'lihat_project');
+    manager.addDocument('id', 'list projek', 'lihat_project');
+    manager.addDocument('id', 'list projekan', 'lihat_project');
+    manager.addDocument('id', 'daftar project', 'lihat_project');
+    manager.addDocument('id', 'daftar projek', 'lihat_project');
+    manager.addDocument('id', 'cek project', 'lihat_project');
+    manager.addDocument('id', 'cek projek', 'lihat_project');
+    manager.addDocument('id', 'lihat project', 'lihat_project');
+    manager.addDocument('id', 'lihat projek', 'lihat_project');
+    manager.addDocument('id', 'project running', 'lihat_project');
+    manager.addDocument('id', 'projek running', 'lihat_project');
+    manager.addDocument('id', 'project aktif', 'lihat_project');
+    manager.addDocument('id', 'projek aktif', 'lihat_project');
+
+    // 3. Train to incorporate new docs
+    // Only train if we added docs or if no corpus existed
+    console.log('[NLP] Training model...');
+    await manager.train();
+
+    // 4. Save updated model
+    manager.save('./corpus.json');
+    console.log('[NLP] Model trained and saved');
 }
 
 export function getManager() {

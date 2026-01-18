@@ -165,6 +165,21 @@ bot.on('callback_query', async (query) => {
         query.data.startsWith('list_proj_page_') ||
         query.data === 'cancel_proj_action') {
         handleProjectCallback(bot, query, broadcastEvent);
+    } else if (query.data === 'confirm_unpair') {
+        // Handle Unpair Confirmation
+        const sessions = getUserSessions(telegramUserId);
+        if (sessions.length > 0) {
+            sessions.forEach(s => revokeSession(s.session_token));
+        }
+
+        bot.answerCallbackQuery(query.id, { text: 'Device disconnected.' });
+        bot.sendMessage(chatId, '✅ **Berhasil Unpair!**\n\nAkun Telegram ini sudah diputus dari Desktop App st4cker. Hubungkan ulang via `/start` jika perlu.', { parse_mode: 'Markdown' });
+        try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) { }
+        return;
+    } else if (query.data === 'cancel_unpair') {
+        bot.answerCallbackQuery(query.id, { text: 'Batal unpair.' });
+        try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) { }
+        return;
     } else if (query.data.startsWith('nlp_')) {
         // NLP callback handlers
         handleNLPCallback(bot, query, broadcastEvent);

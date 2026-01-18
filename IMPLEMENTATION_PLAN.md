@@ -1,154 +1,72 @@
-﻿# Settings UI Refactoring
+﻿# Implementation Plan - Gemini API Migration (The "St4cker" Evolution)
 
-Refactor Settings page to use HextaUI components for better integration management and cleaner layout.
-
-## User Review Required
-
-> [!IMPORTANT]
-> **Layout Changes**: Integrations and Backups cards will be displayed side-by-side (grid layout) on larger screens. Card "Telegram Quick Input" akan dihapus dan digabung ke dalam Integrations card.
-
-> [!IMPORTANT]
-> **New Dependencies**: Membutuhkan 2 HextaUI components (`@hextaui/settings-integrations` dan `@hextaui/auth-otp-verify`).
-
-> [!WARNING]
-> **UI Changes**: Telegram pairing flow akan berubah dari inline OTP input menjadi dialog modal dengan OTP verify component dari HextaUI.
-
-## Proposed Changes
-
-### Dependencies Installation
-
-Install HextaUI components:
-```bash
-pnpm dlx shadcn@latest add @hextaui/settings-integrations
-pnpm dlx shadcn@latest add @hextaui/auth-otp-verify
-```
+**Goal:** Transform St4cker Bot from a simple command executor into a contextual AI Assistant using **Google Gemini 1.5 Flash**.
 
 ---
 
-### [MODIFY] [Settings.tsx](file:///d:/Project/st4cker/src/pages/Settings.tsx)
+## 📅 Phased Approach
 
-**Remove:**
-- `GoogleDriveCard` component (lines 48-183)
-- Standalone `<TelegramTab />` render (line 535)
+### Phase 1: The Brain Transplant (Core Migration) @today
+**Objective:** Replace `node-nlp` with Gemini API to handle Intent Classification & Entity Extraction. Response style remains standard for stability.
+**Why:** Quick win to fix "stupid bot" errors (e.g. failing to understand complex sentences).
 
-**Add:**
-1. **Import HextaUI Components**
-   - Import `SettingsIntegrations` dari `@/components/ui/settings-integrations`
-   - Import `AuthOTPVerify` dari `@/components/ui/auth-otp-verify`
+1.  **Dependencies:** Install `@google/generative-ai`, `dotenv`.
+2.  **Data Preservation:** Rename `corpus.json` -> `legacy_corpus_backup.json` (Do not delete!).
+3.  **Service Rewrite:** Create new `nlp-service.js` that talks to Gemini.
+4.  **Handler Cleanup:** Simplify `nlp-handler.js` (remove regex fallbacks).
+5.  **Output:** Bot behaves smarter in understanding, but replies are still standard templates.
 
-2. **State Management - Google Drive**
-   - Extract state dari `GoogleDriveCard`: `isAuthenticated`, `loading`, `lastBackup`
-   - Move handlers: `checkStatus()`, `handleConnect()`, `confirmDisconnect()`, `handleBackupNow()`
+### Phase 2: The Personality Upgrade (Projected)
+**Objective:** Enable "Context Awareness" (Memory) and "Generative Responses" (Personality).
+**Why:** To achieve the "Nasi Ayam 5 Hari" scenario.
 
-3. **State Management - Telegram**
-   - Extract state dari `TelegramTab`: `isPaired`, `status`, `pairingCode`, `isVerifying`
-   - Move handlers: `handlePair()`, `handleUnpair()`, `handleSync()`
-   - Add: `showOTPDialog` state untuk control dialog
-
-4. **Integrations Card (New)**
-   - Location: After "App Preferences" card, inside grid (right side)
-   - Component: `<SettingsIntegrations />`
-   - Integrations array (simplified - no lastSynced):
-     ```typescript
-     [
-       {
-         id: "google-drive",
-         name: "Google Drive",
-         description: "Autosave your database weekly",
-         status: isAuthenticated ? "connected" : "disconnected",
-         scopes: ["drive.file"], // permission info
-       },
-       {
-         id: "telegram",
-         name: "Telegram Bot",
-         description: "Add tasks, expenses, and projects from your phone",
-         status: isPaired ? (status === 'connected' ? "connected" : "disconnected") : "disconnected",
-         scopes: ["read:messages", "write:data"], // permission info
-       }
-     ]
-     ```
-   - `onConnect`: 
-     - Google Drive: panggil `handleConnect()`
-     - Telegram: set `showOTPDialog(true)`
-   - `onDisconnect`:
-     - Google Drive: panggil `confirmDisconnect()`
-     - Telegram: panggil `handleUnpair()`
-
-5. **OTP Verify Dialog (New)**
-   - Component: `<Dialog>` wrapping `<AuthOTPVerify />`
-   - Props:
-     - `deliveryMethod`: "other" atau tidak relevan
-     - `deliveryAddress`: "@st4cker_bot on Telegram"
-     - `onSubmit`: panggil `handlePair(code)`
-     - `onResend`: generate new pairing code (jika ada API)
-   - **Custom text instruction**: "Get your code by texting @st4cker_bot on Telegram with /start"
-     - Replace default "We've sent a 6-digit code to..." message
-   - **No additional instructions** - user sudah tahu cara pairing
-
-6. **Backups Card (Modified from Local Data)**
-   - Location: Side-by-side dengan Integrations card dalam grid
-   - Grid wrapper: `<div className="grid grid-cols-1 md:grid-cols-2 gap-6">`
-   - Title: "Backups" (changed from "Local Data")
-   - Structure:
-     ```
-     Backups
-     ├─ Local Backup     [Backup button]
-     ├─ Google Drive     [Backup Now button] (only if isAuthenticated)
-     └─ Local Restore    [Restore button]
-     ```
-   - Google Drive row:
-     - Label: "Google Drive"
-     - Description: "Backup to cloud" atau "Last backup: {date}"
-     - Button: "Backup Now" (disabled if not authenticated or loading)
-     - Handler: `handleBackupNow()`
-
-**Layout Structure After Changes:**
-```
-┌─────────────────────────────────────┐
-│   Appearance (full width)           │
-└─────────────────────────────────────┘
-┌─────────────────────────────────────┐
-│   App Preferences (full width)      │
-└─────────────────────────────────────┘
-┌─────────────────┬───────────────────┐
-│     Backups     │   Integrations    │ <- Grid 2 columns (Backups LEFT, Integrations RIGHT)
-│  - Local Backup │  - Google Drive   │
-│  - Google Drive │  - Telegram Bot   │
-│  - Local Restore│                   │
-└─────────────────┴───────────────────┘
-```
+1.  **Context Injection:** Bot fetches last 5 transactions from Database before prompting Gemini.
+2.  **Generative Reply:** Gemini not only extracting data, but also composing the reply text.
+3.  **Persona Tuning:** Adjusting System Prompt to be "Sarkas", "Supportive", or "Professional".
 
 ---
 
-### [NO CHANGE] [TelegramTab.tsx](file:///d:/Project/st4cker/src/pages/Settings/TelegramTab.tsx)
+## ⚠️ User Review Required
+> [!IMPORTANT]
+> **API KEY:** You need a valid Google Generative AI API Key.
+> **Privacy:** Chat content is sent to Google servers for processing (Standard for cloud AI).
 
-File akan tetap ada sebagai reference, tetapi tidak dirender lagi di Settings.tsx. Logic akan dipindahkan ke Settings.tsx.
+---
 
-## Verification Plan
+## Technical Details (Phase 1)
 
-### Manual Verification
+### 1. Dependencies
+#### [MODIFY] `package.json`
+- Remove: `node-nlp`
+- Add: `@google/generative-ai`
+- Add: `dotenv`
 
-**Google Drive Integration:**
-1. ✅ Connect button membuka auth flow
-2. ✅ Status "connected" muncul setelah autentikasi
-3. ✅ Last synced date ditampilkan jika ada
-4. ✅ Backup Now button di Backups card berfungsi (hanya jika connected)
-5. ✅ Disconnect button membuka confirmation dan unpair
+### 2. NLP Service (The Brain)
+#### [OVERWRITE] [nlp-service.js](file:///d:/Project/st4cker/telegram-bot/src/nlp/nlp-service.js)
+- **Class:** `GeminiNLP`
+- **Method:** `parseMessage(text)`
+- **System Prompt:**
+  ```text
+  Role: Financial Assistant.
+  Task: Extract entities (intent, amount, category, note) from user text.
+  Time Reference: Today is [CURRENT_DATE].
+  Output: JSON only.
+  ```
 
-**Telegram Integration:**
-1. ✅ Connect button membuka OTP verify dialog
-2. ✅ Dialog menampilkan instructions
-3. ✅ 6-digit OTP input berfungsi
-4. ✅ Verify code mengupdate status ke "connected"
-5. ✅ Status live/offline ditampilkan dengan benar
-6. ✅ Disconnect button unpair device
+### 3. Handler Logic
+#### [MODIFY] [nlp-handler.js](file:///d:/Project/st4cker/telegram-bot/src/nlp/nlp-handler.js)
+- Remove: `trainNewIntent`, regex overrides.
+- Keep: Business validation (Saldo check, Matkul validation).
 
-**Backups Card:**
-1. ✅ Local Backup berfungsi
-2. ✅ Google Drive backup hanya muncul jika connected
-3. ✅ Local Restore berfungsi dengan warning
+### 4. Cleanup
+#### [RENAME] `corpus.json` -> `legacy_corpus_backup.json`
+#### [DELETE] `model.nlp`
 
-**Layout:**
-1. ✅ Integrations dan Backups bersebelahan pada desktop (md breakpoint)
-2. ✅ Stack vertical pada mobile
-3. ✅ Responsive dan tidak ada overflow
+---
+
+## Verification Plan (Phase 1)
+
+### Manual Testing
+1.  **Ambiguity Test:** "Barusan abis 20rb buat beli bensin" -> Expect: `Expense`, `Transport`, `20000`.
+2.  **Negative Test:** "Gajadi deh" -> Expect: `Cancel`.
+3.  **Slang Test:** "Cuan 1jt dari freelance" -> Expect: `Income`, `Salary`, `1000000`.

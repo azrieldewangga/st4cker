@@ -1,0 +1,40 @@
+// JS Best Practice: Hoist RegExp references (Rule 7.9)
+export const DURATION_REGEX_HOURS = /(\d+(?:\.\d+)?)\s*h/i;
+export const DURATION_REGEX_MINS = /(\d+(?:\.\d+)?)\s*m/i;
+export const URL_REGEX = /^https?:\/\//i;
+export const MARKDOWN_ESCAPE_REGEX = /([_*[`])/g;
+
+// States
+export const STATES = {
+    IDLE: 'IDLE',
+    AWAITING_PROJECT_DEADLINE: 'AWAITING_PROJECT_DEADLINE',
+    AWAITING_PROJECT_TITLE: 'AWAITING_PROJECT_TITLE',
+    AWAITING_PROJECT_TYPE: 'AWAITING_PROJECT_TYPE',
+    AWAITING_PROJECT_COURSE: 'AWAITING_PROJECT_COURSE',
+    AWAITING_PROJECT_PRIORITY: 'AWAITING_PROJECT_PRIORITY',
+    AWAITING_PROJECT_DESC: 'AWAITING_PROJECT_DESC',
+
+    AWAITING_LOG_STATUS: 'AWAITING_LOG_STATUS',
+    AWAITING_LOG_DURATION: 'AWAITING_LOG_DURATION',
+    AWAITING_LOG_PROGRESS: 'AWAITING_LOG_PROGRESS',
+    AWAITING_LOG_NOTE: 'AWAITING_LOG_NOTE',
+    AWAITING_COMPLETION_CONFIRM: 'AWAITING_COMPLETION_CONFIRM',
+
+    EDITING_PROJECT_SELECT: 'EDITING_PROJECT_SELECT',
+    AWAITING_EDIT_INPUT: 'AWAITING_EDIT_INPUT'
+};
+
+// UI Constants
+export const PAGE_SIZE = 5;
+
+export const PRIORITY_ICONS = {
+    high: '🔴',
+    medium: '🟡',
+    low: '🟢'
+};
+
+export const STATUS_ICONS = {
+    in_progress: '▶️',
+    on_hold: '⏸️',
+    completed: '✅'
+};

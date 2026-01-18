@@ -1,0 +1,8 @@
+{
+    "ignore": [
+        "corpus.json",
+        "*.log",
+        "telegram-bot.db*",
+        "debug_nlp.log"
+    ]
+}

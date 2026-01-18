@@ -1,318 +1,38 @@
+import crypto from 'crypto';
 import { getUserData, saveUserData } from '../store.js';
 import { parseDate } from '../nlp/dateParser.js';
-import crypto from 'crypto';
 
-// Local in-memory session store
-const projectSessions = new Map();
+import {
+    clearSession,
+    getSession,
+    updateSession
+} from './project/session.js';
+import {
+    processLogProgress
+} from './project/log.js';
+import {
+    handleCreateProjectCommand,
+    processProjectCreation
+} from './project/create.js';
+import {
+    processListProjects
+} from './project/list.js';
+import {
+    processEditProject,
+    processDeleteProject,
+    handleEditInput,
+    handleDeleteConfirmation
+} from './project/edit.js';
+import {
+    parseDuration
+} from './project/utils.js';
+import {
+    STATES
+} from './project/constants.js';
 
-export function clearSession(userId) {
-    projectSessions.delete(userId.toString());
-}
-
-
-function getSession(userId) {
-    return projectSessions.get(userId.toString());
-}
-
-function updateSession(userId, data) {
-    const existing = projectSessions.get(userId.toString()) || {};
-    if (data.state === 'IDLE') {
-        projectSessions.delete(userId.toString());
-    } else {
-        projectSessions.set(userId.toString(), {
-            ...existing,
-            ...data
-        });
-    }
-}
-
-// Helper to escape Legacy Markdown characters
-function escapeMarkdown(text) {
-    if (!text) return '';
-    return text.toString().replace(/([_*[`])/g, '\\$1');
-}
-
-// SHARED EXECUTION LOGIC: LOG PROGRESS
-export async function processLogProgress(bot, chatId, userId, data, broadcastEvent) {
-    const { projectId, duration, note, newStatus, newProgress, projectName } = data;
-
-    const event = {
-        eventId: crypto.randomUUID(),
-        eventType: 'progress.logged',
-        telegramUserId: userId,
-        timestamp: new Date().toISOString(),
-        payload: {
-            projectId,
-            duration,
-            note,
-            status: newStatus,
-            progress: newProgress,
-            loggedAt: new Date().toISOString()
-        },
-        source: 'telegram'
-    };
-
-    let isOffline = false;
-    if (broadcastEvent) {
-        const result = broadcastEvent(userId, event);
-        if (result && result.online === false) isOffline = true;
-    }
-
-    // Optimistic Update
-    const userData = getUserData(userId);
-    if (userData && userData.projects) {
-        const projIndex = userData.projects.findIndex(p => p.id === projectId);
-        if (projIndex !== -1) {
-            userData.projects[projIndex].totalProgress = newProgress;
-
-            // Map status back to storage format
-            let dbStatus = 'in_progress';
-            if (newStatus.toLowerCase() === 'completed') dbStatus = 'completed';
-            if (newStatus.toLowerCase() === 'on hold') dbStatus = 'on_hold';
-
-            userData.projects[projIndex].status = dbStatus;
-            saveUserData(userId, userData);
-        }
-    }
-
-    // Format duration display
-    const hours = Math.floor(duration / 60);
-    const mins = duration % 60;
-    const timeStr = `${hours > 0 ? hours + 'h ' : ''}${mins}m`;
-
-    const escProject = escapeMarkdown(projectName);
-    const escNote = escapeMarkdown(note);
-
-    // Format status for display (remove underscores, capitalize)
-    const displayStatus = newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
-    let message = `✅ *Update Mantap!*\n\n📂 Project: ${escProject}\n📊 Progress: ${newProgress}%\n⚡ Status: ${displayStatus}\n⏱️ Kerja: ${timeStr}\n📝 Note: ${escNote}\n\n_Lanjut terus bos! 🔥_`;
-
-    if (isOffline) {
-        message += '\n\n☁️ _Saved to Cloud (Desktop Offline)_';
-    }
-
-    return {
-        success: true,
-        message
-    };
-}
-
-// SHARED EXECUTION LOGIC: CREATE PROJECT
-export async function processProjectCreation(bot, chatId, userId, data, broadcastEvent) {
-    const { title, deadline, priority, projectType, courseId, description, courseName, link, linkTitle, links } = data;
-
-    // Safety Fallback for Title
-    const finalTitle = title || 'Untitled Project';
-    const attachments = [];
-
-    // 1. Handle Multiple Links (Priority)
-    if (links && Array.isArray(links) && links.length > 0) {
-        links.forEach(l => {
-            if (!l.url || l.url === '-' || l.url.toLowerCase() === 'skip') return;
-            let cleanUrl = l.url.trim();
-            if (!/^https?:\/\//i.test(cleanUrl)) cleanUrl = 'https://' + cleanUrl;
-
-            attachments.push({
-                id: crypto.randomUUID(),
-                type: 'link',
-                title: l.title && l.title.toLowerCase() !== 'skip' ? l.title : 'Ref Link',
-                url: cleanUrl
-            });
-        });
-    }
-    // 2. Fallback to Single Link (if no array provided)
-    else if (link && link !== '-' && link.toLowerCase() !== 'skip') {
-        let cleanUrl = link.trim();
-        if (!/^https?:\/\//i.test(cleanUrl)) {
-            cleanUrl = 'https://' + cleanUrl;
-        }
-
-        attachments.push({
-            id: crypto.randomUUID(),
-            type: 'link',
-            title: linkTitle || 'Ref Link',
-            url: cleanUrl
-        });
-    }
-
-    const eventId = crypto.randomUUID();
-    const event = {
-        eventId: eventId,
-        eventType: 'project.created',
-        telegramUserId: userId,
-        timestamp: new Date().toISOString(),
-        payload: {
-            title: finalTitle,
-            description: description || '',
-            deadline,
-            priority,
-            type: projectType,
-            courseId: courseId,
-            attachments // Pass attachments to Desktop App
-        },
-        source: 'telegram'
-    };
-
-    let isOffline = false;
-    if (broadcastEvent) {
-        const result = broadcastEvent(userId, event);
-        if (result && result.online === false) isOffline = true;
-    }
-
-    // Optimistic Update (Save full data locally)
-    const userData = getUserData(userId) || {};
-    if (!userData.projects) userData.projects = [];
-
-    userData.projects.push({
-        id: eventId,
-        name: finalTitle,
-        description: description || '',
-        status: 'in_progress',
-        totalProgress: 0,
-        deadline,
-        priority,
-        type: projectType,
-        courseId,
-        attachments,
-        createdAt: new Date().toISOString()
-    });
-    saveUserData(userId, userData);
-
-    const escTitle = escapeMarkdown(finalTitle);
-    const escDesc = escapeMarkdown(description || '-');
-    const escCourse = escapeMarkdown(courseName);
-
-    let message = `✅ *Project Created!*\n\n📌 ${escTitle}\n📅 Due: ${deadline}\n⚡ Priority: ${priority}\n📂 Type: ${projectType === 'course' ? `Course Project (${escCourse})` : 'Personal'}\n📝 Desc: ${escDesc}\n\n_Siap dieksekusi!_`;
-
-    if (isOffline) {
-        message += '\n\n☁️ _Saved to Cloud (Desktop Offline)_';
-    }
-
-    return {
-        success: true,
-        message
-    };
-}
-
-
-// Handler: Start Project Creation (Deadline First)
-export const handleCreateProjectCommand = async (bot, msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id.toString();
-
-    updateSession(userId, {
-        state: 'AWAITING_PROJECT_DEADLINE',
-        data: {}
-    });
-
-    bot.sendMessage(chatId, '🆕 *Bikin Project Baru*\n\nStep 1/5: Masukkan **Deadline** (YYYY-MM-DD):', { parse_mode: 'Markdown' });
-};
-
-// LIST PROJECTS (SHARED)
-export async function processListProjects(bot, chatId, userId, page = 1, mode = 'view') {
-    const userData = getUserData(userId);
-
-    if (!userData || !userData.projects || userData.projects.length === 0) {
-        return bot.sendMessage(chatId, '📂 *Belum ada Project*\n\nKetik /project buat bikin baru!', { parse_mode: 'Markdown' });
-    }
-
-    // Filter Active Only
-    const activeProjects = userData.projects
-        .filter(p => p.status !== 'completed')
-        .sort((a, b) => new Date(a.deadline) - new Date(b.deadline)); // Sort by deadline
-
-    if (activeProjects.length === 0) {
-        return bot.sendMessage(chatId, '✅ *Semua Project Selesai!*\n\nSantai dulu bang 😎', { parse_mode: 'Markdown' });
-    }
-
-    // Pagination
-    const PAGE_SIZE = 5;
-    const totalPages = Math.ceil(activeProjects.length / PAGE_SIZE);
-
-    // Adjust page if out of bounds
-    if (page < 1) page = 1;
-    if (page > totalPages) page = totalPages;
-
-    const start = (page - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    const items = activeProjects.slice(start, end);
-
-    let titleInfo = '📂 **Active Projects**';
-    if (mode === 'delete') titleInfo = '🗑️ **Hapus Project** (Pilih nomor)';
-    if (mode === 'edit') titleInfo = '✏️ **Edit Project** (Pilih nomor)';
-
-    let response = `${titleInfo} (${activeProjects.length}) - Page ${page}/${totalPages}\n\n`;
-
-    const inlineKeyboard = [];
-
-    items.forEach((proj, idx) => {
-        const realIdx = start + idx + 1;
-        const daysLeft = Math.ceil((new Date(proj.deadline) - new Date()) / (1000 * 60 * 60 * 24));
-        const statusIcon = proj.status === 'in_progress' ? '▶️' : '⏸️';
-
-        // Priority Icon
-        let prioIcon = '';
-        if (proj.priority === 'high') prioIcon = '🔴';
-        else if (proj.priority === 'medium') prioIcon = '🟡';
-        else prioIcon = '🟢';
-
-        response += `${realIdx}. ${statusIcon} **${proj.name}**\n`;
-        response += `   📊 ${proj.totalProgress || 0}% | ${prioIcon} ${proj.priority}\n`;
-        response += `   📅 ${proj.deadline} (${daysLeft > 0 ? daysLeft + ' hari lagi' : 'OVERDUE ⚠️'})\n\n`;
-
-        // Buttons based on Mode
-        if (mode === 'view') {
-            inlineKeyboard.push([{
-                text: `📝 Log: ${proj.name}`,
-                callback_data: `log_proj_${proj.id}`
-            }]);
-        } else if (mode === 'delete') {
-            inlineKeyboard.push([{
-                text: `❌ Hapus ${realIdx}`,
-                callback_data: `del_proj_${proj.id}`
-            }]);
-        } else if (mode === 'edit') {
-            inlineKeyboard.push([{
-                text: `✏️ Edit ${realIdx}`,
-                callback_data: `edit_proj_${proj.id}`
-            }]);
-        }
-    });
-
-    // Pagination Buttons
-    const navRow = [];
-    const modeSuffix = mode === 'view' ? '' : `_mode=${mode}`;
-    if (page > 1) navRow.push({ text: '⬅️ Prev', callback_data: `list_proj_page_${page - 1}${modeSuffix}` });
-    if (page < totalPages) navRow.push({ text: 'Next ➡️', callback_data: `list_proj_page_${page + 1}${modeSuffix}` });
-
-    if (navRow.length > 0) inlineKeyboard.push(navRow);
-
-    // Cancel / Back Button for Action Modes
-    if (mode !== 'view') {
-        inlineKeyboard.push([{ text: '🔙 Kembali / Selesai', callback_data: 'cancel_proj_action' }]);
-    }
-
-    bot.sendMessage(chatId, response, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-            inline_keyboard: inlineKeyboard
-        }
-    });
-}
-
-
-
-export const processEditProject = async (bot, chatId, userId) => {
-    return processListProjects(bot, chatId, userId, 1, 'edit');
-};
-
-export const processDeleteProject = async (bot, chatId, userId) => {
-    return processListProjects(bot, chatId, userId, 1, 'delete');
-};
+// --- COMMAND HANDLERS ---
 
 export const handleProjectsCommand = async (bot, msg) => {
-    // Acts as /listprojects
     const chatId = msg.chat.id;
     const userId = msg.from.id.toString();
     await processListProjects(bot, chatId, userId, 1);
@@ -321,6 +41,11 @@ export const handleProjectsCommand = async (bot, msg) => {
 export const handleLogCommand = async (bot, msg) => {
     handleProjectsCommand(bot, msg);
 };
+
+export { handleCreateProjectCommand, processProjectCreation };
+export { processEditProject, processDeleteProject, clearSession, processListProjects, processLogProgress };
+
+// --- CALLBACK HANDLER ---
 
 export const handleProjectCallback = async (bot, query, broadcastEvent) => {
     const chatId = query.message.chat.id;
@@ -339,7 +64,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
 
         // Start Log Flow: Ask Status First
         updateSession(userId, {
-            state: 'AWAITING_LOG_STATUS',
+            state: STATES.AWAITING_LOG_STATUS,
             data: { projectId, projectName: project.name, currentProgress: project.totalProgress || 0 }
         });
 
@@ -361,7 +86,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         const status = data.replace('LOG_STATUS_', '');
         const userSession = getSession(userId);
 
-        if (!userSession || userSession.state !== 'AWAITING_LOG_STATUS') {
+        if (!userSession || userSession.state !== STATES.AWAITING_LOG_STATUS) {
             return bot.answerCallbackQuery(query.id, { text: 'Session expired.' });
         }
 
@@ -371,7 +96,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         } catch (e) { }
 
         updateSession(userId, {
-            state: 'AWAITING_LOG_DURATION',
+            state: STATES.AWAITING_LOG_DURATION,
             data: { ...userSession.data, newStatus: status }
         });
 
@@ -431,26 +156,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
 
     if (data.startsWith('confirm_del_proj_')) {
         const projectId = data.replace('confirm_del_proj_', '');
-        const userData = getUserData(userId);
-        const idx = userData.projects.findIndex(p => p.id === projectId);
-
-        let details = '';
-        if (idx !== -1) {
-            details = userData.projects[idx].name;
-            userData.projects.splice(idx, 1);
-            saveUserData(userId, userData);
-
-            // Broadcast
-            if (broadcastEvent) {
-                broadcastEvent(userId, {
-                    eventId: crypto.randomUUID(),
-                    eventType: 'project.deleted',
-                    timestamp: new Date().toISOString(),
-                    payload: { id: projectId },
-                    source: 'telegram'
-                });
-            }
-        }
+        const details = await handleDeleteConfirmation(bot, chatId, userId, projectId, broadcastEvent);
 
         bot.editMessageText(`✅ Project **${details}** berhasil dihapus!`, {
             chat_id: chatId,
@@ -465,7 +171,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
     if (data.startsWith('edit_proj_')) {
         const projectId = data.replace('edit_proj_', '');
         updateSession(userId, {
-            state: 'EDITING_PROJECT_SELECT',
+            state: STATES.EDITING_PROJECT_SELECT,
             data: { projectId }
         });
 
@@ -510,7 +216,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         }
 
         updateSession(userId, {
-            state: 'AWAITING_EDIT_INPUT',
+            state: STATES.AWAITING_EDIT_INPUT,
             data: { ...session.data, field }
         });
 
@@ -558,7 +264,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         const type = data.replace('TYPE_', ''); // course | personal
         const userSession = getSession(userId);
 
-        if (!userSession || userSession.state !== 'AWAITING_PROJECT_TYPE') {
+        if (!userSession || userSession.state !== STATES.AWAITING_PROJECT_TYPE) {
             return bot.answerCallbackQuery(query.id, { text: 'Session expired.' });
         }
 
@@ -578,7 +284,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
             }]);
 
             updateSession(userId, {
-                state: 'AWAITING_PROJECT_COURSE',
+                state: STATES.AWAITING_PROJECT_COURSE,
                 data: { ...userSession.data, projectType: 'course' }
             });
 
@@ -591,7 +297,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         } else {
             // Personal -> Skip to Priority
             updateSession(userId, {
-                state: 'AWAITING_PROJECT_PRIORITY',
+                state: STATES.AWAITING_PROJECT_PRIORITY,
                 data: { ...userSession.data, projectType: 'personal', courseId: null, courseName: null }
             });
 
@@ -605,7 +311,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         const courseId = data.replace('COURSE_', '');
         const userSession = getSession(userId);
 
-        if (!userSession || userSession.state !== 'AWAITING_PROJECT_COURSE') return;
+        if (!userSession || userSession.state !== STATES.AWAITING_PROJECT_COURSE) return;
 
         // Fetch Course Name
         const userData = getUserData(userId);
@@ -613,7 +319,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         const courseName = course ? course.name : 'Unknown Course';
 
         updateSession(userId, {
-            state: 'AWAITING_PROJECT_PRIORITY',
+            state: STATES.AWAITING_PROJECT_PRIORITY,
             data: { ...userSession.data, courseId, courseName }
         });
 
@@ -627,10 +333,10 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         const priority = data.replace('K_PRIORITY_', '').toLowerCase();
         const userSession = getSession(userId);
 
-        if (!userSession || userSession.state !== 'AWAITING_PROJECT_PRIORITY') return;
+        if (!userSession || userSession.state !== STATES.AWAITING_PROJECT_PRIORITY) return;
 
         updateSession(userId, {
-            state: 'AWAITING_PROJECT_DESC',
+            state: STATES.AWAITING_PROJECT_DESC,
             data: { ...userSession.data, priority }
         });
 
@@ -676,6 +382,8 @@ function askPriority(bot, chatId, messageId = null) {
     }
 }
 
+// --- MESSAGE HANDLER ---
+
 export const handleProjectInput = async (bot, msg, broadcastEvent) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id.toString();
@@ -684,7 +392,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
     if (!userSession || !userSession.state) return false;
 
     // --- LOGGING FLOW ---
-    if (userSession.state === 'AWAITING_LOG_DURATION') {
+    if (userSession.state === STATES.AWAITING_LOG_DURATION) {
         const durationStr = msg.text.toLowerCase();
         const durationMinutes = parseDuration(durationStr);
 
@@ -694,7 +402,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         }
 
         updateSession(userId, {
-            state: 'AWAITING_LOG_PROGRESS',
+            state: STATES.AWAITING_LOG_PROGRESS,
             data: { ...userSession.data, duration: durationMinutes }
         });
 
@@ -702,7 +410,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         return true;
     }
 
-    if (userSession.state === 'AWAITING_LOG_PROGRESS') {
+    if (userSession.state === STATES.AWAITING_LOG_PROGRESS) {
         const input = msg.text.trim();
         const progress = parseInt(input);
 
@@ -714,7 +422,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         // 100% CHECK LOGIC
         if (progress === 100) {
             updateSession(userId, {
-                state: 'AWAITING_COMPLETION_CONFIRM',
+                state: STATES.AWAITING_COMPLETION_CONFIRM,
                 data: { ...userSession.data, potentialProgress: 100 }
             });
             bot.sendMessage(chatId, 'Wow 100%! 🥳\nBerarti project ini udah **SELESAI** tuntas?', {
@@ -729,7 +437,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
 
         // Standard flow (<100)
         updateSession(userId, {
-            state: 'AWAITING_LOG_NOTE',
+            state: STATES.AWAITING_LOG_NOTE,
             data: { ...userSession.data, newProgress: progress }
         });
 
@@ -737,7 +445,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         return true;
     }
 
-    if (userSession.state === 'AWAITING_COMPLETION_CONFIRM') {
+    if (userSession.state === STATES.AWAITING_COMPLETION_CONFIRM) {
         const answer = msg.text.toLowerCase();
         let finalProgress = 99;
         let finalStatus = userSession.data.newStatus || 'in_progress';
@@ -759,7 +467,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         });
 
         updateSession(userId, {
-            state: 'AWAITING_LOG_NOTE',
+            state: STATES.AWAITING_LOG_NOTE,
             data: { ...userSession.data, newProgress: finalProgress, newStatus: finalStatus }
         });
 
@@ -767,20 +475,20 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         return true;
     }
 
-    if (userSession.state === 'AWAITING_LOG_NOTE') {
+    if (userSession.state === STATES.AWAITING_LOG_NOTE) {
         const note = msg.text;
         if (!note || note.trim().length === 0) {
             bot.sendMessage(chatId, '❌ Note wajib diisi ya buat log progress.');
             return true;
         }
 
-        const { projectId, duration, projectName, newStatus, newProgress } = userSession.data; // newStatus might come from confirm
+        const { projectId, duration, projectName, newStatus, newProgress } = userSession.data;
 
         const result = await processLogProgress(bot, chatId, userId, {
             projectId,
             duration,
             note,
-            newStatus: newStatus || 'in_progress', // Default fallback
+            newStatus: newStatus || 'in_progress',
             newProgress,
             projectName
         }, broadcastEvent);
@@ -789,52 +497,28 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
             bot.sendMessage(chatId, result.message, { parse_mode: 'Markdown' });
         }
 
-        updateSession(userId, { state: 'IDLE', data: {} });
+        updateSession(userId, { state: STATES.IDLE, data: {} });
         return true;
     }
 
+    if (userSession.state === STATES.AWAITING_EDIT_INPUT) {
+        const { field } = userSession.data;
 
-    if (userSession.state === 'AWAITING_EDIT_INPUT') {
-        const { projectId, field } = userSession.data;
-        const input = msg.text.trim();
-        const userData = getUserData(userId);
-        const project = userData.projects.find(p => p.id === projectId);
+        try {
+            const result = await handleEditInput(bot, msg, field);
 
-        if (!project) {
-            bot.sendMessage(chatId, '❌ Project not found.');
-            clearSession(userId);
-            return true;
-        }
-
-        if (field === 'deadline') {
-            const parsedDate = parseDate(input);
-            if (!parsedDate) {
-                bot.sendMessage(chatId, '❌ Format tanggal tidak dikenali. Coba: "YYYY-MM-DD" atau "25 Mar 2026"');
-                return true;
+            // Broadcast Update if successful
+            if (result && broadcastEvent) {
+                broadcastEvent(userId, {
+                    eventId: crypto.randomUUID(),
+                    eventType: 'project.updated',
+                    timestamp: new Date().toISOString(),
+                    payload: result, // {id, updates}
+                    source: 'telegram'
+                });
             }
-            // Format to YYYY-MM-DD
-            const yyyy = parsedDate.getFullYear();
-            const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
-            const dd = String(parsedDate.getDate()).padStart(2, '0');
-            const formatted = `${yyyy}-${mm}-${dd}`;
-
-            project.deadline = formatted;
-        } else if (field === 'title') {
-            project.name = input;
-        }
-
-        saveUserData(userId, userData);
-        bot.sendMessage(chatId, `✅ Project **${field}** berhasil diupdate!`, { parse_mode: 'Markdown' });
-
-        // Broadcast Update (Simple version)
-        if (broadcastEvent) {
-            broadcastEvent(userId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'project.updated',
-                timestamp: new Date().toISOString(),
-                payload: { id: projectId, updates: { [field === 'title' ? 'name' : field]: field === 'deadline' ? project.deadline : input } },
-                source: 'telegram'
-            });
+        } catch (e) {
+            console.error('Edit error:', e);
         }
 
         clearSession(userId);
@@ -842,7 +526,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
     }
 
     // --- CREATION FLOW ---
-    if (userSession.state === 'AWAITING_PROJECT_DEADLINE') {
+    if (userSession.state === STATES.AWAITING_PROJECT_DEADLINE) {
         const dateStr = msg.text.trim();
         const parsedDate = parseDate(dateStr);
 
@@ -858,7 +542,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         const formatted = `${yyyy}-${mm}-${dd}`;
 
         updateSession(userId, {
-            state: 'AWAITING_PROJECT_TITLE',
+            state: STATES.AWAITING_PROJECT_TITLE,
             data: { ...userSession.data, deadline: formatted }
         });
 
@@ -866,11 +550,11 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         return true;
     }
 
-    if (userSession.state === 'AWAITING_PROJECT_TITLE') {
+    if (userSession.state === STATES.AWAITING_PROJECT_TITLE) {
         const title = msg.text.trim();
 
         updateSession(userId, {
-            state: 'AWAITING_PROJECT_TYPE',
+            state: STATES.AWAITING_PROJECT_TYPE,
             data: { ...userSession.data, title }
         });
 
@@ -885,7 +569,7 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
         return true;
     }
 
-    if (userSession.state === 'AWAITING_PROJECT_DESC') {
+    if (userSession.state === STATES.AWAITING_PROJECT_DESC) {
         const note = msg.text === '/skip' ? '' : msg.text;
         const { title, deadline, priority, projectType, courseId, courseName } = userSession.data;
 
@@ -897,25 +581,9 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
             bot.sendMessage(chatId, result.message, { parse_mode: 'Markdown' });
         }
 
-        updateSession(userId, { state: 'IDLE', data: {} });
+        updateSession(userId, { state: STATES.IDLE, data: {} });
         return true;
     }
 
     return false;
 };
-
-// Helper: Parse "1h 30m" to minutes
-function parseDuration(str) {
-    let totalMinutes = 0;
-    const hours = str.match(/(\d+(?:\.\d+)?)\s*h/);
-    const mins = str.match(/(\d+(?:\.\d+)?)\s*m/);
-
-    if (hours) totalMinutes += parseFloat(hours[1]) * 60;
-    if (mins) totalMinutes += parseFloat(mins[1]);
-
-    if (!hours && !mins && !isNaN(parseFloat(str))) {
-        totalMinutes = parseFloat(str);
-    }
-
-    return totalMinutes > 0 ? Math.round(totalMinutes) : null;
-}
