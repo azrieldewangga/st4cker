@@ -1,12 +1,9 @@
 import cron from 'node-cron';
 import db from './database.js';
 
-// Helper: Get local YYYY-MM-DD
-const getLocalYMD = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+// Helper: Get local YYYY-MM-DD in Jakarta Time
+const getJakartaDateStr = (dateObj) => {
+    return dateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 };
 
 export const initScheduler = (bot) => {
@@ -31,18 +28,13 @@ async function sendMorningBrief(bot) {
         // Fix: Use Jakarta Timezone (UTC+7) for "Today"
         // Create a date object relative to Jakarta time
         const now = new Date();
-        const jakartaOffset = 7 * 60 * 60 * 1000;
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const jakartaTime = new Date(utc + jakartaOffset);
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        const lusa = new Date(now);
+        lusa.setDate(now.getDate() + 2);
 
-        const today = new Date(jakartaTime);
-        const tomorrow = new Date(jakartaTime);
-        tomorrow.setDate(jakartaTime.getDate() + 1);
-        const lusa = new Date(jakartaTime);
-        lusa.setDate(jakartaTime.getDate() + 2);
-
-        const tomorrowStr = getLocalYMD(tomorrow);
-        const lusaStr = getLocalYMD(lusa);
+        const tomorrowStr = getJakartaDateStr(tomorrow);
+        const lusaStr = getJakartaDateStr(lusa);
 
         for (const user of users) {
             const userId = user.telegram_user_id;
@@ -60,13 +52,13 @@ async function sendMorningBrief(bot) {
             // Filter Tasks
             const dueTomorrow = userData.activeAssignments.filter(t => {
                 if (t.status === 'done' || !t.deadline) return false;
-                let d = t.deadline.includes('T') ? t.deadline.split('T')[0] : t.deadline;
+                const d = t.deadline.includes('T') ? getJakartaDateStr(new Date(t.deadline)) : t.deadline;
                 return d === tomorrowStr;
             });
 
             const dueLusa = userData.activeAssignments.filter(t => {
                 if (t.status === 'done' || !t.deadline) return false;
-                let d = t.deadline.includes('T') ? t.deadline.split('T')[0] : t.deadline;
+                const d = t.deadline.includes('T') ? getJakartaDateStr(new Date(t.deadline)) : t.deadline;
                 return d === lusaStr;
             });
 
