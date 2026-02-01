@@ -1,11 +1,9 @@
 
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { parseMessage, extractEntities, initNLP, getManager } from './nlp-service.js';
+import { parseMessage, initNLP } from './nlp-service.js';
 import { schemas, getMissingFields } from './intentSchemas.js';
-import { setPending, getPending, clearPending, updatePending } from './pendingState.js';
-import { parseAmount, formatAmount } from './currency.js';
+import { setPending, getPending, clearPending } from './pendingState.js';
+import { parseAmount } from './currency.js';
 import { parseDate } from './dateParser.js';
 import { responses } from './personality.js';
 
@@ -13,7 +11,6 @@ import { handleTransactionIntent } from './handlers/transactionHandler.js';
 import { handleTaskIntent } from './handlers/taskHandler.js';
 import { handleProjectIntent } from './handlers/projectHandler.js';
 import { handleGeneralIntent } from './handlers/generalHandler.js';
-import { getUserData } from '../store.js';
 
 // Legacy Imports (Required for Regex/Session Checks)
 import {
@@ -24,8 +21,8 @@ import {
     processListTransactions
 } from '../commands/transaction.js';
 import { handleEditTaskInput, processDeleteTask, processEditTask } from '../commands/listtasks.js';
-import { findCourse, normalizeTaskType } from '../commands/task.js';
-import { processProjectCreation, processLogProgress } from '../commands/project.js';
+import { findCourse, normalizeTaskType, getEntityCache } from '../commands/task.js';
+import { processLogProgress } from '../commands/project.js';
 
 // Initialize NLP
 (async () => {
@@ -41,22 +38,34 @@ const CONFIDENCE_THRESHOLD = 0.6;
 
 // Cancel keywords
 const CANCEL_KEYWORDS = ['ga jadi', 'gajadi', 'batal', 'cancel', 'skip', 'udahan', 'tidak jadi', 'gasido'];
-const SKIP_KEYWORDS = ['ga ada', 'gak ada', 'tidak ada', 'kosong', 'skip', '-', 'ga usah', 'gak usah', 'gapapa', 'ngga', 'enggak', 'no', 'nope', 'tidak', 'gak', 'ga'];
-const EDIT_KEYWORDS = ['ganti', 'ubah', 'bukan', 'salah', 'koreksi'];
+const SKIP_KEYWORDS = ['ga ada', 'gak ada', 'tidak ada', 'kosong', 'skip', '-', 'ga usah', 'gak usah', 'gapapa', 'ngga', 'ngga ada', 'engga', 'enggak', 'no', 'nope', 'tidak', 'gak', 'ga', 'gk', 'tdk', 'cukup', 'dah', 'udah', 'sudah'];
+
+/**
+ * Generate course selection buttons for a user
+ * @param {string} userId - Telegram user ID
+ * @returns {Object|null} Reply markup with inline keyboard, or null if no courses
+ */
+function generateCourseButtons(userId) {
+    // Phase 3: Add DbService.getCourses(userId) here if needed.
+    // For now, return null as we don't have courses in DB.
+    return null;
+}
 
 // Strict Valid Categories (from TransactionModal.tsx)
 const VALID_CATEGORIES = ['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary'];
 
-// Category Keywords Mapping (Fallback)
 const CATEGORY_KEYWORDS = {
-    'Food': ['makan', 'minum', 'jajan', 'snack', 'kopi', 'nasi', 'bakso', 'soto', 'lunch', 'dinner', 'sarapan', 'cafe', 'warteg', 'mie', 'sate', 'martabak', 'geprek'],
-    'Transport': ['gojek', 'grab', 'bensin', 'parkir', 'tol', 'angkot', 'busway', 'kereta', 'uber', 'maxim', 'ojek', 'bengkel', 'service motor', 'service mobil'],
-    'Shopping': ['beli', 'belanja', 'shopee', 'tokped', 'tokopedia', 'lazada', 'tiktok', 'baju', 'celana', 'sepatu', 'tas', 'outfit', 'skincare'],
-    'Bills': ['listrik', 'air', 'pulsa', 'internet', 'wifi', 'spp', 'ukt', 'tagihan', 'token', 'pdam', 'pln', 'bpjs'],
-    'Subscription': ['netflix', 'spotify', 'youtube', 'premium', 'icloud', 'google one', 'disney'],
-    'Transfer': ['transfer', 'tf', 'kirim uang', 'bayar utang', 'saham', 'reksadana', 'investasi', 'tabungan'],
-    'Salary': ['gaji', 'gajian', 'salary', 'honor', 'upah', 'bayaran kerja', 'bonus', 'freelance', 'project', 'dikasih', 'thr', 'angpao', 'hadiah', 'beasiswa']
+    'Food': ['makan', 'minum', 'jajan', 'snack', 'kopi', 'restoran', 'warung', 'food'],
+    'Transport': ['bensin', 'ojek', 'gojek', 'grab', 'parkir', 'tol', 'transport'],
+    'Shopping': ['belanja', 'baju', 'kaos', 'skincare', 'sabun', 'shampoo', 'shopping', 'beli'],
+    'Bills': ['listrik', 'air', 'internet', 'wifi', 'pulsa', 'pln', 'pdam'],
+    'Subscription': ['netflix', 'spotify', 'youtube', 'langganan'],
+    'Transfer': ['trf', 'tf', 'transfer', 'bayar utang', 'kirim', 'thr', 'angpao'],
+    'Salary': ['gaji', 'bonus', 'dapet duit', 'income', 'pemasukan']
 };
+
+// Regex for Amount Correction (e.g., 15rb, 20.000, 50k)
+const AMOUNT_REGEX = /\b(?:\d{1,3}(?:[.,]\d{3})*(?:,\d+)?|\d+)\s*(?:rb|k|jt|juta)?\b/i;
 
 /**
  * Main NLP handler - entry point for natural language messages
@@ -71,22 +80,17 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
     logRawText(chatId, text);
 
     // 2. IMMEDIATE GREETING CHECK (Bypass NLP)
-    // Catch "pagi", "pagii", "paagii", "halooo", "haai" etc.
     const greetingRegex = /^(h+a+l+o+|h+a+i+|o+i+|p+a+g+i+|s+i+a+n+g+|s+o+r+e+|m+a+l+a+m+|m+k+s+h+|m+a+k+a+s+i+h+|t+h+a+n+k+s+)$/i;
     const standardGreeting = /^(selamat )?(pagi|siang|sore|malam)$/i;
 
     if (greetingRegex.test(text) || standardGreeting.test(text)) {
         console.log(`[NLP] Greeting detected: ${text} -> Force Casual`);
-        // Extract suffix/honorific (last word if length > 2 and not part of greeting base)
         const parts = text.split(/\s+/);
         const lastWord = parts[parts.length - 1];
         let suffix = '';
-
-        // Simple check: if last word is not "pagi" or "halo", treat as name/honorific
         if (parts.length > 1 && !['pagi', 'siang', 'sore', 'malam', 'halo', 'hai'].includes(lastWord.toLowerCase())) {
             suffix = lastWord;
         }
-
         return executeConfirmedIntent(bot, msg, 'casual', { note: { value: suffix } }, broadcastEvent);
     }
 
@@ -97,139 +101,60 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
     }
 
     // 2b. Check Transaction Session (Edit/Input Mode)
-    // This connects the command-based session from transaction.js to the NLP handler flow
     if (await handleTransactionNote(bot, msg, broadcastEvent)) return;
     if (await handleEditTransactionInput(bot, msg, broadcastEvent)) return;
     if (await handleEditTaskInput(bot, msg, broadcastEvent)) return;
 
-    // 2c. OVERRIDES (Fix NLP Misses for new commands)
-    // TRANSACTION CRUD (Dialects: Sby, Btw, Slang)
-    // Delete: hapus, ngapus, busak, mbusak, ilangno, buwak, uncalno, apus, buang, musnahin, tiadakan, drop, wipe
-    if (/^(hapus|ngapus|ngapusin|hapusin|apus|delete|remove|buang|batalkan|cancel|busak|mbusak|ilangno|buwak|uncalno|musnahin|tiadakan|drop|wipe)\s+(transaksi|keuangan|duwit|duit|picis|ceng|sangun|arto|fulus|ceban|cuan|hepeng|dana)/i.test(text)) {
+    // 2c. OVERRIDES (Fix NLP Misses for new commands that require specific regex)
+    if (/^(hapus|delete|remove)\s+(transaksi|keuangan|duwit|duit|picis|ceng|sangun|arto|fulus|ceban|cuan|hepeng|dana)/i.test(text)) {
         return processDeleteTransaction(bot, chatId, msg.from.id.toString());
     }
-    // Edit: edit, ubah, ganti, benakno, opoo, dandani, ulik, benerin, oprek, otak-atik, revisi, rombak, tweak, patch
-    if (/^(edit|ubah|ganti|koreksi|revisi|update|change|benakno|opoo|dandani|ulik|benerin|oprek|otak-atik|rombak|tweak|patch)\s+(transaksi|keuangan|duwit|duit|picis|ceng|sangun|arto|fulus|ceban|cuan|hepeng|dana)/i.test(text)) {
+    if (/^(edit|ubah|ganti)\s+(transaksi|keuangan|duwit|duit|picis|ceng|sangun|arto|fulus|ceban|cuan|hepeng|dana)/i.test(text)) {
         return processEditTransaction(bot, chatId, msg.from.id.toString());
     }
-    // Read/History: histori, riwayat, log, cek, liat, ndelok, eruh, inceng, was, lirik, intip, pantau, tengok, kepoin
-    if (/^(histori|riwayat|log|cek|liat|lihat|ndelok|eruh|inceng|was|lirik|intip|pantau|tengok|kepoin)\s+(transaksi|keuangan|duwit|duit|picis|ceng|sangun|arto|fulus|ceban|cuan|hepeng|dana)/i.test(text)) {
+    if (/^(histori|riwayat|log|cek|liat|lihat)\s+(transaksi|keuangan|duwit|duit|picis|ceng|sangun|arto|fulus|ceban|cuan|hepeng|dana)/i.test(text)) {
         return processListTransactions(bot, chatId, msg.from.id.toString());
     }
-
-    // TASK CRUD (Dialects: Sby, Btw, Slang)
-    // Delete
-    if (/^(hapus|ngapus|ngapusin|hapusin|apus|delete|remove|buang|batalkan|cancel|busak|mbusak|ilangno|buwak|uncalno|musnahin|tiadakan|drop|wipe)\s+(tugas|lapres|lapsem|lapen|lp|pr|kuis|quiz|uts|uas|garapan|gawean|tanggungan|kerjaan|proyekan|grind|quest|misi)\b/i.test(text)) {
+    if (/^(hapus|delete|remove)\s+(tugas|lapres|lapsem|lapen|lp|pr|kuis|quiz|uts|uas)/i.test(text)) {
         return processDeleteTask(bot, chatId, msg.from.id.toString());
     }
-    // Edit
-    if (/^(edit|ubah|ganti|koreksi|revisi|update|change|benakno|opoo|dandani|ulik|benerin|oprek|otak-atik|rombak|tweak|patch)\s+(tugas|lapres|lapsem|lapen|lp|pr|kuis|quiz|uts|uas|garapan|gawean|tanggungan|kerjaan|proyekan|grind|quest|misi)\b/i.test(text)) {
+    if (/^(edit|ubah|ganti)\s+(tugas|lapres|lapsem|lapen|lp|pr|kuis|quiz|uts|uas)/i.test(text)) {
         return processEditTask(bot, chatId, msg.from.id.toString());
     }
-
-    // PROJECT CRUD (Dialects: Sby, Btw, Slang)
-    // Delete
-    if (/^(hapus|ngapus|ngapusin|hapusin|apus|delete|remove|buang|batalkan|cancel|busak|mbusak|ilangno|buwak|uncalno|musnahin|tiadakan|drop|wipe)\s+(project|projek|proyek)/i.test(text)) {
-        const { processDeleteProject } = await import('../commands/project.js');
-        return processDeleteProject(bot, chatId, msg.from.id.toString());
-    }
-    // Edit
-    if (/^(edit|ubah|ganti|koreksi|revisi|update|change|benakno|opoo|dandani|ulik|benerin|oprek|otak-atik|rombak|tweak|patch)\s+(project|projek|proyek)/i.test(text)) {
-        const { processEditProject } = await import('../commands/project.js');
-        return processEditProject(bot, chatId, msg.from.id.toString());
-    }
-    // SUMMARY OVERRIDE
     if (/^(summary|ringkasan|rangkuman|rekap)/i.test(text)) {
         const { processSummary } = await import('../commands/summary.js');
         return processSummary(bot, chatId, msg.from.id.toString(), text);
     }
 
-    // 3. Process with NLP (Wit.ai / NodeNLP)
-    // FORCE OVERRIDE: Check for specific patterns that NLP misses
-    let result = { intents: [], entities: {} };
-    const lowerText = text.toLowerCase();
-
-    // Regex for Task Creation (Specific Keywords Only)
-    // Excluded 'project/projek' to avoid hijacking project commands
-    if (/^((?:aku|saya|gw|gue)\s+)?(buat|tambah|ada|input|bikin)\s+(tugas|lapres|lapsem|lapen|lp|laporan|pr|kuis|quiz|uts|uas)\b/i.test(lowerText) ||
-        /^((?:aku|saya|gw|gue)\s+)?(tugas|lapres|lapsem|lapen|lp)\b/.test(lowerText)) {
-        console.log(`[NLP] Regex Override: Detected Task Creation -> Force 'buat_tugas'`);
-        result.intents = [{ name: 'buat_tugas', confidence: 1.0 }];
-        const nlpResult = (await getManager()) ? await parseMessage(text) : { intents: [], entities: {} };
-        result.entities = nlpResult.entities;
-    }
-    // Regex for Project Creation
-    // Regex for Project Creation vs Query
-    else if (/^((?:aku|saya|gw|gue)\s+)?(buat|tambah|ada|input|bikin)\s+(project|projek)/.test(lowerText)) {
-        // Disambiguation: Check if it's a question ("ada project ga?", "project apa?")
-        const isQuery = text.endsWith('?') || /\b(ga|apa|kah|mana)\??$/i.test(lowerText);
-
-        if (isQuery) {
-            console.log(`[NLP] Regex Override: Detected Project Query -> Force 'lihat_project'`);
-            result.intents = [{ name: 'lihat_project', confidence: 1.0 }];
-        } else {
-            console.log(`[NLP] Regex Override: Detected Project Creation -> Force 'buat_project'`);
-            result.intents = [{ name: 'buat_project', confidence: 1.0 }];
-        }
-
-        const nlpResult = (await getManager()) ? await parseMessage(text) : { intents: [], entities: {} };
-        result.entities = nlpResult.entities;
-    }
-    // Regex for Log Progress
-    else if (/^((?:aku|saya|gw|gue)\s+)?(catat|catet|log|lapor|update|tambah)\s+(progress|progres)\b/i.test(lowerText)) {
-        console.log(`[NLP] Regex Override: Detected Log Progress -> Force 'catat_progress'`);
-        result.intents = [{ name: 'catat_progress', confidence: 1.0 }];
-        const nlpResult = (await getManager()) ? await parseMessage(text) : { intents: [], entities: {} };
-        result.entities = nlpResult.entities;
-    }
-    else {
-        result = (await getManager()) ? await parseMessage(text) : { intents: [] };
-    }
+    // 3. Process with GEMINI NLP
+    let result = await parseMessage(text, msg.from.id.toString());
 
     // 4. Confidence gate
     const topIntent = result.intents?.[0];
+
+    // Special Handling for API Limit
+    if (topIntent?.name === 'api_limit') {
+        const resetTime = new Date(Date.now() + 60000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        await bot.sendMessage(msg.chat.id, `⌛ <b>Server Lagi Penuh</b> (Limit Tercapai)\n\nOtak saya lagi istirahat sebentar karena kebanyakan request. Coba lagi jam <b>${resetTime}</b> ya!`, { parse_mode: 'HTML' });
+        return true;
+    }
+
     if (!topIntent || topIntent.confidence < CONFIDENCE_THRESHOLD) {
         return handleLowConfidence(bot, msg, text);
     }
 
     // 5. Extract entities
     const intent = topIntent.name;
-    const entities = extractEntities(result.entities);
+    const entities = result.entities;
 
-    // 6. Enrich entities (parse amounts, dates, etc)
+    // 6. Enrich entities
     const enriched = enrichEntities(entities, text, msg.from.id.toString());
 
-    // --- LOCAL FALLBACK EXTRACTION (Smart NLP) ---
-    // If Amount is missing, try to extract from text using Regex (Only for transactions)
-    if (!enriched.amount && (intent === 'tambah_pemasukan' || intent === 'tambah_pengeluaran')) {
-        // Added \b to start to prevent matching inside words like jkt48
-        const amountMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(rb|ribu|k|jt|juta|m|milyar)?\b/i);
-        if (amountMatch) {
-            const val = parseAmount(amountMatch[0]);
-            if (val > 0) {
-                enriched.amount = { value: val, raw: amountMatch[0], confidence: 1 };
-                console.log(`[NLP] extracted local amount: ${val}`);
-            }
-        }
-    }
-
-    // If Category is missing, try to infer from text
-    if (!enriched.kategori && (intent === 'tambah_pengeluaran' || intent === 'tambah_pemasukan')) {
-        const inferred = inferCategory(text);
-        if (inferred) {
-            enriched.kategori = { value: inferred, raw: text, confidence: 0.9 };
-            console.log(`[NLP] extracted local category: ${inferred}`);
-        }
-    }
-
-    // NEW: Smart Course Scan (Early Enrichment for buat_tugas)
-    // Scan text for course acronyms/names BEFORE checking missing fields
-    if (intent === 'buat_tugas' && !enriched.matkul) {
-        const userData = getUserData(msg.from.id.toString());
-        const courses = userData?.courses || [];
+    // NEW: Smart Course Scan (Early Enrichment for buat_tugas AND buat_project)
+    if ((intent === 'buat_tugas' || intent === 'buat_project') && !enriched.matkul) {
+        const courses = []; // Phase 1: No courses list in DB yet
 
         if (courses.length > 0) {
-            // findCourse now supports scanning text for synonyms/names
             const found = findCourse(text, courses);
             if (found) {
                 enriched.matkul = {
@@ -238,87 +163,69 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
                     raw: found.name,
                     confidence: 1
                 };
-                console.log(`[NLP DEBUG] Early Scan found: ${found.name}`);
+                if (intent === 'buat_project' && !enriched.project_type) {
+                    enriched.project_type = { value: 'course', raw: 'course', confidence: 1 };
+                }
+                if (intent === 'buat_project' && enriched.project) {
+                    const projectLower = enriched.project.value.toLowerCase();
+                    const textLower = text.toLowerCase();
+                    if (textLower.includes(projectLower) && found.name.toLowerCase() !== projectLower) {
+                        delete enriched.project;
+                    }
+                }
             }
         }
     }
 
+    process.stdout.write(`\n[GEMINI] Intent: ${intent}, Enriched Keys: ${Object.keys(enriched).join(', ')}\n`);
 
-
-    // DEBUG: Print all keys
-    try { fs.appendFileSync('debug_nlp.log', `[DEBUG] Intent: ${intent}, Enriched Keys: ${Object.keys(enriched).join(', ')}\n`); } catch (e) { }
-    process.stdout.write(`\n[XXX] Intent: ${intent}, Enriched Keys: ${Object.keys(enriched).join(', ')}\n`);
-
-    // NEW: Validation Logic (Only 'Praktikum'/'Workshop' courses can have Reports)
+    // NEW: Validation Logic
     if (intent === 'buat_tugas' && enriched.matkul && enriched.tipe_tugas) {
         const type = (enriched.tipe_tugas.value || '').toLowerCase();
         const courseName = (enriched.matkul.value || '').toLowerCase();
+        const rawMatkul = (enriched.matkul.raw || '').toLowerCase();
+        const userText = text.toLowerCase();
 
-        // Normalized Types often used: "Laporan Resmi", "Laporan Pendahuluan", "Laporan Sementara"
         const isReport = type.includes('laporan') || type.includes('lapres') || type.includes('lapsem') || type.includes('lapen');
-        const isPractical = courseName.includes('praktikum') || courseName.includes('workshop');
+        const isPractical = courseName.includes('praktikum') ||
+            courseName.includes('workshop') ||
+            rawMatkul.includes('prak') ||
+            userText.includes('prak');
 
         if (isReport && !isPractical) {
-            console.log(`[NLP VALIDATION] Rejected '${type}' for course '${courseName}'`);
-            bot.sendMessage(msg.chat.id, `⚠️ *Gak Match!* ⚠️\n\nJenis tugas *${enriched.tipe_tugas.value}* cuma bisa buat matkul Praktikum/Workshop.\n(Sedangkan ini matkul: _${enriched.matkul.value}_)\n\nCoba pilih tipe lain ya.`, { parse_mode: 'Markdown' });
-
-            // Clear the invalid field so it prompts again
+            bot.sendMessage(msg.chat.id, `⚠️ <b>Gak Match!</b> ⚠️\n\nJenis tugas <b>${enriched.tipe_tugas.value}</b> biasanya cuma buat matkul Praktikum/Workshop.\n(Sedangkan ini matkul: <i>${enriched.matkul.value}</i>)\n\nKalau maksa, ketik ulang pakai kata "Prak" ya (misal: "Prak Komber").`, { parse_mode: 'HTML' });
             delete enriched.tipe_tugas;
         }
     }
 
-    // If Note is missing, try to extract it from remaining text (Optional but heuristic)
-    // Heuristic: Remove Intent Keywords, Category Keywords, and Amount. What's left is Note.
-    if (!enriched.note && (intent === 'tambah_pengeluaran' || intent === 'tambah_pemasukan')) {
-        let cleanText = text.toLowerCase();
-        // Remove amount raw
-        if (enriched.amount?.raw) cleanText = cleanText.replace(enriched.amount.raw.toLowerCase(), '');
-        // Remove category keywords
-        if (enriched.kategori?.value) {
-            const catKeywords = CATEGORY_KEYWORDS[enriched.kategori.value] || [];
-            catKeywords.forEach(kw => cleanText = cleanText.replace(kw, ''));
-        }
-        // Remove basic keywords and pronouns
-        // Remove basic keywords and pronouns
-        const stopWords = [
-            // Transaction Actions
-            'income', 'pemasukan', 'expense', 'pengeluaran', 'beli', 'bayar', 'jajan', 'transfer',
-            // Amount Labels
-            'nominal', 'harga', 'jumlah', 'duit', 'harganya', 'nominalnya', 'sebesar', 'senilai', 'seharga', 'sebanyak',
-            // Time / Recency
-            'baru aja', 'baru saja', 'barusan', 'tadi', 'kemarin', 'kemaren', 'hari ini', 'saat ini', 'sekarang',
-            // Aspect
-            'abis', 'habis', 'lagi', 'sedang', 'sudah', 'telah', 'mau', 'ingin', 'akan',
-            // Pronouns
-            'aku', 'saya', 'gw', 'gua', 'gue', 'kita', 'kami', 'lu', 'lo', 'kamu', 'anda', 'dia', 'mereka',
-            // Prepositions
-            'di', 'ke', 'dari', 'buat', 'untuk', 'sama', 'kepada', 'dengan', 'pada', 'bagi', 'oleh',
-            // Conjunctions / Demonstratives
-            'adalah', 'yaitu', 'yakni', 'ini', 'itu', 'yang', 'dan', 'atau',
-            // Particles / Fillers
-            'dong', 'sih', 'deh', 'kan', 'ya', 'ni', 'nih', 'tuh', 'cuma', 'hanya', 'cuman', 'si', 'sang', 'para',
-            // Custom Fillers
-            'bes', 'bang', 'mas', 'kang', 'coy', 'ler'
-        ];
+    // 7. Check required fields
+    if ((intent === 'buat_tugas' || intent === 'buat_project') && enriched.matkul?.value && !enriched.matkul.courseId) {
+        const courses = []; // Placeholder
 
-        // Sort by length desc to handle phrases first ("baru aja" before "baru")
-        stopWords.sort((a, b) => b.length - a.length);
+        const resolved = findCourse(enriched.matkul.value, courses);
 
-        stopWords.forEach(kw => {
-            cleanText = cleanText.replace(new RegExp(`\\b${kw}\\b`, 'gi'), '');
-        });
+        if (resolved) {
+            enriched.matkul.value = resolved.name;
+            enriched.matkul.courseId = resolved.id;
 
-        const potentialNote = cleanText.trim().replace(/\s+/g, ' ');
-        if (potentialNote.length > 2) { // Minimal length check
-            enriched.note = { value: potentialNote, raw: potentialNote, confidence: 0.8 };
-            console.log(`[NLP] extracted local note: "${potentialNote}"`);
+            // PRACTICAL SWITCH LOGIC
+            if (!resolved.name.toLowerCase().includes('praktikum') && !resolved.name.toLowerCase().includes('workshop')) {
+                const lowerText = text.toLowerCase();
+                if (lowerText.includes('prak') || lowerText.includes('workshop')) {
+                    // Since we have no courses list, we skip switching logic
+                }
+            }
+        } else {
+            // If manual entry and not in courses table, acceptable in Phase 1
+            // We retain the value as is
         }
     }
-    // ---------------------------------------------
 
-    // 7. Check required fields (Smart Field Completion)
     const schema = schemas[intent];
     if (!schema) {
+        if (intent === 'casual') {
+            return executeConfirmedIntent(bot, msg, 'casual', enriched, broadcastEvent);
+        }
         console.warn('Unknown intent:', intent);
         return false;
     }
@@ -327,12 +234,12 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
 
     // --- CUSTOM FLOW: Project Creation (Type & Matkul logic) ---
     if (intent === 'buat_project' && !missing.includes('project')) {
-        // 1. Check Project Type
         if (!enriched.project_type) {
             setPending(chatId, {
-                intent, filled: enriched, missing: ['project_type'], raw_text: text, confidence: topIntent.confidence
+                intent, filled: enriched, missing: ['project_type', ...missing], raw_text: text, confidence: topIntent.confidence, userId: msg.from.id.toString()
             });
             await bot.sendMessage(chatId, `Jenis Projectnya apa? 🏫/👤\n_Pilih atau ketik "personal"/"matkul"_`, {
+                parse_mode: 'Markdown',
                 reply_markup: {
                     inline_keyboard: [[
                         { text: '👤 Personal', callback_data: 'nlp_proj_personal' },
@@ -342,134 +249,46 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
             });
             return true;
         }
-
-        // 2. If Course -> Check Matkul
         if (enriched.project_type.value === 'course' && !enriched.matkul) {
             setPending(chatId, {
-                intent, filled: enriched, missing: ['matkul'], raw_text: text, confidence: topIntent.confidence
+                intent, filled: enriched, missing: ['matkul'], raw_text: text, confidence: topIntent.confidence, userId: msg.from.id.toString()
             });
             return askForMissing(bot, chatId, 'matkul', intent, enriched);
         }
     }
-    // -----------------------------------------------------------
 
     if (missing.length > 0) {
-        // Save pending state and ask for missing field
         setPending(chatId, {
             intent,
             filled: enriched,
             missing,
             raw_text: text,
-            confidence: topIntent.confidence
+            confidence: topIntent.confidence,
+            userId: msg.from.id.toString()
         });
         return askForMissing(bot, chatId, missing[0], intent, enriched);
     }
 
-    // 8. All required fields present - BUT we must validate specific constraints (Strict Category)
-    // and then ask for confirmation.
-
-    // 8. All Validated - BUT we must validate specific constraints
-
-    // A. Expense/Income Strict Category
+    // 8. All Validated - Trigger Confirmation Flow
     if (intent === 'tambah_pengeluaran' || intent === 'tambah_pemasukan') {
-        let category = enriched.kategori?.value;
-
-        // Validation: Check strict list
-        if (category && !VALID_CATEGORIES.includes(category)) {
-            // Try fallback inference
-            const inferred = inferCategory(category) || inferCategory(text);
-            if (inferred) {
-                enriched.kategori = { value: inferred, raw: category, confidence: 1 };
-            } else {
-                // Invalid and cannot infer -> Mark as missing
-                delete enriched.kategori;
-                // Re-evaluate missing fields
-                const missingAgain = getMissingFields(['kategori'], enriched); // Force allow asking
-                if (missingAgain.length > 0) {
-                    setPending(chatId, {
-                        intent, filled: enriched, missing: missingAgain, raw_text: text, confidence: topIntent.confidence
-                    });
-                    return askForMissing(bot, chatId, missingAgain[0], intent, enriched);
-                }
-            }
-        }
-
         if (!enriched.kategori) {
             setPending(chatId, {
-                intent, filled: enriched, missing: ['kategori'], raw_text: text, confidence: topIntent.confidence
+                intent, filled: enriched, missing: ['kategori'], raw_text: text, confidence: topIntent.confidence, userId: msg.from.id.toString()
             });
             return askForMissing(bot, chatId, 'kategori', intent, enriched);
         }
     }
 
-    // B. Task Creation Strict Validation (NEW)
-    else if (intent === 'buat_tugas') {
-        const userData = getUserData(msg.from.id.toString());
-        const courses = userData?.courses || [];
-
-        // 1. Resolve Course Name to ID
-        // Note: We already did "Smart Scan" in Early Enrichment step.
-        // So enriched.matkul should have { value: "Full Name", courseId: "..." } if found.
-
-        if (enriched.matkul?.value) {
-            // Validate that the course actually exists (double check) or find ID if missing
-            // If it came from NLP entity, it might not have courseId yet.
-            if (!enriched.matkul.courseId) {
-                const resolved = findCourse(enriched.matkul.value, courses);
-                if (resolved) {
-                    enriched.matkul.value = resolved.name;
-                    enriched.matkul.courseId = resolved.id;
-                } else {
-                    // Invalid course name from NLP?
-                    await bot.sendMessage(chatId, `❌ Matkul "${enriched.matkul.value}" gak ketemu di daftarmu.`);
-                    delete enriched.matkul;
-                    setPending(chatId, {
-                        intent, filled: enriched, missing: ['matkul'], raw_text: text, confidence: topIntent.confidence
-                    });
-                    return askForMissing(bot, chatId, 'matkul', intent, enriched);
-                }
-            }
-        } else {
-            // If still missing after Early Scan -> Ask user
-            // This block normally won't be reached if matkul is "required" schema, 
-            // because getMissingFields returns before this validation block.
-            // But just in case.
-        }
-
-        // 2. Validate Task Type vs Course Type
-        if (enriched.tipe_tugas?.value && enriched.matkul?.value) {
-            const type = enriched.tipe_tugas.value; // e.g. "Laporan Resmi"
-            const courseName = enriched.matkul.value.toLowerCase();
-
-            const isReport = ['Laporan Resmi', 'Laporan Sementara', 'Laporan Pendahuluan'].includes(type);
-            const isPracticalCourse = courseName.includes('praktikum') || courseName.includes('workshop');
-
-            if (isReport && !isPracticalCourse) {
-                await bot.sendMessage(chatId, `⚠️ **Validasi Gagal**\n"${type}" cuma boleh buat matkul Praktikum/Workshop.\nMatkul "${enriched.matkul.value}" ini Teori.`);
-                delete enriched.tipe_tugas;
-
-                setPending(chatId, {
-                    intent, filled: enriched, missing: ['tipe_tugas'], raw_text: text, confidence: topIntent.confidence
-                });
-                return askForMissing(bot, chatId, 'tipe_tugas', intent, enriched);
-            }
-        }
-    }
-
-
-
-    // 9. All Validated - Trigger Confirmation Flow
     const pendingState = {
         intent,
         filled: enriched,
         missing: [],
         raw_text: text,
         confidence: topIntent.confidence,
-        subState: 'confirmation'
+        subState: 'confirmation',
+        userId: msg.from.id.toString()
     };
 
-    // 9. NEW: Check if this intent requires confirmation at all
-    // Read-only intents should execute immediately without asking "Benar?"
     const NO_CONFIRM_INTENTS = [
         'lihat_tugas', 'lihat_transaksi', 'cek_saldo', 'deadline_terdekat',
         'minta_summary', 'batalkan', 'bantuan', 'casual', 'lihat_project'
@@ -484,1654 +303,731 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
 }
 
 /**
- * Handle slot completion for multi-turn conversations
+ * Handle slot completion
  */
 export async function handleSlotCompletion(bot, msg, pending, text, broadcastEvent) {
     const chatId = msg.chat.id;
-
-    // A.0 Check for STRONG INTENTS (Interrupt current flow)
     const lowerText = text.toLowerCase();
-
-    // 1. Progress Logging Override
-    if (/^((?:aku|saya|gw|gue)\s+)?(catat|catet|log|lapor|update|tambah)\s+(progress|progres)\b/i.test(lowerText)) {
-        console.log('[NLP] Strong Intent Interrupt: catat_progress');
-        clearPending(chatId);
-        // Delete previous confirmation if exists
-        if (pending.confirmMessageId) {
-            try { await bot.deleteMessage(chatId, pending.confirmMessageId); } catch (e) { }
-        }
-        return handleNaturalLanguage(bot, msg, broadcastEvent);
-    }
-
-    // 4. Check Transaction Note Input
-    if (await handleTransactionNote(bot, msg, broadcastEvent)) return;
-
-    // 5. Check Edit Transaction Input (New)
-    if (await handleEditTransactionInput(bot, msg, broadcastEvent)) return;
-
-    // --- OVERRIDES (Fix NLP Misses) ---
-    if (/^(hapus|delete|remove)\s+transaksi/i.test(lowerText)) {
-        return processDeleteTransaction(bot, chatId, userId);
-    }
-    if (/^(edit|ubah|ganti)\s+transaksi/i.test(lowerText)) {
-        return processEditTransaction(bot, chatId, userId);
-    }
-    if (/^(hapus|delete|remove)\s+(project|projek)/i.test(lowerText)) {
-        // Future: processDeleteProject(bot, chatId, userId)
-        // For now, let it fall through or handle if implemented
-    }
-
-    // 6. NLP Analysis
-    if (/^((?:aku|saya|gw|gue)\s+)?(buat|tambah|ada|input|bikin)\s+(project|projek)/.test(lowerText)) {
-        console.log('[NLP] Strong Intent Interrupt: buat_project');
-        clearPending(chatId);
-        // Delete previous confirmation if exists
-        if (pending.confirmMessageId) {
-            try { await bot.deleteMessage(chatId, pending.confirmMessageId); } catch (e) { }
-        }
-        return handleNaturalLanguage(bot, msg, broadcastEvent);
-    }
 
     // A. Check for cancel keywords
     if (isCancelKeyword(text)) {
-        // Delete the previous confirmation message if it exists
         if (pending.confirmMessageId) {
-            try {
-                await bot.deleteMessage(chatId, pending.confirmMessageId);
-            } catch (error) {
-                console.log('[NLP] Failed to delete confirmation message (maybe too old or already deleted)');
-            }
+            try { await bot.deleteMessage(chatId, pending.confirmMessageId); } catch (error) { }
         }
-
         clearPending(chatId);
         await bot.sendMessage(chatId, responses.cancelled());
         return true;
     }
 
-    // A.1 Check for Casual/Help Interruption (Reset Flow)
-    // const lower = text.toLowerCase(); // Already defined above
-    const casualWords = ['halo', 'hai', 'oi', 'pagi', 'siang', 'sore', 'malam'];
-    const helpWords = ['bantuan', 'help', 'menu', 'panduan', 'command'];
-
-    if (casualWords.some(w => lowerText.startsWith(w))) {
-        clearPending(chatId);
-        // Treat as new casual message
-        // Extract suffix/honorific (last word if length > 2 and not part of greeting base)
-        const parts = text.split(/\s+/);
-        const lastWord = parts[parts.length - 1];
-        let suffix = '';
-        if (parts.length > 1 && !['pagi', 'siang', 'sore', 'malam', 'halo', 'hai'].includes(lastWord.toLowerCase())) {
-            suffix = lastWord;
-        }
-
-        await bot.sendMessage(chatId, responses.casual(text, suffix));
-        return true;
-    }
-
-    if (helpWords.some(w => lowerText.includes(w))) {
-        clearPending(chatId);
-        return handleFallbackIntents(bot, msg, 'bantuan');
-    }
-
-    // A.5 Check for skip keywords (for optional fields)
+    // B. Check for skip keywords
     const currentMissing = pending.missing[0];
-    // const lowerText = text.toLowerCase().trim(); // Already defined at top
-    // console.log(`[NLP DEBUG Block A.5] currentMissing=${currentMissing}, text="${text}"`);
-    console.log(`[NLP DEBUG Block A.5] currentMissing=${currentMissing}, text="${text}"`);
-    // Force "ga" check to be safe + existing helper
     if (currentMissing && (isSkipKeyword(text) || lowerText === 'ga' || lowerText === 'gak')) {
-
-        // 1. Mandatory Note Check for catat_progress
         if (pending.intent === 'catat_progress' && currentMissing === 'note') {
-            await bot.sendMessage(chatId, '❌ Note wajib diisi buat log progress! (Apa yang dikerjain?)');
+            await bot.sendMessage(chatId, '❌ Note wajib diisi buat log progress!');
             return;
         }
-
-        // Fix: Use '-' instead of '' so Block F knows it is filled
         pending.filled[currentMissing] = { value: '-', raw: text, confidence: 1 };
+        pending.missing.shift();
 
-        // SPECIAL SIDE-EFFECT: Link Title Skipped -> Push link to array
-        if (currentMissing === 'link_title' && pending.filled.link) {
-            // ... existing logic ...
-            if (!pending.links) pending.links = [];
-            pending.links.push({ url: pending.filled.link.value, title: 'Ref Link' });
-            pending.filled.links = { value: pending.links, raw: '', confidence: 1 };
-
-            // Loop: STOP Loop on Skip Title (Fix "Two Ga" annoyance)
-            pending.missing.shift(); // Remove link_title
-            pending.missing = pending.missing.filter(f => f !== 'add_more_links');
-        } else if (currentMissing === 'link') {
-            // Special handling for Link Skip: If user skips link, it means NO link (or stop adding)
-            pending.filled.link = { value: '-', raw: text, confidence: 1 };
-            pending.missing.shift(); // Remove 'link'
-
-            // Also remove 'link_title' and 'add_more_links' if they are queued
-            pending.missing = pending.missing.filter(f => f !== 'link_title' && f !== 'add_more_links');
-
-            // Ensure 'links' field is set to prevent re-asking
-            if (!pending.filled.links) {
-                pending.filled.links = { value: pending.links || [], raw: '', confidence: 1 };
-            }
-        } else {
-            pending.missing.shift();
-        }
-
-        // Cleanup Buttons for Skip/Manual "ga"
         if (pending.lastQuestionId) {
             try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId }); } catch (e) { }
             delete pending.lastQuestionId;
         }
-
         text = '';
     }
 
-
-    // B. Check for mid-flow edit keywords
-    const userId = msg.from.id.toString();
-    const editMatch = detectMidFlowEdit(text, pending, userId);
-    if (editMatch) {
-        if (editMatch.type === 'intent') {
-            pending.intent = editMatch.value;
-            await bot.sendMessage(chatId, `✅ Tipe diubah ke: ${editMatch.value === 'tambah_pemasukan' ? 'Income' : 'Expense'}`);
-
-            // Recalculate missing for new intent
-            const req = schemas[pending.intent].required;
-            pending.missing = getMissingFields(req, pending.filled);
-            setPending(chatId, pending);
-
-            if (pending.missing.length > 0) {
-                return askForMissing(bot, chatId, pending.missing[0], pending.intent, pending.filled);
-            } else {
-                pending.subState = 'confirmation';
-                setPending(chatId, pending);
-                return askForConfirmation(bot, chatId, pending.intent, pending.filled);
-            }
-        } else {
-            // Special handling for Link Edits (Array modification)
-            if (editMatch.field === 'edit_link') {
-                const { index, url } = editMatch.value;
-                if (pending.links && pending.links[index]) {
-                    pending.links[index] = { ...pending.links[index], url: url };
-                    pending.filled.links = { value: pending.links, raw: '', confidence: 1 };
-                    await bot.sendMessage(chatId, `✅ Link ${index + 1} diubah jadi: ${url}`);
-                } else {
-                    await bot.sendMessage(chatId, `❌ Link nomor ${index + 1} gak ketemu.`);
-                }
-            } else if (editMatch.field === 'edit_link_title') {
-                const { index, title } = editMatch.value;
-                if (pending.links && pending.links[index]) {
-                    pending.links[index] = { ...pending.links[index], title: title };
-                    pending.filled.links = { value: pending.links, raw: '', confidence: 1 };
-                    await bot.sendMessage(chatId, `✅ Judul link ${index + 1} diubah jadi: ${title}`);
-                } else {
-                    await bot.sendMessage(chatId, `❌ Link nomor ${index + 1} gak ketemu.`);
-                }
-            } else {
-                // Normal fields
-                pending.filled[editMatch.field] = editMatch.value;
-                let displayVal = editMatch.value.value;
-                if (editMatch.field === 'amount') {
-                    displayVal = formatAmount(displayVal);
-                }
-                await bot.sendMessage(chatId, responses.fieldUpdated(editMatch.field, displayVal));
-            }
-        }
-
-        // Common Re-evaluation (for both Field edits and link edits)
-        // If we were in confirmation mode, re-trigger confirmation with new data immediately
-        if (pending.subState === 'confirmation') {
-            if (pending.confirmMessageId) {
-                try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.confirmMessageId }); } catch (e) { }
-            }
-            return askForConfirmation(bot, chatId, pending.intent, pending.filled);
-        }
-
-        // If in collection mode, re-check missing and continue
-        pending.missing = pending.missing.filter(field => {
-            const val = pending.filled[field];
-            return !val || val.value === undefined || val.value === '';
-        });
-
-        // Dynamic Dependency Check (Project Type -> Matkul)
-        if (pending.filled.project_type?.value === 'personal') {
-            pending.missing = pending.missing.filter(f => f !== 'matkul');
-        } else if (pending.filled.project_type?.value === 'course' && !pending.filled.matkul) {
-            if (!pending.missing.includes('matkul')) pending.missing.unshift('matkul');
-        }
-        setPending(chatId, pending);
-
-        if (pending.missing.length > 0) {
-            return askForMissing(bot, chatId, pending.missing[0], pending.intent, pending.filled);
-        } else {
-            // All done
-            pending.subState = 'confirmation';
-            setPending(chatId, pending);
-            return askForConfirmation(bot, chatId, pending.intent, pending.filled);
-        }
-    }
-
-    // C. Confirmation State Handling
+    // C. Confirmation State Handling (AI-POWERED)
     if (pending.subState === 'confirmation') {
-        const lower = (text || '').toLowerCase();
-        // Added 'udah', 'sudah', 'sip', 'siap', 'betul'
-        if (['ya', 'y', 'benar', 'bener', 'lanjut', 'gas', 'oke', 'ok', 'udah', 'sudah', 'sip', 'siap', 'betul', 'udeh', 'sudah bener', 'sudah benar', 'sudah betul', 'iye', 'ye', 'hooh', 'yak'].includes(lower)) {
-            // Cleanup confirmation buttons
+
+        const aiResult = await parseMessage(text, msg.from.id.toString());
+        const aiIntent = aiResult?.intents?.[0]?.name;
+
+        console.log(`[CONFIRM-AI] Text: "${text}" -> Intent: ${aiIntent}`);
+
+        // 2. POSITIVE
+        if (aiIntent === 'konfirmasi_positif') {
             if (pending.confirmMessageId) {
                 try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.confirmMessageId }); } catch (e) { }
             }
             clearPending(chatId);
             return executeConfirmedIntent(bot, msg, pending.intent, pending.filled, broadcastEvent, pending.links);
-        } else if (['tidak', 'ga', 'salah', 'bukan', 'no', 'enggak', 'gajadi', 'batal'].includes(lower)) {
-            // Cleanup confirmation buttons
+        }
+
+        // 3. NEGATIVE
+        else if (aiIntent === 'konfirmasi_negatif' || isCancelKeyword(text)) {
             if (pending.confirmMessageId) {
                 try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.confirmMessageId }); } catch (e) { }
             }
             clearPending(chatId);
-            await bot.sendMessage(chatId, '❌ Dibatalkan. Silakan input ulang jika perlu.');
-            return true;
-        } else {
-            // 1. Check for Corrections (Explicit or Implicit)
-            // Priority: Corrections > Context Switch
-            // 1. Check for Corrections (Explicit or Implicit)
-            // Priority: Corrections > Context Switch
-            const correctionResult = await parseMessage(text);
-            const rawCorrectionEntities = extractEntities(correctionResult.entities || {});
-            // CRITICAL FIX: Enrich entities immediately to catch Regex-based fields (like 'tipe_tugas' for 'lapsem')
-            const enrichedCorrection = enrichEntities(rawCorrectionEntities, text);
-
-            // Explicit correction keywords
-            const isExplicitCorrection = ['ganti', 'ubah', 'koreksi', 'bukan', 'salah', 'tipe', 'matkul', 'deadline', 'waktu'].some(w => text.toLowerCase().includes(w));
-
-            // Check if any recognized entity matches the schema fields
-            // Use enrichedCorrection keys!
-            const hasCorrection = Object.keys(enrichedCorrection).some(key =>
-                ['amount', 'kategori', 'waktu', 'matkul', 'tipe_tugas', 'note', 'number', 'datetime'].includes(key)
-            );
-
-            if (hasCorrection || isExplicitCorrection) {
-                // Cleanup OLD confirmation buttons before re-asking
-                if (pending.confirmMessageId) {
-                    try { bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.confirmMessageId }); } catch (e) { }
-                }
-                // Apply correction
-                // enrichedCorrection is already calculated
-
-                // If explicit correction but no entity found (e.g. "ganti note jadi ini"), treat text as note if generic
-                if (Object.keys(enrichedCorrection).length === 0 && isExplicitCorrection) {
-                    // Simple heuristic: if likely a note correction
-                    if (text.toLowerCase().includes('note') || text.toLowerCase().includes('catatan')) {
-                        const cleanNote = text.replace(/ganti|ubah|koreksi|note|catatan|jadi/gi, '').trim();
-                        if (cleanNote) enrichedCorrection.note = { value: cleanNote, raw: cleanNote, confidence: 1 };
-                    }
-                }
-
-                // Handling for 'edit_link' (Special case for array modification)
-                if (enrichedCorrection.edit_link) {
-                    const { index, url } = enrichedCorrection.edit_link.value;
-                    if (pending.links && pending.links[index]) {
-                        pending.links[index] = { ...pending.links[index], url: url };
-                        pending.filled.links = { value: pending.links, raw: '', confidence: 1 };
-                        await bot.sendMessage(chatId, `✅ Link ${index + 1} diubah jadi: ${url}`);
-                        delete enrichedCorrection.edit_link;
-                    } else {
-                        await bot.sendMessage(chatId, `❌ Link nomor ${index + 1} gak ketemu.`);
-                        return true;
-                    }
-                }
-
-                // Handling for 'edit_link_title' 
-                if (enrichedCorrection.edit_link_title) {
-                    const { index, title } = enrichedCorrection.edit_link_title.value;
-                    if (pending.links && pending.links[index]) {
-                        pending.links[index] = { ...pending.links[index], title: title };
-                        pending.filled.links = { value: pending.links, raw: '', confidence: 1 };
-                        await bot.sendMessage(chatId, `✅ Judul link ${index + 1} diubah jadi: ${title}`);
-                        delete enrichedCorrection.edit_link_title;
-                    } else {
-                        await bot.sendMessage(chatId, `❌ Link nomor ${index + 1} gak ketemu.`);
-                        return true;
-                    }
-                }
-
-
-
-                // Force delete special keys to avoid them leaking into Object.assign or logs
-                const editKeys = ['edit_link', 'edit_link_title'];
-                editKeys.forEach(k => delete enrichedCorrection[k]);
-
-                Object.assign(pending.filled, enrichedCorrection);
-
-                // Re-confirm with updated data
-                // Generate human-readable feedback
-                const changes = [];
-                const fieldLabels = {
-                    matkul: 'Matkul',
-                    tipe_tugas: 'Tipe',
-                    waktu: 'Deadline',
-                    amount: 'Nominal',
-                    kategori: 'Kategori',
-                    note: 'Note',
-                    date: 'Tanggal',
-                    project: 'Project',
-                    link: 'Link',
-                    priority: 'Prioritas'
-                };
-
-                for (const [key, val] of Object.entries(enrichedCorrection)) {
-                    // Skip undefined or internal keys
-                    // Fix: Skip edit_link* keys explicitly to avoid "undefined" logs
-                    if (!fieldLabels[key] || key.startsWith('edit_link')) continue;
-
-                    let displayVal = val.value;
-                    // Format Date
-                    if (key === 'waktu' && val.parsed) {
-                        displayVal = val.parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-                    }
-                    // Format Amount
-                    if (key === 'amount' && typeof val.value === 'number') {
-                        displayVal = formatAmount(val.value);
-                    }
-                    // Format Link (truncate)
-                    if (key === 'link' && displayVal.length > 30) {
-                        displayVal = displayVal.substring(0, 27) + '...';
-                    }
-
-                    changes.push(`${fieldLabels[key]} udah kuganti jadi ${displayVal}`);
-                }
-
-                if (changes.length > 0) {
-                    await bot.sendMessage(chatId, `Okee, ${changes.join(', ')} 👍`);
-                } else {
-                    await bot.sendMessage(chatId, `✅ Data diperbarui.`);
-                }
-                // Return to recursion with SAME intent/data to re-trigger confirmation logic properly
-                // But simpler depends on logic: just re-calling askForConfirmation is safest
-                await askForConfirmation(bot, chatId, pending.intent, pending.filled);
-                return true;
-            }
-
-            // 2. Context Switch (High Confidence New Intent)
-            const manager = getManager();
-            if (manager) {
-                const processResult = await manager.process('id', text);
-                const limit = 0.75;
-                if (processResult.intent && processResult.intent !== 'None' && processResult.score > limit) {
-                    // CRITICAL FIX: If intent is SAME as pending, treat as Refinement/Correction, NOT Cancellation
-                    if (processResult.intent === pending.intent) {
-                        console.log(`[NLP] Same intent detected (${pending.intent}). Merging new entities...`);
-                        const newEntities = extractEntities(processResult.entities || {});
-                        const enrichedNew = enrichEntities(newEntities, text);
-                        Object.assign(pending.filled, enrichedNew);
-
-                        await bot.sendMessage(chatId, `✅ Data diperbarui.`);
-                        await askForConfirmation(bot, chatId, pending.intent, pending.filled);
-                        return true;
-                    }
-
-                    console.log(`[NLP] Context Switch: Cancelling ${pending.intent} -> ${processResult.intent}`);
-                    clearPending(chatId);
-                    await bot.sendMessage(chatId, `⚠️ Transaksi sebelumnya dibatalkan. Mengganti ke perintah baru...`);
-                    return handleNaturalLanguage(bot, msg, broadcastEvent);
-                }
-            }
-
-            // 3. Fallback: Unknown / Gibberish
-            // Do NOT re-ask confirmation card aggressively.
-            await bot.sendMessage(chatId, `Maaf, saya tidak mengerti. 
-- Jawab "Ya" untuk konfirmasi.
-- Jawab "Tidak" untuk batal.
-- Atau ketik koreksi (misal: "50rb", "makan").
-- Gunakan /help untuk bantuan.`);
+            await bot.sendMessage(chatId, '❌ Dibatalkan.');
             return true;
         }
-    }
 
-    // D. Parse answer as slot completion
-    let enriched = {};
-    if (text) {
-        // SPECIAL CASE: Note/Link field (Raw Text Capture)
-        if (pending.missing[0] === 'note') {
-            enriched = { note: { value: text, raw: text, confidence: 1 } };
-        } else if (pending.missing[0] === 'link') {
-            const trimmed = text.trim();
-            const isUrl = (trimmed.includes('.') && !trimmed.includes(' ')) || /^(http|https):\/\//i.test(trimmed);
+        // 4. CORRECTION
+        const localEntities = extractLocalEntities(text);
+        const correction = enrichEntities(
+            localEntities,
+            text,
+            msg.from.id.toString()
+        );
 
-            if (isUrl) {
-                enriched = { link: { value: text, raw: text, confidence: 1 } };
-                // CRITICAL FIX: Save immediately
-                Object.assign(pending.filled, enriched);
+        let updated = false;
 
-                // Next step: Title
-                pending.missing.unshift('link_title');
+        if (correction.amount) { pending.filled.amount = correction.amount; updated = true; }
+        if (correction.waktu) { pending.filled.waktu = correction.waktu; updated = true; }
+        if (correction.kategori) { pending.filled.kategori = correction.kategori; updated = true; }
 
-                setPending(chatId, pending);
-                // Cleanup prev buttons
-                if (pending.lastQuestionId) {
-                    try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId }); } catch (e) { }
-                    delete pending.lastQuestionId;
-                }
-                return askForMissing(bot, chatId, 'link_title', pending.intent, pending.filled);
-            } else {
-                // Invalid URL (and not skip, because skip is handled in A.5)
-                await bot.sendMessage(chatId, '❌ Link gak valid (misal: google.com). Ketik "ga" atau "-" kalau mau skip.');
-                return true; // Stop flow, ask user to retry
-            }
-        } else if (pending.missing[0] === 'link_title') {
-            enriched = { link_title: { value: text, raw: text, confidence: 1 } };
-        } else if (pending.missing[0] === 'add_more_links') {
-            const trimmed = text.trim();
-            const isUrl = (trimmed.includes('.') && !trimmed.includes(' ')) || /^(http|https):\/\//i.test(trimmed);
-
-            // 1. Smart URL Check
-            if (isUrl) {
-                delete pending.filled.link;
-                delete pending.filled.link_title;
-                delete pending.filled.add_more_links;
-
-                // Save new link
-                pending.filled.link = { value: text, raw: text, confidence: 1 };
-
-                // Loop state: Expecting Title next
-                pending.missing.shift(); // Remove add_more_links
-                pending.missing.unshift('link_title');
-
-                setPending(chatId, pending);
-                if (pending.lastQuestionId) {
-                    try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId }); } catch (e) { }
-                    delete pending.lastQuestionId;
-                }
-                return askForMissing(bot, chatId, 'link_title', pending.intent, pending.filled);
-            }
-
-            // 2. Normal Yes/No Check
-            const lower = text.toLowerCase();
-            const yesWords = ['ya', 'y', 'boleh', 'tambah', 'lagi', 'mau', 'lanjut', 'ada'];
-            const val = yesWords.some(w => lower.includes(w)) ? 'yes' : 'no';
-
-            if (val === 'yes') {
-                // Cleanup buttons explicitly for text answer "Ya"
-                if (pending.lastQuestionId) {
-                    try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId }); } catch (e) { }
-                    delete pending.lastQuestionId;
-                }
-
-                delete pending.filled.link;
-                delete pending.filled.link_title;
-                delete pending.filled.add_more_links;
-
-                // Loop state: Expecting Link next
-                pending.missing.shift();
-                pending.missing.unshift('link');
-
-                setPending(chatId, pending);
-                if (pending.lastQuestionId) {
-                    try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId }); } catch (e) { }
-                    delete pending.lastQuestionId;
-                }
-                return askForMissing(bot, chatId, 'link', pending.intent, pending.filled);
-            }
-
-            enriched = { add_more_links: { value: val, raw: text, confidence: 1 } };
-            // Cleanup buttons explicitly for text answer "No" or "Tidak"
-            if (pending.lastQuestionId) {
-                try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId }); } catch (e) { }
-                delete pending.lastQuestionId;
-            }
-        } else {
-            const result = await parseMessage(text);
-            const entities = extractEntities(result.entities || {});
-            enriched = enrichEntities(entities, text);
-        }
-        Object.assign(pending.filled, enriched);
-
-        // INJECTION: If project_type is 'course', ensure 'matkul' is asked
-        if (pending.filled.project_type) {
-            const pType = pending.filled.project_type.value;
-            if (pType === 'course' || pType === 'matkul') {
-                // Fix: If 'matkul' is filled but value is just "matkul" (keyword), clear it so we ask properly
-                if (pending.filled.matkul && pending.filled.matkul.raw.toLowerCase() === 'matkul') {
-                    delete pending.filled.matkul;
-                }
-
-                // Force into missing queue at the front
-                // Fix: Only inject/clear text if we are NOT already asking for matkul
-                // If we are already asking (missing[0] === 'matkul'), the current text is the ANSWER, so don't clear it!
-                if (!pending.filled.matkul && pending.missing[0] !== 'matkul') {
-                    pending.missing = pending.missing.filter(f => f !== 'matkul');
-                    pending.missing.unshift('matkul');
-
-                    // Prevent Block E from using the "matkul" text to try filling the new 'matkul' field
-                    // Only done if we JUST detected the project type in this turn (avoid clearing legitimate answers)
-                    if (enriched.project_type) {
-                        text = '';
-                    }
-                }
-            }
+        if (correction.tipe_tugas) {
+            const norm = normalizeTaskType(correction.tipe_tugas.value);
+            if (norm) correction.tipe_tugas.value = norm;
+            pending.filled.tipe_tugas = correction.tipe_tugas;
+            updated = true;
         }
 
-        // Cleanup: If the current missing field is now filled by NLP, remove buttons
-        if (enriched[pending.missing[0]]) {
-            if (pending.lastQuestionId) {
-                try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId }); } catch (e) { }
-                delete pending.lastQuestionId;
-            }
-        }
-    }
+        if (correction.matkul) {
+            const courses = [];
+            const resolved = findCourse(correction.matkul.value, courses);
 
-    // E. Handle simple text answers (Fallback if NLP didn't catch the specific missing field)
-    const missingField = pending.missing[0];
-    console.log(`[NLP DEBUG Block E] missingField="${missingField}", text="${text}", enriched=${!!enriched[missingField]}`);
-    if (pending.missing.length > 0 && text && !enriched[missingField]) {
-        let value = text;
-        let confidence = 1;
-
-        // 1. Amount Parsing
-        if (missingField === 'amount') {
-            const amountMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(rb|ribu|k|jt|juta|m|milyar)?\b/i);
-            if (amountMatch) {
-                const parsed = parseAmount(amountMatch[0]);
-                if (parsed > 0) value = parsed;
-            }
-        }
-
-        // 2. Course Resolution (Matkul)
-        else if (missingField === 'matkul') {
-            const userData = getUserData(msg.from.id.toString());
-            const courses = userData?.courses || [];
-            console.log(`[NLP DEBUG Block E Matkul] ID=${msg.from.id.toString()}, courses=${courses.length}, text="${text}"`);
-            const found = findCourse(text, courses);
-            console.log(`[NLP DEBUG Block E Matkul] found=${found ? found.name : 'null'}`);
-
-            if (found) {
-                value = found.name;
-                confidence = 1;
-            } else {
-                await bot.sendMessage(chatId, '❌ Matkul gak ketemu. Coba pilih dari tombol atau ketik nama yang bener.');
-                return true;
-            }
-        }
-
-
-        // 3. Task Type Normalization
-        else if (missingField === 'tipe_tugas') {
-            const normalized = normalizeTaskType(text);
-            if (normalized) value = normalized;
-        }
-
-
-        // 4. Project Type Validation
-        else if (missingField === 'project_type') {
-            const lower = text.toLowerCase();
-            if (lower.includes('personal') || lower.includes('pribadi') || lower.includes('sendiri')) {
-                value = 'personal';
-            } else if (lower.includes('matkul') || lower.includes('kuliah') || lower.includes('course')) {
-                value = 'course';
-                // Trigger Matkul Selection logic explicitly for text input
-                if (!pending.filled.matkul && !pending.missing.includes('matkul')) {
-                    pending.missing.unshift('matkul');
-                }
-            } else {
-                // Invalid input for project type, re-ask
-                return askForMissing(bot, chatId, missingField, pending.intent, pending.filled);
-            }
-        }
-
-        // 5. Date Parsing (Waktu / Deadline)
-        else if (missingField === 'waktu') {
-            console.log(`[NLP DEBUG] Manual Date Parse for: "${text}"`);
-            const parsedDate = parseDate(text);
-            if (parsedDate) {
-                console.log(`[NLP DEBUG] Parsed Date Success:`, parsedDate);
-                // Format to YYYY-MM-DD or keep Date object?
-                // The system seems to use Date object in 'parsed' field
-                pending.filled['waktu'] = {
-                    value: text,
-                    raw: text,
-                    parsed: parsedDate,
+            if (resolved) {
+                pending.filled.matkul = {
+                    value: resolved.name,
+                    courseId: resolved.id,
+                    raw: correction.matkul.value,
                     confidence: 1
                 };
-                // We manually set it here so we don't rely on 'value' assignment below for the complex object
-                value = text;
+                updated = true;
             } else {
-                console.log(`[NLP DEBUG] Parsed Date Failed (null).`);
+                // Keep manual input
+                pending.filled.matkul = correction.matkul;
+                updated = true;
             }
         }
 
+        if (correction.project) {
+            pending.filled.project = correction.project;
+            updated = true;
+        }
 
-        let fieldData = { value: value, raw: text, confidence };
+        if (correction.note) { pending.filled.note = correction.note; updated = true; }
 
-        // Attach courseId if resolved (Text Input Case)
-        if (missingField === 'matkul') {
-            const userData = getUserData(msg.from.id.toString());
-            const courses = userData?.courses || [];
-            const resolved = findCourse(text, courses);
-            if (resolved) {
-                fieldData.value = resolved.name;
-                fieldData.courseId = resolved.id;
+        // Priority correction for projects
+        if (correction.priority) { pending.filled.priority = correction.priority; updated = true; }
+
+        // Item correction for transactions
+        if (correction.item) { pending.filled.item = correction.item; updated = true; }
+
+        const deleteKeywords = ['hapus', 'apus', 'delete', 'remove', 'buang', 'kosongin', 'ilangin', 'hilangkan'];
+        const isDeleteAction = deleteKeywords.some(kw => lowerText.includes(kw));
+
+        if (isDeleteAction && (lowerText.includes('link') || lowerText.includes('tautan'))) {
+            pending.links = [];
+            pending.filled.link = { value: '-', raw: '-', confidence: 1 };
+            updated = true;
+        }
+
+        if (!updated) {
+            if (text.length > 2 && !isSkipKeyword(text) && !isCancelKeyword(text)) {
+                pending.filled.note = { value: text, raw: text, confidence: 1 };
+                updated = true;
             }
         }
 
-        pending.filled[missingField] = fieldData;
+        if (updated) {
+            await bot.sendMessage(chatId, '✅ Data diupdate.');
+            setPending(chatId, pending);
+            return askForConfirmation(bot, chatId, pending.intent, pending.filled);
+        } else {
+            await bot.sendMessage(chatId, '🤔 Saya bingung. Jawab <b>Ya</b> untuk simpan, <b>Tidak</b> untuk batal.\nAtau ketik langsung revisinya (misal: "Besok aja").', { parse_mode: 'HTML' });
+            return true;
+        }
+    }
 
-        // Cleanup previous buttons (if any)
-        if (pending.lastQuestionId) {
-            console.log(`[NLP DEBUG] Cleaning up ID: ${pending.lastQuestionId}`);
-            try {
-                await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: pending.lastQuestionId });
-            } catch (e) {
-                // Ignore "message is not modified"
-                if (!e.message.includes('message is not modified')) {
-                    console.log('[NLP DEBUG] Cleanup Error:', e.message);
+    // D. Normal Slot Filling
+    let enriched = {};
+    if (text) {
+        if (pending.missing[0] === 'note') {
+            enriched = { note: { value: text, raw: text, confidence: 1 } };
+        }
+        else if (pending.missing[0] === 'project_type') {
+            // Handle text input for project type
+            const lower = text.toLowerCase();
+            let pType = 'personal'; // default
+            if (lower.includes('matkul') || lower.includes('kuliah') || lower.includes('course') || lower === 'mk') {
+                pType = 'course';
+            }
+            enriched = { project_type: { value: pType, raw: text, confidence: 1 } };
+
+            // If course type, add matkul to missing if not already present
+            if (pType === 'course' && !pending.filled.matkul && !pending.missing.includes('matkul')) {
+                pending.missing.splice(1, 0, 'matkul'); // Insert after project_type
+            }
+        }
+        else if (pending.missing[0] === 'priority') {
+            let prio = 'medium';
+            const t = text.toLowerCase();
+            if (t.includes('high') || t.includes('tinggi') || t.includes('urgent') || t.includes('penting')) prio = 'high';
+            if (t.includes('low') || t.includes('rendah') || t.includes('santai')) prio = 'low';
+            if (t.includes('sedang') || t.includes('normal')) prio = 'medium';
+            enriched = { priority: { value: prio, raw: text, confidence: 1 } };
+        }
+        else if (pending.missing[0] === 'link') {
+            if (isSkipKeyword(text)) {
+                // Shifted below
+            } else {
+                if (!pending.tempLink) {
+                    pending.tempLink = { url: text };
+                    await bot.sendMessage(chatId, `🔗 Oke, URL tersimpan. Judul link-nya apa? (Misal: "Figma", "Drive")`);
+                    return;
+                } else {
+                    pending.tempLink.title = text;
+                    if (!pending.links) pending.links = [];
+                    pending.links.push(pending.tempLink);
+                    delete pending.tempLink;
+                    await bot.sendMessage(chatId, `✅ Link tersimpan. Ada lagi? (Ketik link lain atau "enggak" buat lanjut)`);
+                    return;
                 }
             }
-            delete pending.lastQuestionId;
         }
+        else if (pending.missing[0] === 'matkul') {
+            // Resolve matkul using findCourse to match synonyms
+            const courses = [];
+            const resolved = findCourse(text, courses);
+
+            if (resolved) {
+                enriched = {
+                    matkul: {
+                        value: resolved.name,
+                        courseId: resolved.id,
+                        raw: text,
+                        confidence: 1
+                    }
+                };
+            } else {
+                // Keep raw input if no match found
+                enriched = { matkul: { value: text, raw: text, confidence: 0.5 } };
+            }
+        }
+        else {
+            const rawEntities = {};
+            if (pending.missing[0] === 'amount') rawEntities.amount = [{ value: text }];
+            else if (pending.missing[0] === 'waktu') rawEntities.datetime = [{ value: text }];
+            else rawEntities[pending.missing[0]] = [{ value: text }];
+
+            rawEntities.isSlotFilling = true; // Mark to prevent default date overwriting
+            enriched = enrichEntities(rawEntities, text, msg.from.id.toString());
+        }
+
+        Object.assign(pending.filled, enriched);
+        pending.missing.shift();
     }
 
-    // E.5 Post-Processing Side Effects (Centralized)
-    // Handle Link Title completion (from Block D or E)
-    // Use pending.missing[0] because Block F hasn't run yet
-    if (pending.missing[0] === 'link_title' && pending.filled.link_title && pending.filled.link) {
-        if (!pending.links) pending.links = [];
-
-        const titleVal = pending.filled.link_title.value || 'Ref Link';
-        // Check duplicates?
-        // pending.links.push({ url: pending.filled.link.value, title: titleVal });
-
-        // Use the value from filled (which might be raw text or skipped empty string handled elsewhere, 
-        // but if it's empty here, we default. Wait, A.5 handled Skip already)
-        // This block handles the Text Input case.
-        // In Text Input case, 'links' array is NOT updated yet.
-
-        // Avoid double push if A.5 already did it? 
-        // A.5 clears 'text' and loops, so it falls through to F. 
-        // So this block won't execute for A.5 because 'text' is empty? 
-        // Wait, this block is outside 'if (missingField...)'. It's standalone after E.
-        // But A.5 managed 'missing' array (shifted link_title). 
-        // So pending.missing[0] is 'add_more_links' (if A.5 ran).
-        // So this block won't run for A.5. CORRECT.
-
-        pending.links.push({ url: pending.filled.link.value, title: titleVal });
-        pending.filled.links = { value: pending.links, raw: '', confidence: 1 };
-
-        // Trigger Loop
-        pending.missing.unshift('add_more_links');
-    }
-
-    // F. Re-check missing fields
-    const stillMissing = pending.missing.filter(field => {
-        const val = pending.filled[field];
-        // Log status of each field
-        // console.log(`[NLP DEBUG] Checking field ${field}:`, val);
-        return !val || val.value === undefined || val.value === '';
-    });
-
-    if (stillMissing.length > 0) {
-        console.log(`[NLP DEBUG] Still missing fields: ${stillMissing.join(', ')}`);
-        pending.missing = stillMissing;
-        setPending(chatId, pending);
-        return askForMissing(bot, chatId, stillMissing[0], pending.intent, pending.filled);
-    }
-
-    // G. All fields complete - Trigger Confirmation
-    pending.missing = [];
-    pending.subState = 'confirmation';
     setPending(chatId, pending);
-    return askForConfirmation(bot, chatId, pending.intent, pending.filled);
-}
-
-// ----------------------------------------------------
-// Helper Functions (Top Level)
-// ----------------------------------------------------
-
-async function handleLowConfidence(bot, msg, text) {
-    const chatId = msg.chat.id;
-    await bot.sendMessage(chatId, responses.lowConfidence(text));
-    return true;
-}
-
-async function askForMissing(bot, chatId, field, intent, filled) {
-    const message = responses.askField(field, intent, filled);
-    const buttons = getFieldButtons(field, intent);
-
-    let sentMsg;
-    if (buttons) {
-        sentMsg = await bot.sendMessage(chatId, message, {
-            reply_markup: { inline_keyboard: buttons }
-        });
+    if (pending.missing.length > 0) {
+        return askForMissing(bot, chatId, pending.missing[0], pending.intent, pending.filled);
     } else {
-        sentMsg = await bot.sendMessage(chatId, message);
+        pending.subState = 'confirmation';
+        setPending(chatId, pending);
+        return askForConfirmation(bot, chatId, pending.intent, pending.filled);
     }
+}
 
-    // Save message ID to cleanup buttons later
-    updatePending(chatId, { lastQuestionId: sentMsg.message_id });
+// UTILS
+function isCancelKeyword(text) {
+    return CANCEL_KEYWORDS.some(k => text.toLowerCase() === k);
+}
+function isSkipKeyword(text) {
+    return SKIP_KEYWORDS.some(k => text.toLowerCase() === k);
+}
+function logRawText(chatId, text) {
+    const logLine = `[${new Date().toISOString()}] ${chatId}: ${text}\n`;
+    fs.appendFile('message_logs.txt', logLine, () => { });
+}
+async function handleLowConfidence(bot, msg, text) {
+    await bot.sendMessage(msg.chat.id, responses.confusion());
     return true;
 }
 
-async function askForConfirmation(bot, chatId, intent, data) {
-    bot.sendChatAction(chatId, 'typing').catch(() => { }); // Enhance responsiveness perception
-    console.log('[NLP DEBUG] askForConfirmation called for intent:', intent);
-    let summary = `📝 *Konfirmasi Data*\n\n`;
-
-    // Customize summary based on intent
-    if (intent === 'tambah_pengeluaran' || intent === 'tambah_pemasukan') {
-        const type = intent === 'tambah_pemasukan' ? 'Income 🟢' : 'Expense 🔴';
-        const formattedAmount = data.amount?.value ? formatAmount(data.amount.value) : (data.amount || '0');
-        const cat = data.kategori?.value || data.kategori || '-';
-
-        summary += `Type: ${type}\n`;
-        summary += `Nominal: ${formattedAmount}\n`;
-        summary += `Kategori: ${cat}\n`;
-        summary += `Note: ${data.note?.value || data.note || '-'}\n`;
-    } else if (intent === 'buat_tugas') {
-        // Task Summary
-        const deadlineStr = data.waktu?.parsed
-            ? data.waktu.parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-            : (data.waktu?.value || '-');
-
-        summary += `📚 Matkul: ${data.matkul?.value || '-'}\n`;
-        summary += `📝 Tipe: ${data.tipe_tugas?.value || '-'}\n`;
-        summary += `📅 Deadline: ${deadlineStr}\n`;
-        if (data.note?.value) summary += `📄 Note: ${data.note.value}\n`;
-
-    } else if (intent === 'buat_project') {
-        const deadlineStr = data.waktu?.parsed
-            ? data.waktu.parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-            : (data.waktu?.value || '-');
-
-        summary += `📌 Project: ${data.project?.value || '-'}\n`;
-        summary += `📂 Type: ${data.project_type?.value || '-'}\n`;
-        if (data.matkul?.value) summary += `🏫 Matkul: ${data.matkul.value}\n`;
-        summary += `⚡ Priority: ${data.priority?.value || '-'}\n`;
-        summary += `📅 Deadline: ${deadlineStr}\n`;
-        if (data.note?.value) summary += `📄 Desc: ${data.note.value}\n`;
-        // Show Links
-        if (data.links && Array.isArray(data.links)) {
-            data.links.forEach((l, i) => summary += `🔗 Link ${i + 1}: ${l.title} (${l.url})\n`);
-        } else if (data.links?.value && Array.isArray(data.links.value)) {
-            data.links.value.forEach((l, i) => summary += `🔗 Link ${i + 1}: ${l.title} (${l.url})\n`);
-        } else {
-            summary += `🔗 Link: ${data.link?.value === '-' ? '-' : (data.link?.value || '-')}\n`;
-        }
-    } else if (intent === 'catat_progress') {
-        summary += `📌 Project: ${data.project?.value || 'Unknown'}\n`;
-        summary += `📈 Progress: ${data.persentase?.value || '0'}%\n`;
-        summary += `⏱️ Duration: ${data.duration?.value || '-'} menit\n`;
-        summary += `📝 Note: ${data.note?.value || '-'}\n`;
-    }
-
-    summary += `\nSudah benar? (Ya/Tidak)`;
-
-    const options = {
-        parse_mode: 'Markdown',
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    { text: '✅ Ya', callback_data: 'nlp_confirm_yes' },
-                    { text: '❌ Batal', callback_data: 'nlp_confirm_no' }
-                ]
-            ]
-        }
+function enrichEntities(entities, text, userId = null) {
+    const enriched = {};
+    const getVal = (key) => {
+        const entity = entities[key]?.[0];
+        if (entity === undefined || entity === null) return null;
+        return (entity.value !== undefined) ? entity.value : entity;
     };
 
-    let sentMsg;
-    try {
-        console.log('[NLP DEBUG] Sending Confirmation Message...');
-        sentMsg = await bot.sendMessage(chatId, summary, options);
-        console.log('[NLP DEBUG] Confirmation Sent Successfully.');
-    } catch (error) {
-        console.error('[NLP DEBUG] Confirmation Send Error:', error.message);
-        // Fallback if markdown error
-        sentMsg = await bot.sendMessage(chatId, summary.replace(/\*/g, '').replace(/_/g, ''), { ...options, parse_mode: undefined });
+    // 1. Amount
+    const rawAmt = getVal('amount');
+    if (rawAmt) {
+        const val = (typeof rawAmt === 'number') ? rawAmt : parseAmount(rawAmt.toString());
+        enriched.amount = { value: val, raw: rawAmt.toString(), confidence: 1 };
     }
 
-    // Save message ID to delete it later if cancelled
-    updatePending(chatId, { confirmMessageId: sentMsg.message_id });
-    return true;
-}
-
-async function executeConfirmedIntent(bot, msg, intent, entities, broadcastEvent) {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id.toString();
-
-    // ============ AMBIGUITY CHECK ============
-    // If Intent is Expense, check keywords implying Income (receive money)
-    if (intent === 'tambah_pengeluaran') {
-        const fullText = (msg.text || '').toLowerCase();
-        // Keywords: dikasih, dapat, dapet, nemu, gajian, cair, transferan masuk
-        const incomeKeywords = ['dikasih', 'dapat', 'dapet', 'nemu', 'gajian', 'cair', 'transferan'];
-        if (incomeKeywords.some(kw => fullText.includes(kw))) {
-            intent = 'tambah_pemasukan';
-            console.log(`[NLP] Switched intent Expense -> Income due to keyword check.`);
+    // 2. Kategori
+    let rawCat = getVal('kategori');
+    if (rawCat) {
+        const normalized = inferCategory(rawCat);
+        if (normalized) rawCat = normalized;
+        else if (!VALID_CATEGORIES.includes(rawCat)) {
+            const titleCase = rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase();
+            if (VALID_CATEGORIES.includes(titleCase)) rawCat = titleCase;
         }
+        enriched.kategori = { value: rawCat, raw: rawCat, confidence: 1 };
     }
 
-    // Map entity values to simple Key-Value pair
-    const data = {};
-    for (const [key, val] of Object.entries(entities)) {
-        data[key] = val?.value ?? val; // Simplifies value
+    // 3. Matkul
+    const rawMatkul = getVal('matkul');
+    if (rawMatkul) enriched.matkul = { value: rawMatkul, raw: rawMatkul, confidence: 1 };
 
-        // Preserve rich data (courseId, parsed date)
-        if (val && typeof val === 'object') {
-            if (val.courseId) data.courseId = val.courseId;
-            if (val.parsed) data.parsedDate = val.parsed;
-        }
-    }
-    // ensure 'amount' is number if string
-    if (data.amount && typeof data.amount === 'string') data.amount = parseAmount(data.amount);
+    // 4. Note
+    const rawNote = getVal('note');
+    if (rawNote) enriched.note = { value: rawNote, raw: rawNote, confidence: 1 };
 
-    // Route to Handlers (Shared Logic)
-    // Route to Handlers
-    // 1. Transaction Handlers
-    if (await handleTransactionIntent(bot, msg, intent, data, broadcastEvent)) return true;
-
-    // 2. Task Handlers
-    if (await handleTaskIntent(bot, msg, intent, data, broadcastEvent)) return true;
-
-    // 3. Project Handlers
-    if (await handleProjectIntent(bot, msg, intent, data, broadcastEvent)) return true;
-
-    // 4. General Handlers
-    if (await handleGeneralIntent(bot, msg, intent, data, broadcastEvent)) return true;
-
-    // If no handler matched (and confidence was checked before), maybe log?
-    return false;
-
-}
-
-// ============ Utility Functions ============
-
-function isCancelKeyword(text) {
-    const lower = text.toLowerCase();
-    return CANCEL_KEYWORDS.some(kw => lower.includes(kw));
-}
-
-function isSkipKeyword(text) {
-    if (!text) return false;
-    const lower = text.trim().toLowerCase();
-    return SKIP_KEYWORDS.some(kw => lower === kw || lower.includes(kw));
-}
-
-
-function detectMidFlowEdit(text, pending, userId) {
-    const lower = text.toLowerCase();
-
-    // 1. Check for Intent/Type Switching
-    // Allow simple "tipe income", "ganti expense", "income"
-    if (lower.includes('income') || lower.includes('pemasukan')) {
-        return { type: 'intent', value: 'tambah_pemasukan' };
-    }
-    if (lower.includes('expense') || lower.includes('pengeluaran')) {
-        return { type: 'intent', value: 'tambah_pengeluaran' };
+    // 5. Date (check multiple possible key names from Gemini)
+    const rawDate = getVal('date') || getVal('datetime') || getVal('waktu') || getVal('deadline');
+    if (rawDate) {
+        const parsed = parseDate(rawDate);
+        if (parsed) enriched.waktu = { value: rawDate, parsed: parsed, raw: rawDate, confidence: 1 };
+    } else if (!entities.isSlotFilling) {
+        // Only default to 'Hari Ini' if NOT in slot-filling mode (first extraction)
+        const now = new Date();
+        const todayStr = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+        enriched.waktu = { value: 'Hari Ini', parsed: now, raw: todayStr, confidence: 1 };
     }
 
-    // 1.5. CHECK FOR LINK EDITING (Project specific)
-    const linkEditMatch = text.match(/link\s?(\d+)\s?(?:ganti|ubah|jadi|set|ke)?\s*(.+)/i);
-    const titleEditMatch = text.match(/(?:judul|nama)\s?link\s?(\d+)\s?(?:ganti|ubah|jadi|set|ke)?\s*(.+)/i);
-
-    if (titleEditMatch) {
-        const index = parseInt(titleEditMatch[1]) - 1;
-        const newTitle = titleEditMatch[2].trim();
-        return { field: 'edit_link_title', value: { index, title: newTitle } };
-    }
-    if (linkEditMatch) {
-        const index = parseInt(linkEditMatch[1]) - 1; // 0-indexed
-        const newUrl = linkEditMatch[2].trim();
-        return { field: 'edit_link', value: { index, url: newUrl } };
+    // 5b. Priority
+    const rawPrio = getVal('priority');
+    if (rawPrio) {
+        let p = rawPrio.toString().toLowerCase();
+        if (p.includes('tinggi') || p.includes('urgent') || p.includes('penting')) p = 'high';
+        else if (p.includes('rendah') || p.includes('santai')) p = 'low';
+        else if (p.includes('sedang') || p.includes('normal')) p = 'medium';
+        enriched.priority = { value: p, raw: rawPrio, confidence: 1 };
     }
 
-    // 2. UNIVERSAL CONTEXT SWITCHING (Smart Scan)
-    // We check if the text strongly matches ANY entity
-    if (userId) {
-        const potentialRaw = {};
-        // Use our existing enrichers
-        const potential = enrichEntities(potentialRaw, text, userId); // Base + Project + Transaction + Task
-        // enriched now contains whatever was found
+    // 6. Others (normalize tipe_tugas to valid types only)
+    const VALID_TASK_TYPES = ['Tugas', 'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'];
+    ['tipe_tugas', 'project', 'project_type', 'item', 'link'].forEach(key => {
+        let val = getVal(key);
 
-        // We need to filter out things that are NOT relevant or weak
-        // Strategy: Only return if confidence is high or raw length is significant
-
-        // Priority Ordered Check
-
-        // A. Project Name (Strongest if matched)
-        if (potential.project && potential.project.confidence >= 0.8) {
-            // Only if we are not currently asking for project (or even if we are, maybe user is correcting it)
-            return { field: 'project', value: potential.project };
-        }
-
-        // B. Date/Waktu
-        if (potential.waktu) {
-            // Date is tricky because "besok" might be part of a note
-            // But if user says "deadline besok" or just "besok" when asked for something else, it's likely a switch
-            return { field: 'waktu', value: potential.waktu };
-        }
-
-        // C. Amount (Money)
-        if (potential.amount) {
-            return { field: 'amount', value: potential.amount };
-        }
-
-        // D. Category
-        if (potential.kategori && potential.kategori.confidence >= 0.8) {
-            return { field: 'kategori', value: potential.kategori };
-        }
-
-        // E. Matkul (Course)
-        if (potential.matkul) {
-            return { field: 'matkul', value: potential.matkul };
-        }
-
-        // F. Task Type
-        if (potential.tipe_tugas) {
-            return { field: 'tipe_tugas', value: potential.tipe_tugas };
-        }
-
-        // G. Progress Specifics
-        if (potential.persentase) return { field: 'persentase', value: potential.persentase };
-        if (potential.duration) return { field: 'duration', value: potential.duration };
-
-        // H. Project Type
-        if (potential.project_type) {
-            return { field: 'project_type', value: potential.project_type };
-        }
-
-        // I. Priority
-        if (potential.priority) {
-            return { field: 'priority', value: potential.priority };
-        }
-    }
-
-    // 3. Explicit Command Fallback (e.g. "ganti note jadi ...")
-    const noteMatch = text.match(/(?:note|catatan|keterangan)(?:\s+(?:nya|adalah))?[:\s]\s*(.+)/i);
-    if (noteMatch) {
-        return { field: 'note', value: { value: noteMatch[1], raw: noteMatch[1], confidence: 1 } };
-    }
-
-    return null; // No edit detected
-}
-
-
-
-function inferCategory(text) {
-    if (!text) return null;
-    const lower = text.toLowerCase();
-
-    for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-        if (keywords.some(kw => lower.includes(kw))) {
-            return category;
-        }
-    }
-    return null;
-}
-
-
-
-
-
-// Helper to enrich Project specific entities
-function enrichProjectSpecifics(enriched, rawText, userId) {
-    // 1. Priority
-    if (!enriched.priority) {
-        if (/\b(urgent|penting|high|tinggi|darurat)\b/i.test(rawText)) enriched.priority = { value: 'high', raw: 'urgent', confidence: 0.9 };
-        else if (/\b(santai|low|rendah|biasa)\b/i.test(rawText)) enriched.priority = { value: 'low', raw: 'santai', confidence: 0.9 };
-        else if (/\b(sedang|medium|normal)\b/i.test(rawText)) enriched.priority = { value: 'medium', raw: 'medium', confidence: 0.9 };
-    }
-
-    // 2. Project Type (Explicit keywords)
-    if (!enriched.project_type) {
-        if (/\b(personal|pribadi|sendiri)\b/i.test(rawText)) {
-            enriched.project_type = { value: 'personal', raw: 'personal', confidence: 0.9 };
-        } else if (/\b(matkul|kuliah|kampus|course)\b/i.test(rawText)) {
-            enriched.project_type = { value: 'course', raw: 'matkul', confidence: 0.9 };
-        }
-    }
-
-    // 3. Project Title (Smart Extraction)
-    // Pattern: "judul/judulnya/project" + [Capture] + delim
-    if (!enriched.project) {
-        // Look for explicit marker 'judul'/'nama' first
-        let titleMatch = rawText.match(/(?:judul|nama)(?:nya)?(?:\s+adalah)?\s+(.+?)(?:\s+(?:deadline|tenggat|prioritas|tipe|kategori|urgent|penting|biasa|santai|matkul|kuliah|matakuliah|personal|detail|$))/i);
-
-        // If not found, look for "project [Title]" but exclude keywords
-        if (!titleMatch) {
-            titleMatch = rawText.match(/(?:project|projek)\s+(?!personal|matkul|nih\b|ni\b|dong\b|deh\b|sih\b)(.+?)(?:\s+(?:deadline|tenggat|prioritas|tipe|kategori|urgent|penting|biasa|santai|matkul|kuliah|matakuliah|personal|detail|$))/i);
-        }
-
-        if (titleMatch) {
-            let title = titleMatch[1].trim();
-            // Cleanup: remove common stop words if captured
-            title = title.replace(/^(buat|bikin)\s+/i, '');
-            if (title) {
-                enriched.project = { value: title, raw: title, confidence: 0.8 };
-                console.log(`[NLP DEBUG] Smart Scan found project title: ${title}`);
+        // Handle project as object (Gemini sometimes returns { nama_project, priority, deadline })
+        if (key === 'project' && val && typeof val === 'object') {
+            // Extract nama_project from object
+            const projectName = val.nama_project || val.name || val.title;
+            if (projectName) {
+                enriched.project = { value: projectName, raw: projectName, confidence: 1 };
             }
-        }
-    }
-
-    // 4. Matkul (Project Context)
-    // Only if not already found and not 'personal' (which implies no matkul)
-    if (!enriched.matkul && enriched.project_type?.value !== 'personal') {
-        const matkulMatch = rawText.match(/(?:matkul|kuliah|matakuliah)\s+(?!apa\b)(.+?)(?:\s+(?:deadline|tenggat|prioritas|tipe|kategori|urgent|penting|biasa|santai|judul|nama|$))/i);
-        if (matkulMatch) {
-            const query = matkulMatch[1].trim();
-            try {
-                // Fetch User Data to get courses
-                const userData = getUserData(userId);
-                const courses = userData?.courses || [];
-
-                const found = findCourse(query, courses);
-
-                if (found) {
-                    enriched.matkul = { value: found.name, courseId: found.id, raw: query, confidence: 0.9 };
-                    // Also infer project_type = course
-                    if (!enriched.project_type) {
-                        enriched.project_type = { value: 'course', raw: 'inferred', confidence: 0.9 };
-                    }
-                    console.log(`[NLP DEBUG] Smart Scan found matkul: ${found.name}`);
-                }
-            } catch (e) {
-                console.log(`[NLP DEBUG] findCourse error in Smart Scan: ${e.message}`);
+            // Also extract priority if present
+            if (val.priority && !enriched.priority) {
+                let p = val.priority.toString().toLowerCase();
+                if (p.includes('tinggi') || p.includes('high') || p.includes('urgent')) p = 'high';
+                else if (p.includes('rendah') || p.includes('low') || p.includes('santai')) p = 'low';
+                else if (p.includes('sedang') || p.includes('medium') || p.includes('normal')) p = 'medium';
+                enriched.priority = { value: p, raw: val.priority, confidence: 1 };
             }
-        }
-    }
-}
-
-function enrichEntities(entities, rawText, userId) { // rawText is needed for context if entities missing
-    const enriched = { ...entities };
-    if (enriched.number) {
-        const amount = parseAmount(enriched.number.raw || enriched.number.value?.toString());
-        enriched.amount = { value: amount, raw: enriched.number.raw, confidence: enriched.number.confidence };
-    }
-
-    // 1. DATE / TIMING
-    // If 'waktu' missing, try to detect 'datetime' entity from Wit.ai/NLP first (sometimes mapped differently)
-    if (!enriched.waktu && enriched.datetime) {
-        enriched.waktu = enriched.datetime;
-    }
-
-    if (enriched.waktu) {
-        const date = parseDate(enriched.waktu.raw || enriched.waktu.value);
-        enriched.waktu = { ...enriched.waktu, parsed: date };
-    } else {
-        // Smart Scan for Date (e.g. "besok", "minggu depan")
-        // Check if raw text contains evident date keywords
-        const dateKeywords = ['besok', 'lusa', 'hari ini', 'minggu depan', 'bulan depan', 'jan', 'feb', 'mar', 'apr', 'mei', 'jun', 'jul', 'agu', 'sep', 'okt', 'nov', 'des'];
-        const textLower = rawText.toLowerCase();
-        if (dateKeywords.some(k => textLower.includes(k))) {
-            const date = parseDate(rawText);
-            // Validation: parseDate returns null or current date if failed? 
-            // The existing parseDate implementation seems to return a Date object if matches found.
-            // We assume it's robust based on previous logs.
-            if (date) {
-                // Use formatted date string as value instead of full rawText
-                const dateStr = date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
-                enriched.waktu = { value: dateStr, raw: rawText, parsed: date, confidence: 0.9 };
-                console.log(`[NLP DEBUG] Smart Scan found date: ${date.toISOString()}`);
+            // Also extract deadline if present
+            if (val.deadline && !enriched.waktu) {
+                const parsed = parseDate(val.deadline);
+                if (parsed) enriched.waktu = { value: val.deadline, parsed: parsed, raw: val.deadline, confidence: 1 };
             }
+            return;
+        }
+
+        if (key === 'project' && val && typeof val === 'string') {
+            const lower = val.toLowerCase();
+            const generics = ['personal', 'pribadi', 'project', 'proyek', 'tugas', 'matkul', 'kuliah', 'kerjaan', 'kantor', 'urgent', 'penting'];
+            if (generics.includes(lower)) return;
+        }
+        if (key === 'tipe_tugas' && val) {
+            // Normalize to valid types only
+            const normalizedType = normalizeToValidType(val);
+            enriched[key] = { value: normalizedType, raw: val, confidence: 1 };
+            return;
+        }
+        if (val && typeof val === 'string') enriched[key] = { value: val, raw: val, confidence: 1 };
+    });
+
+    // Helper to normalize task types to valid ones
+    function normalizeToValidType(type) {
+        if (!type) return 'Tugas';
+        const lower = type.toLowerCase().trim();
+        const mapping = {
+            'lapres': 'Laporan Resmi',
+            'laporan resmi': 'Laporan Resmi',
+            'lapsem': 'Laporan Sementara',
+            'laporan sementara': 'Laporan Sementara',
+            'lapen': 'Laporan Pendahuluan',
+            'laporan pendahuluan': 'Laporan Pendahuluan',
+            'lp': 'Laporan Pendahuluan',
+            'tugas': 'Tugas'
+        };
+        return mapping[lower] || 'Tugas'; // All others (Kuis, UTS, etc.) become Tugas
+    }
+
+    // 7. Infer Project Type
+    if (!enriched.project_type && text) {
+        const lower = text.toLowerCase();
+        if (lower.includes('personal') || lower.includes('pribadi')) {
+            enriched.project_type = { value: 'personal', raw: 'personal', confidence: 0.8 };
+        } else if (lower.includes('matkul') || lower.includes('kuliah') || lower.includes('course')) {
+            enriched.project_type = { value: 'course', raw: 'matkul', confidence: 0.8 };
         }
     }
 
-    // 2. COURSE (Already handled in main loop mostly, but placeholder here)
-    if (enriched.matkul) {
-        // Kept for structure
-    }
-
-    // 3. TASK TYPE
-    // If missing, scan for keywords
-    if (!enriched.tipe_tugas) {
-        const typeRegex = /\b(tugas|quiz|kuis|ujian|uts|uas|projek|project|laporan|lapres|lapen|lapsem|workshop)\b/i;
-        const match = rawText.match(typeRegex);
-        if (match) {
-            enriched.tipe_tugas = { value: match[0], raw: match[0], confidence: 0.9 };
-            console.log(`[NLP DEBUG] Smart Scan found task type: ${match[0]}`);
+    // Merge Item & Note
+    if (enriched.item && enriched.note) {
+        const itemVal = enriched.item.value;
+        const noteVal = enriched.note.value;
+        if (!noteVal.toLowerCase().includes(itemVal.toLowerCase())) {
+            enriched.note.value = `${itemVal} ${noteVal}`;
         }
+        delete enriched.item;
+    } else if (enriched.item && !enriched.note) {
+        enriched.note = { ...enriched.item };
+        delete enriched.item;
     }
-
-    // Normalize Task Type
-    if (enriched.tipe_tugas) {
-        const normalized = normalizeTaskType(enriched.tipe_tugas.value);
-        if (normalized) {
-            enriched.tipe_tugas = { value: normalized, raw: enriched.tipe_tugas.raw, confidence: 1 };
-        }
-    }
-
-    // 4. PROJECT SPECIFICS
-    enrichProjectSpecifics(enriched, rawText, userId);
-
-    // 5. PROGRESS SPECIFICS
-    enrichProgressSpecifics(enriched, rawText, userId);
 
     return enriched;
 }
 
-// Helper: Enrich Progress Specifics (Smart Extraction)
-function enrichProgressSpecifics(enriched, text, userId) {
-    if (!text) return;
-
-    // A. Extract Persentase (e.g., 50%, 50 persen)
-    if (!enriched.persentase) {
-        // Fix: Remove \b after % because % is non-word, \b requires word/non-word boundary. 
-        // 25% matches. 25%_ matches. 25%space matches.
-        const pctMatch = text.match(/\b(\d+)\s*(%|persen|percent)/i);
-        if (pctMatch) {
-            let val = parseInt(pctMatch[1]);
-            if (val >= 0 && val <= 100) {
-                enriched.persentase = { value: val, raw: pctMatch[0], confidence: 1 };
-            }
-        }
+function inferCategory(text) {
+    const lower = text.toLowerCase();
+    for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+        if (keywords.some(k => lower.includes(k))) return cat;
     }
-
-    // B. Extract Duration (e.g., 2 jam, 30 menit)
-    if (!enriched.duration) {
-        // Regex for duration: 2.5 jam, 30 menit, 1 h
-        const durMatch = text.match(/\b(\d+(?:[.,]\d+)?)\s*(jam|menit|hour|minute|h|m)\b/i);
-        if (durMatch) {
-            let num = parseFloat(durMatch[1].replace(',', '.'));
-            let unit = durMatch[2].toLowerCase();
-            let minutes = 0;
-
-            if (unit.startsWith('j') || unit.startsWith('h')) {
-                minutes = num * 60;
-            } else {
-                minutes = num;
-            }
-
-            if (minutes > 0) {
-                enriched.duration = { value: Math.round(minutes), raw: durMatch[0], confidence: 1 };
-            }
-        }
-    }
-
-    // C. Extract Project (Fuzzy Match)
-    // Only if not already found (Project specific helper might have found it too)
-    if (!enriched.project && userId) {
-        // Use findCourse-like logic but for projects
-        // We need list of active projects. Since we don't have direct access here, 
-        // we might need to rely on what `getUserData` provides or similar.
-        // Assuming getUserData(userId) gives us access to projects.
-        const userData = getUserData(userId);
-        const activeProjects = (userData?.projects || []).filter(p => p.status !== 'completed'); // Only active
-
-        if (activeProjects.length > 0) {
-            // Simple heuristic directly in text
-            // Sort projects by length (desc) to match longest triggers first
-            // e.g. "Sistem Skripsi" > "Skripsi"
-            const sorted = [...activeProjects].sort((a, b) => b.name.length - a.name.length);
-
-            for (const p of sorted) {
-                // Check exact name match or partial match if name is long
-                const pName = p.name.toLowerCase();
-                const textLower = text.toLowerCase();
-
-                // 1. Direct inclusion
-                if (textLower.includes(pName)) {
-                    enriched.project = { value: p.name, raw: p.name, confidence: 1 };
-                    break;
-                }
-
-                // 2. Acronym/Short name check (Optional - simple word match)
-                // If project name is "Sistem Skripsi V2", and user says "skripsi" -> match
-                const words = pName.split(/\s+/).filter(w => w.length > 3);
-                const hasKeyword = words.some(w => textLower.includes(w));
-                if (hasKeyword) {
-                    enriched.project = { value: p.name, raw: p.name, confidence: 0.8 };
-                    break;
-                }
-            }
-        }
-    }
-
-    // D. Extract Note (Everything else)
-    if (!enriched.note) {
-        let cleanText = text;
-
-        // Remove Duration
-        if (enriched.duration?.raw) cleanText = cleanText.replace(enriched.duration.raw, '');
-        // Remove Percent
-        if (enriched.persentase?.raw) cleanText = cleanText.replace(enriched.persentase.raw, '');
-        // Remove Project Name
-        if (enriched.project?.value) {
-            // Try to remove the matched part. Since we don't have 'raw' for project fuzzy match,
-            // we try to remove the project name itself or words.
-            // This is tricky. For now, let's just leave it or improve 'enriched.project' to have 'raw'.
-            const words = enriched.project.value.toLowerCase().split(' ');
-            words.forEach(w => {
-                const reg = new RegExp(`\\b${w}\\b`, 'gi');
-                cleanText = cleanText.replace(reg, '');
-            });
-        }
-
-        // Remove intent keywords
-        // Added 'catet'
-        cleanText = cleanText.replace(/\b(catet|catat|progres|progress|lapor|update|log)\b/gi, '');
-
-        // Cleanup
-        cleanText = cleanText.replace(/\s+/g, ' ').trim();
-
-        // If length > 3, assume it's a note
-        if (cleanText.length > 3) {
-            enriched.note = { value: cleanText, raw: cleanText, confidence: 0.8 };
-        }
-    }
+    return null;
 }
 
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
-// ============ Course Data Helper ============
+async function askForMissing(bot, chatId, field, intent, currentData) {
+    console.log(`[askForMissing] field='${field}', intent='${intent}'`);
+    const question = responses.askField(field, intent, currentData);
+    const opts = { parse_mode: 'HTML' };
 
-
-const __filename_nlp = fileURLToPath(import.meta.url); // Avoid conflict with possible existing vars
-const __dirname_nlp = path.dirname(__filename_nlp);
-
-let cachedCourseButtons = null;
-function getCourseButtons() {
-    if (cachedCourseButtons) return cachedCourseButtons;
-
-    try {
-        // Path relative to: telegram-bot/src/nlp/nlp-handler.js
-        // Target: st4cker/st4cker/entities/matkul.json (Based on user report: D:\Project\st4cker\st4cker\entities\matkul.json)
-        // Path: ../../../st4cker/entities/matkul.json (if root is D:\Project\st4cker and folder is st4cker/st4cker/entities)
-
-        // Let's try both common paths to be safe.
-        let entityPath = path.resolve(__dirname_nlp, '../../../st4cker/entities/matkul.json');
-
-        if (!fs.existsSync(entityPath)) {
-            // Fallback to standard path if double-nested doesn't exist
-            entityPath = path.resolve(__dirname_nlp, '../../../entities/matkul.json');
-        }
-
-        if (fs.existsSync(entityPath)) {
-            console.log(`[NLP DEBUG] Loaded Course Buttons from: ${entityPath}`);
-            const content = JSON.parse(fs.readFileSync(entityPath, 'utf8'));
-            if (content.keywords) {
-                // Map to inline buttons (rows of 2)
-                const buttons = [];
-                let row = [];
-                content.keywords.forEach(k => {
-                    // Use clean title case for label
-                    const label = k.keyword.charAt(0).toUpperCase() + k.keyword.slice(1);
-                    row.push({ text: label, callback_data: `nlp_matkul_${k.keyword}` });
-                    if (row.length === 2) {
-                        buttons.push(row);
-                        row = [];
-                    }
-                });
-                if (row.length > 0) buttons.push(row);
-
-                cachedCourseButtons = buttons;
-            }
-        } else {
-            console.warn('[NLP] Course entity file not found at:', entityPath);
-        }
-    } catch (e) {
-        console.error('[NLP] Failed to load course buttons:', e.message);
+    if (field === 'kategori') {
+        opts.reply_markup = {
+            inline_keyboard: [
+                [{ text: '🍔 Food', callback_data: 'nlp_kategori_Food' }, { text: '🚗 Transport', callback_data: 'nlp_kategori_Transport' }],
+                [{ text: '🛍️ Shopping', callback_data: 'nlp_kategori_Shopping' }, { text: '💡 Bills', callback_data: 'nlp_kategori_Bills' }],
+                [{ text: '📺 Subscript', callback_data: 'nlp_kategori_Subscription' }, { text: '💸 Transfer', callback_data: 'nlp_kategori_Transfer' }]
+            ]
+        };
     }
-    return cachedCourseButtons;
-}
-
-function logRawText(chatId, text) {
-    console.log(`[NLP] ${chatId}: "${text}"`);
-}
-
-function getFieldButtons(field, intent) {
-    switch (field) {
-        case 'kategori':
-            if (intent === 'tambah_pemasukan') {
-                return [[
-                    { text: '💸 Salary', callback_data: 'nlp_kategori_Salary' },
-                    { text: '🏦 Transfer', callback_data: 'nlp_kategori_Transfer' }
-                ]];
-            }
-            return [[
-                { text: '🍔 Food', callback_data: 'nlp_kategori_Food' },
-                { text: '🚗 Transport', callback_data: 'nlp_kategori_Transport' }
-            ], [
-                { text: '🛍️ Shopping', callback_data: 'nlp_kategori_Shopping' },
-                { text: '📄 Bills', callback_data: 'nlp_kategori_Bills' }
-            ], [
-                { text: '📺 Subscription', callback_data: 'nlp_kategori_Subscription' },
-                { text: '💸 Transfer', callback_data: 'nlp_kategori_Transfer' }
-            ]];
-        case 'priority':
-            return [[
-                { text: 'Low', callback_data: 'nlp_priority_Low' },
-                { text: 'Medium', callback_data: 'nlp_priority_Medium' },
-                { text: 'High', callback_data: 'nlp_priority_High' }
-            ]];
-        case 'project_type':
-            return [[
+    if (field === 'priority') {
+        opts.reply_markup = {
+            inline_keyboard: [
+                [{ text: 'High', callback_data: 'nlp_prio_High' }, { text: 'Medium', callback_data: 'nlp_prio_Medium' }, { text: 'Low', callback_data: 'nlp_prio_Low' }]
+            ]
+        };
+    }
+    if (field === 'project_type') {
+        opts.reply_markup = {
+            inline_keyboard: [[
                 { text: '👤 Personal', callback_data: 'nlp_proj_personal' },
-                { text: '🏫 Matkul', callback_data: 'nlp_proj_course' }
-            ]];
-        case 'matkul':
-            return getCourseButtons();
-        case 'add_more_links':
-            return [[
-                { text: '✅ Ya', callback_data: 'nlp_addlink_yes' },
-                { text: '❌ Tidak', callback_data: 'nlp_addlink_no' }
-            ]];
-        default:
-            return null;
+                { text: '🏫 Mata Kuliah', callback_data: 'nlp_proj_course' }
+            ]]
+        };
     }
-}
+    if (field === 'matkul') {
+        // Load courses from entity cache (matkul.json)
+        const cache = getEntityCache();
+        const matkulKeywords = [];
 
-// Fallback Handlers
-async function handleFallbackIntents(bot, msg, intent) {
-    const chatId = msg.chat.id;
-    if (intent === 'batalkan') await bot.sendMessage(chatId, responses.cancelled());
-    else if (intent === 'bantuan') await bot.sendMessage(chatId, responses.help());
-    else if (intent === 'casual') await bot.sendMessage(chatId, responses.casual());
-    return true;
-}
-
-async function handleCekSaldo(bot, msg, entities) {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id.toString();
-    try {
-        const userData = getUserData(userId);
-        const balance = userData?.currentBalance || 0;
-        await bot.sendMessage(chatId, `💰 Saldo kamu: *${formatAmount(balance)}*`, { parse_mode: 'Markdown' });
-    } catch (e) { await bot.sendMessage(chatId, 'Gagal cek saldo.'); }
-    return true;
-}
-
-async function handleLihatTransaksi(bot, msg, entities, broadcastEvent) {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id.toString();
-    try {
-        const userData = getUserData(userId);
-        const transactions = userData?.transactions || [];
-
-        if (transactions.length === 0) {
-            await bot.sendMessage(chatId, '📭 **Belum ada transaksi**\n\nYuk catat pemasukan/pengeluaran dulu!', { parse_mode: 'Markdown' });
-            return true;
+        if (cache && cache['matkul']) {
+            // Extract unique course names (keywords)
+            const map = cache['matkul'];
+            const seen = new Set();
+            for (const [synonym, keyword] of map.entries()) {
+                if (!seen.has(keyword)) {
+                    seen.add(keyword);
+                    matkulKeywords.push(keyword);
+                }
+            }
         }
 
-        // Sort just in case (though sync handles it)
-        const recent = transactions.slice(0, 10);
+        // Build inline keyboard (max 12 courses, 2 per row)
+        if (matkulKeywords.length > 0) {
+            const buttons = matkulKeywords.slice(0, 12).map(name => {
+                // Shorten long names for button text
+                const shortName = name.length > 20 ? name.substring(0, 17) + '...' : name;
+                return { text: shortName, callback_data: `nlp_matkul_${name.substring(0, 30)}` };
+            });
 
-        // Helper for formatting
-        const formatMoney = (amount) => {
-            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
-        };
+            // Arrange in rows of 2
+            const keyboard = [];
+            for (let i = 0; i < buttons.length; i += 2) {
+                keyboard.push(buttons.slice(i, i + 2));
+            }
 
-        const formatDate = (dateStr) => {
-            const date = new Date(dateStr);
-            const now = new Date();
-            const diffTime = now - date;
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            opts.reply_markup = { inline_keyboard: keyboard };
+        }
+    }
 
-            if (diffDays === 0) return 'Hari ini';
-            if (diffDays === 1) return 'Kemarin';
-            return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-        };
+    const sent = await bot.sendMessage(chatId, question, opts);
+    const p = getPending(chatId);
+    if (p) {
+        p.lastQuestionId = sent.message_id;
+        setPending(chatId, p);
+    }
+    return true;
+}
 
-        let message = `💰 **Riwayat Transaksi (10 Terakhir)**\n\n`;
+async function askForConfirmation(bot, chatId, intent, data) {
+    let summary = `<b>Konfirmasi Data</b> 📝\n\n`;
+    const priorityKeys = ['project', 'waktu', 'project_type', 'priority', 'note', 'amount', 'kategori', 'item', 'matkul', 'tipe_tugas'];
 
-        recent.forEach((t) => {
-            const isIncome = t.type === 'income';
-            const icon = isIncome ? '🟢' : '🔴';
-            const sign = isIncome ? '+' : '-';
-            const amountStr = formatMoney(Math.abs(t.amount));
-            const note = t.note || t.category || '-';
-            const dateInfo = formatDate(t.date);
+    const pending = getPending(chatId);
+    const hasLinkList = pending && pending.links && pending.links.length > 0;
 
-            message += `${icon} **${sign}${amountStr}**\n   ${note} • _${dateInfo}_\n\n`;
+    priorityKeys.forEach(key => {
+        const val = data[key];
+        if (!val) return;
+        let displayVal = escapeHtml(val.value);
+
+        if (key === 'amount') {
+            const num = Number(val.value);
+            const fmt = !isNaN(num) ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num) : val.value;
+            displayVal = escapeHtml(fmt);
+        } else if (key === 'waktu' && val.parsed) {
+            const dtStr = val.parsed.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+            displayVal = escapeHtml(dtStr);
+        }
+
+        const keyName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+        summary += `- <b>${keyName}</b>: ${displayVal}\n`;
+    });
+
+    Object.keys(data).forEach(key => {
+        if (priorityKeys.includes(key)) return;
+        if (key === 'link') {
+            const v = data[key]?.value;
+            if (hasLinkList) return;
+            if (v === '-' || v.toLowerCase() === 'skip') return;
+        }
+        if (['confidence', 'raw', 'parsed', 'courseId', 'links'].includes(key)) return;
+        summary += `- <b>${key}</b>: ${escapeHtml(data[key].value)}\n`;
+    });
+
+    if (hasLinkList) {
+        summary += `\n🔗 <b>Links:</b>\n`;
+        pending.links.forEach(l => {
+            const t = l.title || 'Link';
+            summary += `- <a href="${l.url}">${escapeHtml(t)}</a>\n`;
         });
+    }
 
-        const currentBalance = userData?.currentBalance || 0;
-        message += `💳 **Saldo Akhir:** ${formatMoney(currentBalance)}`;
+    summary += `\nSudah benar? (Ya/Tidak)`;
 
-        await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-    } catch (e) {
-        console.error('[NLP] Error Lihat Transaksi:', e);
-        await bot.sendMessage(chatId, 'Gagal ambil data transaksi.');
+    const sent = await bot.sendMessage(chatId, summary, {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [[
+                { text: '✅ Ya', callback_data: 'nlp_confirm_yes' },
+                { text: '❌ Tidak', callback_data: 'nlp_confirm_no' }
+            ]]
+        }
+    });
+
+    const p = getPending(chatId);
+    if (p) {
+        p.confirmMessageId = sent.message_id;
+        setPending(chatId, p);
     }
     return true;
 }
 
-// Handle Summary
-async function handleSummary(bot, msg, entities, broadcastEvent) {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id.toString();
-    const text = msg.text.toLowerCase();
+async function executeConfirmedIntent(bot, msg, intent, data, broadcastEvent, extraData = []) {
+    console.log(`[EXECUTE] Intent: ${intent}`, JSON.stringify(data));
+    if (extraData && Array.isArray(extraData) && extraData.length > 0) {
+        data.links = extraData;
+    }
 
     try {
-        const userData = getUserData(userId);
-        const summary = userData?.summary;
-
-        if (!summary) {
-            await bot.sendMessage(chatId, '⚠️ Data summary belum tersedia. Coba restart App Desktop & pastikan connect.');
-            return true;
+        if (['tambah_pemasukan', 'tambah_pengeluaran', 'lihat_transaksi', 'edit_transaksi', 'hapus_transaksi', 'cek_saldo'].includes(intent)) {
+            await handleTransactionIntent(bot, msg, intent, data, broadcastEvent);
         }
-
-        const formatRupiah = (num) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
-
-        let title = '📊 **Summary Global**';
-        let stats = summary.monthly; // Default to monthly if unspecified? Or All?
-        // Actually "summary" usually implies general status.
-        // Let's detect time keyword
-
-        let timeLabel = 'Bulan Ini';
-
-        if (text.includes('hari ini') || text.includes('today')) {
-            title = '📅 **Summary Hari Ini**';
-            stats = summary.daily;
-            timeLabel = 'Hari Ini';
-        } else if (text.includes('minggu ini') || text.includes('week')) {
-            title = '📅 **Summary Minggu Ini** (Last 7 Days)';
-            stats = summary.weekly;
-            timeLabel = 'Minggu Ini';
-        } else if (text.includes('bulan ini') || text.includes('month')) {
-            title = '📅 **Summary Bulan Ini**';
-            stats = summary.monthly;
-            timeLabel = 'Bulan Ini';
-        } else {
-            // Default "Summary" -> Show All 3?
-            // "Ringkasan"
-            let message = `📊 **Financial Summary**\n\n`;
-
-            message += `**Hari Ini:**\n`;
-            message += `🟢 Masuk: ${formatRupiah(summary.daily.income)}\n`;
-            message += `🔴 Keluar: ${formatRupiah(summary.daily.expense)}\n\n`;
-
-            message += `**Minggu Ini (7 Hari):**\n`;
-            message += `🟢 Masuk: ${formatRupiah(summary.weekly.income)}\n`;
-            message += `🔴 Keluar: ${formatRupiah(summary.weekly.expense)}\n\n`;
-
-            message += `**Bulan Ini:**\n`;
-            message += `🟢 Masuk: ${formatRupiah(summary.monthly.income)}\n`;
-            message += `🔴 Keluar: ${formatRupiah(summary.monthly.expense)}\n\n`;
-
-            message += `💳 **Saldo Saat Ini:** ${formatRupiah(userData.currentBalance || 0)}`;
-
-            await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-            return true;
+        else if (intent.includes('tugas') || intent === 'deadline_terdekat') {
+            await handleTaskIntent(bot, msg, intent, data, broadcastEvent);
         }
-
-        // Specific Time View
-        const balance = stats.income - stats.expense;
-        const icon = balance >= 0 ? '📈' : '📉';
-
-        let message = `${title}\n\n`;
-        message += `🟢 Pemasukan: ${formatRupiah(stats.income)}\n`;
-        message += `🔴 Pengeluaran: ${formatRupiah(stats.expense)}\n`;
-        message += `-------------------------\n`;
-        message += `${icon} Net Flow: **${formatRupiah(balance)}**\n\n`;
-
-        if (timeLabel === 'Bulan Ini') {
-            message += `💳 Saldo Akhir: **${formatRupiah(userData.currentBalance || 0)}**`;
+        else if (intent.includes('project') || intent === 'catat_progress') {
+            await handleProjectIntent(bot, msg, intent, data, broadcastEvent);
         }
-
-        await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-
-    } catch (e) {
-        console.error('[NLP] Error Handle Summary:', e);
-        await bot.sendMessage(chatId, 'Gagal memproses summary.');
+        else {
+            await handleGeneralIntent(bot, msg, intent, data, broadcastEvent);
+        }
+    } catch (err) {
+        console.error('Execute Error:', err);
+        bot.sendMessage(msg.chat.id, '❌ Terjadi kesalahan saat memproses data.');
     }
-    return true;
 }
 
-// Helpers for NLP callbacks
+function extractLocalEntities(text) {
+    const lower = text.toLowerCase();
+    const entities = {};
+
+    const amtMatch = text.match(AMOUNT_REGEX);
+    if (amtMatch) {
+        if (!amtMatch[0].match(/^\d{4}$/) || lower.includes('rp')) {
+            entities.amount = [{ value: amtMatch[0] }];
+        }
+    }
+
+    if (/^(deadline|tenggat|waktu|tanggal|date)\b/i.test(lower)) {
+        const val = text.replace(/^(deadline|tenggat|waktu|tanggal|date)\s*[:=]?\s*(nya)?\s*/i, '');
+        entities.waktu = [{ value: val }];
+    } else {
+        const dateObj = parseDate(text);
+        if (dateObj) entities.waktu = [{ value: text }];
+    }
+
+    if (lower.startsWith('note') || lower.startsWith('catatan') || lower.startsWith('ket')) {
+        let val = text.replace(/^(ganti|ubah)?\s*(note|catatan|ket)(nya)?\s*(jadi|ke)?\s*[:=]?\s*/i, '');
+        entities.note = [{ value: val }];
+    }
+
+    if (lower.startsWith('matkul') || lower.startsWith('mk')) {
+        const val = text.replace(/^(matkul|mk)(nya)?\s*(jadi|ke)?\s*[:=]?\s*/i, '');
+        entities.matkul = [{ value: val }];
+    }
+
+    if (lower.startsWith('nama project') || lower.startsWith('project') || lower.includes('nama jadi') || lower.includes('ganti nama')) {
+        const val = text.replace(/^(ganti)?\s*(nama)?\s*(project|proyek)?(nya)?\s*(jadi|ke)?\s*[:=]?\s*/i, '');
+        if (val && val.length > 1) entities.project = [{ value: val }];
+    }
+
+    if (lower.startsWith('kategori') || lower.startsWith('kat')) {
+        const val = text.replace(/^(kategori|kat)(nya)?\s*(jadi|ke)?\s*[:=]?\s*/i, '');
+        entities.kategori = [{ value: val }];
+    } else {
+        const foundCat = VALID_CATEGORIES.find(c => lower.includes(c.toLowerCase()));
+        if (foundCat) entities.kategori = [{ value: foundCat }];
+    }
+
+    if (lower.startsWith('tipe') || lower.startsWith('jenis') || lower.startsWith('tugas')) {
+        const val = text.replace(/^(tipe|jenis|tugas)(nya)?\s*(tugas)?\s*(jadi|ke)?\s*[:=]?\s*/i, '');
+        entities.tipe_tugas = [{ value: val }];
+    }
+
+    // Priority extraction for projects
+    if (lower.startsWith('priority') || lower.startsWith('prioritas') || lower.startsWith('prio')) {
+        let val = text.replace(/^(priority|prioritas|prio)(nya)?\s*(jadi|ke)?\s*[:=]?\s*/i, '').toLowerCase();
+        if (val.includes('tinggi') || val.includes('high') || val.includes('urgent')) val = 'high';
+        else if (val.includes('rendah') || val.includes('low') || val.includes('santai')) val = 'low';
+        else if (val.includes('sedang') || val.includes('medium') || val.includes('normal')) val = 'medium';
+        entities.priority = [{ value: val }];
+    }
+
+    // Item extraction for transactions
+    if (lower.startsWith('item') || lower.startsWith('barang') || lower.startsWith('beli')) {
+        const val = text.replace(/^(item|barang|beli)(nya)?\s*(jadi|ke)?\s*[:=]?\s*/i, '');
+        if (val && val.length > 1) entities.item = [{ value: val }];
+    }
+
+    // Conflict Resolution: Date vs Amount
+    if (entities.waktu && entities.amount) {
+        const amtStr = entities.amount[0].value;
+        if (!/rb|k|jt|juta/i.test(amtStr)) {
+            delete entities.amount;
+        }
+    }
+
+    return entities;
+}
+
+// Callback Query Handler
 export async function handleNLPCallback(bot, query, broadcastEvent) {
+    const data = query.data;
     const chatId = query.message.chat.id;
     const userId = query.from.id.toString();
-    const data = query.data;
 
+    // 1. Kategori Selection
     if (data.startsWith('nlp_kategori_')) {
         const val = data.replace('nlp_kategori_', '');
-        updateSlotAndContinue(bot, chatId, userId, 'kategori', val, query.id, query.message.message_id, broadcastEvent);
-        return;
+        // Simulate text answer
+        const fakeMsg = { chat: { id: chatId }, from: { id: userId }, text: val };
+        try { await bot.answerCallbackQuery(query.id); } catch (e) { console.warn('[NLP Callback] answerCallbackQuery failed:', e.message); }
+        return handleNaturalLanguage(bot, fakeMsg, broadcastEvent);
     }
-    if (data.startsWith('nlp_priority_')) {
-        const val = data.replace('nlp_priority_', '');
-        updateSlotAndContinue(bot, chatId, userId, 'priority', val, query.id, query.message.message_id, broadcastEvent);
-        return;
-    }
-    // Project Type flow
-    if (data.startsWith('nlp_proj_')) {
-        const val = data.replace('nlp_proj_', '');
-        updateSlotAndContinue(bot, chatId, userId, 'project_type', val, query.id, query.message.message_id, broadcastEvent);
-        return;
-    }
-    // Matkul flow
+
+    // 1b. Matkul Selection
     if (data.startsWith('nlp_matkul_')) {
         const val = data.replace('nlp_matkul_', '');
-        // For buttons, the val is the keyword (e.g. 'webpro'). 
-        // We can capitalize it for display or keep as is.
-        updateSlotAndContinue(bot, chatId, userId, 'matkul', val, query.id, query.message.message_id, broadcastEvent);
-        return;
-    }
-    // Add Link flow
-    if (data.startsWith('nlp_addlink_')) {
-        const val = data.replace('nlp_addlink_', ''); // 'yes' or 'no'
-
-        // Handle "No" -> Just complete the field and continue (to confirmation)
-        if (val === 'no') {
-            // Explicit cleanup to be ultra-safe
-            try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id }); } catch (e) { }
-            updateSlotAndContinue(bot, chatId, userId, 'add_more_links', 'no', query.id, query.message.message_id, broadcastEvent);
-            return;
-        }
-
-        // Handle "Yes" -> Reset fields to loop back
-        if (val === 'yes') {
-            const pending = getPending(chatId);
-            if (pending) {
-                // Remove filled fields to restart loop
-                delete pending.filled.link;
-                delete pending.filled.link_title;
-                delete pending.filled.add_more_links;
-
-                // Add 'link' back to missing (at start)
-                if (!pending.missing.includes('link')) {
-                    pending.missing.unshift('link');
+        // Find full course name from cache if it was truncated
+        const cache = getEntityCache();
+        let fullName = val;
+        if (cache && cache['matkul']) {
+            for (const [_, keyword] of cache['matkul'].entries()) {
+                if (keyword.startsWith(val)) {
+                    fullName = keyword;
+                    break;
                 }
-                // Remove 'add_more_links' from missing if it's there (it shouldn't be, but safe check)
-                pending.missing = pending.missing.filter(f => f !== 'add_more_links');
-
-                setPending(chatId, pending);
-
-                await bot.answerCallbackQuery(query.id, { text: 'Sip, tambah lagi.' }).catch(() => { });
-                // Clear buttons
-                bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id });
-
-                // Ask for the next link
-                await askForMissing(bot, chatId, 'link', pending.intent, pending.filled);
-                return;
             }
         }
-        return;
+
+        const fakeMsg = { chat: { id: chatId }, from: { id: userId }, text: fullName };
+        try { await bot.answerCallbackQuery(query.id); } catch (e) { console.warn('[NLP Callback] answerCallbackQuery failed:', e.message); }
+        try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id }); } catch (e) { }
+        return handleNaturalLanguage(bot, fakeMsg, broadcastEvent);
     }
 
-    // Progress flow
-    if (data.startsWith('nlp_progress_')) {
-        const pid = data.replace('nlp_progress_', '');
-        // For progress, we trigger "catat_progress" with project filled
-        setPending(chatId, {
-            intent: 'catat_progress',
-            filled: { project: { value: pid } },
-            missing: ['persentase', 'duration', 'note'],
-            raw_text: ''
-        });
-        await bot.answerCallbackQuery(query.id);
-        bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id });
-        await askForMissing(bot, chatId, 'persentase', 'catat_progress', {});
-        return;
-    }
-
-    // Confirm flow
-    if (data === 'nlp_confirm_yes') {
+    // 2. Confirmation
+    if (data === 'nlp_confirm_yes' || data === 'nlp_confirm_no') {
         const pending = getPending(chatId);
-        if (pending && pending.subState === 'confirmation') {
-            clearPending(chatId);
-            await bot.answerCallbackQuery(query.id, { text: 'Processing...' }).catch(() => { });
-            bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id });
-            const fakeMsg = { chat: { id: chatId }, from: { id: userId }, text: '' };
-            return executeConfirmedIntent(bot, fakeMsg, pending.intent, pending.filled, broadcastEvent);
-        }
-    }
-    if (data === 'nlp_confirm_no') {
+        if (!pending) return;
+
+        try { await bot.answerCallbackQuery(query.id); } catch (e) { console.warn('[NLP Callback] answerCallbackQuery failed:', e.message); }
+        try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id }); } catch (e) { }
         clearPending(chatId);
-        await bot.answerCallbackQuery(query.id, { text: 'Cancelled' }).catch(() => { });
 
-        // Delete the confirmation message to keep chat clean (consistent with "gajadi")
-        try {
-            await bot.deleteMessage(chatId, query.message.message_id);
-        } catch (e) { console.log('[NLP] Failed to delete confirmation on button click', e.message); }
-
-        await bot.sendMessage(chatId, responses.cancelled());
+        if (data === 'nlp_confirm_yes') {
+            const fakeMsg = { chat: { id: chatId }, from: { id: userId }, text: '' };
+            return executeConfirmedIntent(bot, fakeMsg, pending.intent, pending.filled, broadcastEvent, pending.links);
+        } else {
+            await bot.sendMessage(chatId, '❌ Dibatalkan.');
+        }
         return;
     }
 
-    await bot.answerCallbackQuery(query.id).catch(() => { });
-}
-
-async function updateSlotAndContinue(bot, chatId, userId, field, value, callbackQueryId, messageId, broadcastEvent, rawValue = null) {
-    const pending = getPending(chatId);
-    if (!pending) {
-        await bot.answerCallbackQuery(callbackQueryId, { text: 'Session expired.' });
-        return;
+    if (data.startsWith('nlp_prio_')) {
+        const val = data.replace('nlp_prio_', '');
+        const fakeMsg = { chat: { id: chatId }, from: { id: userId }, text: val };
+        try { await bot.answerCallbackQuery(query.id); } catch (e) { console.warn('[NLP Callback] answerCallbackQuery failed:', e.message); }
+        return handleNaturalLanguage(bot, fakeMsg, broadcastEvent);
     }
 
-    // Cleanup buttons immediately
-    try {
-        await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
-    } catch (e) { }
+    // 4. Project Type Selection
+    if (data === 'nlp_proj_personal' || data === 'nlp_proj_course') {
+        const pending = getPending(chatId);
+        if (!pending) return;
 
-    const slotData = { value: value, raw: rawValue || value, confidence: 1 };
+        const type = data === 'nlp_proj_personal' ? 'personal' : 'course';
 
-    // Resolve Course ID for 'matkul'
-    if (field === 'matkul') {
-        const userData = getUserData(userId);
-        const courses = userData?.courses || [];
-        const found = findCourse(value, courses);
-        if (found) {
-            slotData.value = found.name;
-            slotData.courseId = found.id;
+        pending.filled.project_type = { value: type, raw: type, confidence: 1 };
+        pending.missing = pending.missing.filter(field => field !== 'project_type');
+
+        // If type is COURSE and Matkul is missing, force ask for matkul
+        if (type === 'course' && !pending.filled.matkul) {
+            if (!pending.missing.includes('matkul')) pending.missing.unshift('matkul');
         }
-    }
 
-    pending.filled[field] = slotData;
-    await bot.answerCallbackQuery(callbackQueryId).catch(() => { });
+        try { await bot.answerCallbackQuery(query.id); } catch (e) { console.warn('[NLP Callback] answerCallbackQuery failed:', e.message); }
+        try { await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id }); } catch (e) { }
 
-    // Inject 'matkul' if project_type becomes course
-    if (field === 'project_type' && (value === 'course' || value === 'matkul')) {
-        if (!pending.filled.matkul && !pending.missing.includes('matkul')) {
-            pending.missing.unshift('matkul');
-        }
-    }
-
-    // Remove current field from missing
-    pending.missing = pending.missing.filter(f => f !== field);
-
-    if (pending.missing.length > 0) {
         setPending(chatId, pending);
-        return askForMissing(bot, chatId, pending.missing[0], pending.intent, pending.filled);
+        if (pending.missing.length > 0) {
+            return askForMissing(bot, chatId, pending.missing[0], pending.intent, pending.filled);
+        } else {
+            pending.subState = 'confirmation';
+            setPending(chatId, pending);
+            return askForConfirmation(bot, chatId, pending.intent, pending.filled);
+        }
     }
-
-    // All done -> Confirmation
-    pending.missing = [];
-    pending.subState = 'confirmation';
-    setPending(chatId, pending);
-    return askForConfirmation(bot, chatId, pending.intent, pending.filled);
 }

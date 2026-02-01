@@ -20,13 +20,17 @@
     "author": "st4cker",
     "license": "MIT",
     "dependencies": {
+        "@google/generative-ai": "^0.24.1",
         "better-sqlite3": "^12.6.2",
         "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "drizzle-orm": "^0.45.1",
         "express": "^4.18.2",
         "googleapis": "^131.0.0",
         "node-cron": "^4.2.1",
         "node-nlp": "4.27.0",
         "node-telegram-bot-api": "^0.66.0",
+        "pg": "^8.17.2",
         "socket.io": "^4.7.2",
         "uuid": "^9.0.1",
         "validator": "^13.11.0"

@@ -63,6 +63,15 @@ export function parseDate(text) {
     const today = getJakartaNow();
     const lower = text.toLowerCase().trim();
 
+    // ISO Date Format (YYYY-MM-DD) - Priority check for Gemini output
+    const isoMatch = lower.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+        const y = parseInt(isoMatch[1]);
+        const m = parseInt(isoMatch[2]) - 1; // Month is 0-indexed
+        const d = parseInt(isoMatch[3]);
+        return new Date(y, m, d);
+    }
+
     // Relative dates
     if (/\bbesok\b|\bbsk\b/i.test(lower)) {
         return addDays(today, 1);

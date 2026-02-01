@@ -1,3 +1,4 @@
+
 import {
     processProjectCreation,
     processLogProgress,
@@ -5,16 +6,16 @@ import {
     processEditProject,
     processDeleteProject
 } from '../../commands/project.js';
-import { getUserData } from '../../store.js';
+import { DbService } from '../../services/dbService.js';
+import { generateDynamicResponse } from '../nlp-service.js';
 
 export async function handleProjectIntent(bot, msg, intent, data, broadcastEvent) {
     const chatId = msg.chat.id;
     const userId = msg.from.id.toString();
+    const getVal = (key) => typeof data[key] === 'object' ? data[key]?.value : (data[key] || '');
 
     // 1. Create Project
     if (intent === 'buat_project') {
-        console.log('[ProjectHandler] Data:', JSON.stringify(data, null, 2));
-
         const toLocalYMD = (d) => {
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -22,44 +23,60 @@ export async function handleProjectIntent(bot, msg, intent, data, broadcastEvent
             return `${y}-${m}-${dy}`;
         };
 
-        const rawDate = data.parsedDate || new Date();
-        const dateStr = toLocalYMD(rawDate);
+        // Handle Date
+        let targetDate = new Date();
+        if (data.waktu?.parsed) targetDate = new Date(data.waktu.parsed);
+        else if (data.date?.parsed) targetDate = new Date(data.date.parsed);
+        const dateStr = toLocalYMD(targetDate);
+
+        const projectType = getVal('project_type') || 'personal';
+        const matkulObj = data.matkul;
+
+        const projectTitle = getVal('project') || getVal('judul') || 'Untitled';
 
         const res = await processProjectCreation(bot, chatId, userId, {
-            title: data.project || data.judul,
+            title: projectTitle,
             deadline: dateStr,
-            priority: data.priority || 'medium',
-            projectType: data.project_type || 'personal',
-            courseId: data.courseId,
-            description: data.note || '',
-            courseName: data.matkul || '',
-            link: data.link || '',
-            linkTitle: data.link_title || '',
+            priority: getVal('priority') || 'medium',
+            projectType: projectType,
+            courseId: matkulObj?.courseId || null,
+            description: getVal('note') || '',
+            courseName: getVal('matkul') || '',
+            link: getVal('link') || '',
+            linkTitle: getVal('link_title') || '',
             links: data.links || []
         }, broadcastEvent);
 
-        if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
+        if (res.success) {
+            const dynamicMsg = await generateDynamicResponse('project_created', { title: projectTitle });
+            bot.sendMessage(chatId, dynamicMsg);
+        }
         else bot.sendMessage(chatId, `❌ ${res.message}`);
         return true;
     }
 
     // 2. Log Progress
     if (intent === 'catat_progress') {
-        const projects = getUserData(userId)?.projects || [];
+        // Fetch projects from DB
+        const projects = await DbService.getProjects(userId);
         let targetProject = null;
-        if (data.project) {
-            const search = data.project.toLowerCase();
-            targetProject = projects.find(p => p.name.toLowerCase().includes(search));
+
+        const projName = getVal('project');
+
+        if (projName) {
+            const search = projName.toLowerCase();
+            targetProject = projects.find(p => p.title.toLowerCase().includes(search));
         }
 
         if (!targetProject) {
             // Interactive Selection
+            // Show recent active projects first
+            // projects are sorted by deadline default if we wanted. DbService returns order? 
+            // We should sort by last updated or deadline for relevance.
+            // Let's take first 10.
             const buttons = projects.slice(0, 10).map(p => [{
-                text: p.name,
-                callback_data: `nlp_progress_${p.id}` // This callback needs to be handled in logic or passed back?
-                // The callback handler in nlp-handler.js handles 'nlp_progress_' prefix.
-                // It sets pending state and asks for missing slots.
-                // So this just initiates the UI.
+                text: p.title,
+                callback_data: `log_proj_${p.id}` // Reuse command callback
             }]);
 
             if (buttons.length === 0) {
@@ -72,19 +89,31 @@ export async function handleProjectIntent(bot, msg, intent, data, broadcastEvent
             return true;
         }
 
-        // Check for 100% completion flag
-        if (data.persentase == 100) data.newStatus = 'completed';
+        // Logic for auto-filling progress
+        const rawPercent = getVal('persentase');
+        let newProgress = parseInt(rawPercent);
+        if (isNaN(newProgress)) newProgress = (targetProject.totalProgress || 0) + 10; // Default increment if not specified? 
+        if (newProgress > 100) newProgress = 100;
+
+        let newStatus = getVal('project_status') || 'in_progress';
+        if (newProgress === 100) newStatus = 'completed';
 
         const res = await processLogProgress(bot, chatId, userId, {
             projectId: targetProject.id,
-            projectName: targetProject.name,
-            duration: typeof data.duration === 'string' ? parseInt(data.duration) : (data.duration || 60),
-            note: data.note || 'Progress Log',
-            newStatus: data.newStatus || 'in_progress',
-            newProgress: parseInt(data.persentase)
+            projectName: targetProject.title,
+            duration: parseInt(getVal('duration')) || 60,
+            note: getVal('note') || 'Progress Log',
+            newStatus: newStatus,
+            newProgress: newProgress
         }, broadcastEvent);
 
-        if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
+        if (res.success) {
+            const dynamicMsg = await generateDynamicResponse('progress_logged', {
+                projectName: targetProject.title,
+                progress: newProgress
+            });
+            bot.sendMessage(chatId, dynamicMsg);
+        }
         return true;
     }
 

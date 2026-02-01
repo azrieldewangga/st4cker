@@ -31,14 +31,18 @@ export const responses = {
             case 'waktu':
                 return 'Deadlinenya kapan?';
             case 'matkul':
-                return 'Matkul apa?';
+                return 'Buat matkul apa? 📚';
             case 'project':
                 return 'Apa nama projectnya? 📝';
             case 'priority':
                 return 'Prioritasnya?';
             case 'note':
-                // Custom prompt for progress vs others
-                if (intent === 'catat_progress') return 'Note/Keterangannya apa? (Wajib)';
+                // Context-aware prompts
+                if (intent === 'tambah_pengeluaran') return 'Beli apa? 🛒';
+                if (intent === 'tambah_pemasukan') return 'Dari mana? 💰';
+                if (intent === 'buat_tugas') return 'Ada catatan/deskripsi? 📝';
+                if (intent === 'catat_progress') return 'Keterangannya apa? (Wajib)';
+                if (intent === 'buat_project') return 'Deskripsi projectnya? 📋';
                 return 'Ada note ga?';
             case 'duration':
                 return 'Berapa lama kerjanya?';
@@ -82,6 +86,8 @@ export const responses = {
     redone: (action) => `Oke, ${action} udah balik lagi~`,
 
     // ============ Low Confidence ============
+    confusion: (text) =>
+        `Hmm, aku belum terlalu paham nih~ Coba pakai command atau ketik "bantuan" yaa`,
     lowConfidence: (text) =>
         `Hmm, aku belum terlalu paham nih~ Coba pakai command atau ketik "bantuan" yaa`,
 
@@ -93,28 +99,28 @@ export const responses = {
 
     // ============ Help ============
     help: () => `Aku bisa bantu kamu:\n
-📝 *Tugas*
+<b>📝 Tugas</b>
 • "tugas fisdas deadline besok"
 • "lihat tugas" / "deadline"
 • "hapus tugas" / "edit tugas"
 
-💰 *Keuangan*
+<b>💰 Keuangan</b>
 • "jajan 50rb kopi"
 • "gaji 2jt"
 • "cek saldo" / "histori transaksi"
 • "edit transaksi" / "hapus transaksi"
 
-📊 *Project*
+<b>📊 Project</b>
 • "buat project skripsi"
 • "log progress"
 • "lihat project"
 
-📅 *Summary*
+<b>📅 Summary</b>
 • "summary" (Hari ini)
 • "rekap besok" / "rekap minggu ini"
 • "rekap bulan ini"
 
-💡 *Tips*
+<b>💡 Tips</b>
 • Bisa undo pake "ga jadi"
 • Bisa revisi pake "ganti [field]"
 • Support singkatan: "mingdep", "buldep", "50k", "goceng"`,

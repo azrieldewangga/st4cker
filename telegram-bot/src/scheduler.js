@@ -1,5 +1,6 @@
+
 import cron from 'node-cron';
-import db from './database.js';
+import { DbService } from './services/dbService.js';
 
 // Helper: Get local YYYY-MM-DD in Jakarta Time
 const getJakartaDateStr = (dateObj) => {
@@ -22,11 +23,7 @@ export const initScheduler = (bot) => {
 
 async function sendMorningBrief(bot) {
     try {
-        // Fix: Read from SQLite instead of JSON files
-        const users = db.prepare('SELECT telegram_user_id, data FROM user_data').all();
-
-        // Fix: Use Jakarta Timezone (UTC+7) for "Today"
-        // Create a date object relative to Jakarta time
+        // Calculate dynamic dates for Jakarta
         const now = new Date();
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
@@ -36,76 +33,51 @@ async function sendMorningBrief(bot) {
         const tomorrowStr = getJakartaDateStr(tomorrow);
         const lusaStr = getJakartaDateStr(lusa);
 
-        for (const user of users) {
-            const userId = user.telegram_user_id;
-            let userData;
+        // Fetch Tasks
+        const tasksTomorrow = await DbService.getDueTasks(tomorrowStr);
+        const tasksLusa = await DbService.getDueTasks(lusaStr);
 
-            try {
-                userData = JSON.parse(user.data);
-            } catch (e) {
-                console.error(`[Scheduler] Failed to parse data for ${userId}`);
-                continue;
+        // Group by User
+        const userTasks = new Map();
+
+        const addToUser = (userId, type, task) => {
+            if (!userTasks.has(userId)) {
+                userTasks.set(userId, { tomorrow: [], lusa: [] });
             }
+            userTasks.get(userId)[type].push(task);
+        };
 
-            if (!userData.activeAssignments || userData.activeAssignments.length === 0) continue;
+        tasksTomorrow.forEach(t => addToUser(t.userId, 'tomorrow', t));
+        tasksLusa.forEach(t => addToUser(t.userId, 'lusa', t));
 
-            // Filter Tasks
-            const dueTomorrow = userData.activeAssignments.filter(t => {
-                if (t.status === 'done' || !t.deadline) return false;
-                const d = t.deadline.includes('T') ? getJakartaDateStr(new Date(t.deadline)) : t.deadline;
-                return d === tomorrowStr;
-            });
-
-            const dueLusa = userData.activeAssignments.filter(t => {
-                if (t.status === 'done' || !t.deadline) return false;
-                const d = t.deadline.includes('T') ? getJakartaDateStr(new Date(t.deadline)) : t.deadline;
-                return d === lusaStr;
-            });
-
-            if (dueTomorrow.length > 0) {
+        // Iterate Users and Send Messages
+        for (const [userId, groups] of userTasks.entries()) {
+            if (groups.tomorrow.length > 0) {
                 let msg = `☀️ **Morning Briefing**\n\n`;
                 msg += `⚠️ **BESOK (${tomorrowStr})** ada deadline:\n`;
-                dueTomorrow.forEach(t => {
-                    // Resolve course name if ID
-                    let cName = t.course;
-                    if (cName.startsWith('course-') && userData.courses) {
-                        const found = userData.courses.find(c => c.id === cName);
-                        if (found) cName = found.name;
-                    }
 
-                    // Clean Title Logic
-                    let cleanTitle = t.title;
-                    if (cleanTitle && cName) {
-                        if (cleanTitle.toLowerCase().includes(cName.toLowerCase())) {
-                            cleanTitle = cleanTitle.replace(new RegExp(cName, 'gi'), '').trim();
-                            cleanTitle = cleanTitle.replace(/^[\s\W]+|[\s\W]+$/g, '');
-                        }
+                groups.tomorrow.forEach(t => {
+                    // Display Logic: Use title or type, course is name or ID
+                    let displayTitle = t.title || t.type || 'Tugas';
+                    let displayCourse = t.course || 'General';
+                    // Strip course name from title if redundant
+                    if (displayTitle.toLowerCase().includes(displayCourse.toLowerCase())) {
+                        displayTitle = displayTitle.replace(new RegExp(displayCourse, 'gi'), '').trim();
+                        displayTitle = displayTitle.replace(/^[\s\W]+|[\s\W]+$/g, '');
                     }
-                    if (!cleanTitle) cleanTitle = t.type || 'Tugas';
-
-                    msg += `• ${cleanTitle} - ${cName}\n`;
+                    msg += `• ${displayTitle} - ${displayCourse}\n`;
                 });
 
-                if (dueLusa.length > 0) {
+                if (groups.lusa.length > 0) {
                     msg += `\n📅 Lusa juga ada:\n`;
-                    dueLusa.forEach(t => {
-                        let cName = t.course;
-                        if (cName.startsWith('course-') && userData.courses) {
-                            const found = userData.courses.find(c => c.id === cName);
-                            if (found) cName = found.name;
+                    groups.lusa.forEach(t => {
+                        let displayTitle = t.title || t.type || 'Tugas';
+                        let displayCourse = t.course || 'General';
+                        if (displayTitle.toLowerCase().includes(displayCourse.toLowerCase())) {
+                            displayTitle = displayTitle.replace(new RegExp(displayCourse, 'gi'), '').trim();
+                            displayTitle = displayTitle.replace(/^[\s\W]+|[\s\W]+$/g, '');
                         }
-
-                        // Clean Title Logic
-                        let cleanTitle = t.title;
-                        if (cleanTitle && cName) {
-                            if (cleanTitle.toLowerCase().includes(cName.toLowerCase())) {
-                                cleanTitle = cleanTitle.replace(new RegExp(cName, 'gi'), '').trim();
-                                cleanTitle = cleanTitle.replace(/^[\s\W]+|[\s\W]+$/g, '');
-                            }
-                        }
-                        if (!cleanTitle) cleanTitle = t.type || 'Tugas';
-
-                        msg += `• ${cleanTitle} - ${cName}\n`;
+                        msg += `• ${displayTitle} - ${displayCourse}\n`;
                     });
                 }
 
@@ -119,6 +91,7 @@ async function sendMorningBrief(bot) {
                 }
             }
         }
+
     } catch (error) {
         console.error('[Scheduler] Error in Morning Brief:', error);
     }

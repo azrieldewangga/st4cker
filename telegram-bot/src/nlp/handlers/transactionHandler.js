@@ -1,14 +1,15 @@
+
 import {
     processTransaction,
     processDeleteTransaction,
     processEditTransaction,
-    processListTransactions // If available or we use local logic
+    processListTransactions
 } from '../../commands/transaction.js';
-import { getUserData } from '../../store.js';
-import { formatAmount, parseAmount } from '../currency.js'; // Ensure path is correct
-// inferCategory was local, we'll define it here or import if we centralize utils
+import { DbService } from '../../services/dbService.js'; // Use DbService
+import { formatAmount, parseAmount } from '../currency.js';
+import { generateDynamicResponse } from '../nlp-service.js';
 
-// Category Keywords (Copied from nlp-handler.js for now)
+// Category Keywords (Copied from nlp-handler.js for now - ideally centralized in a Utils file)
 const CATEGORY_KEYWORDS = {
     'Food': ['makan', 'minum', 'jajan', 'snack', 'kopi', 'nasi', 'bakso', 'soto', 'lunch', 'dinner', 'sarapan', 'cafe', 'warteg', 'mie', 'sate', 'martabak', 'geprek'],
     'Transport': ['gojek', 'grab', 'bensin', 'parkir', 'tol', 'angkot', 'busway', 'kereta', 'uber', 'maxim', 'ojek', 'bengkel', 'service motor', 'service mobil'],
@@ -39,33 +40,53 @@ export async function handleTransactionIntent(bot, msg, intent, data, broadcastE
     if (intent === 'tambah_pengeluaran' || intent === 'tambah_pemasukan') {
         const type = intent === 'tambah_pemasukan' ? 'income' : 'expense';
 
+        // Helper to safely get value from potential entity object
+        const getValue = (key) => typeof data[key] === 'object' ? data[key].value : data[key];
+
         // Infer Category
-        const inferredCategory = data.kategori || inferCategory((msg.text || '').toLowerCase());
-        if (inferredCategory) data.kategori = inferredCategory;
+        let inferredCategory = getValue('kategori') || inferCategory((msg.text || '').toLowerCase());
 
         // Fallback Category
-        const cat = data.kategori || (type === 'income' ? 'Salary' : 'Food');
+        const cat = inferredCategory || (type === 'income' ? 'Salary' : 'Food');
 
         // Parse Amount if needed
-        let amount = data.amount;
+        let amount = getValue('amount');
         if (amount && typeof amount === 'string') amount = parseAmount(amount);
 
+        const noteVal = getValue('note') || '';
+
+        // processTransaction now uses DbService internally
         const res = await processTransaction(bot, chatId, userId, {
             type,
             amount: amount,
             category: cat,
-            note: data.note || '',
+            note: noteVal,
             date: new Date().toISOString()
-        }, broadcastEvent);
+        });
 
-        if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
+        if (res.success) {
+            const dynamicMsg = await generateDynamicResponse('transaction_added', {
+                type, amount, note: noteVal, category: cat
+            });
+            // processTransaction already sends message?
+            // Wait, processTransaction in transaction.js RETURNS success/msg, but doesn't send casual message if not commanded?
+            // Actually processTransaction logic I wrote returns object {success, message}. It does NOT send message.
+            // But wait, the previous code sent message too. 
+            // Let's modify processTransaction to returning data, and letting Handler send UI?
+            // In my overwrite of transaction.js, processTransaction does NOT send message to bot, it merely returns strings.
+            // So we should send `res.message` here.
+
+            // NOTE: processTransaction returns a formatted message!
+            bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
+        }
         else bot.sendMessage(chatId, `❌ ${res.message}`);
         return true;
     }
 
     // 2. View Transactions (History)
     if (intent === 'lihat_transaksi') {
-        return handleLihatTransaksi(bot, msg, data, broadcastEvent); // data is entities
+        // Use shared command logic
+        return processListTransactions(bot, chatId, userId, 1, 'view');
     }
 
     // 3. Edit Transaction
@@ -91,65 +112,12 @@ async function handleCekSaldo(bot, msg) {
     const chatId = msg.chat.id;
     const userId = msg.from.id.toString();
     try {
-        const userData = getUserData(userId);
-        const balance = userData?.currentBalance || 0;
-        await bot.sendMessage(chatId, `💰 Saldo kamu: *${formatAmount(balance)}*`, { parse_mode: 'Markdown' });
+        const user = await DbService.getUser(userId);
+        const balance = user?.currentBalance || 0;
+        const dynamicMsg = await generateDynamicResponse('balance_check', { balance });
+        await bot.sendMessage(chatId, dynamicMsg);
     } catch (e) { await bot.sendMessage(chatId, 'Gagal cek saldo.'); }
     return true;
 }
 
-// Helper: Lihat Riwayat
-async function handleLihatTransaksi(bot, msg, entities, broadcastEvent) {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id.toString();
-    try {
-        const userData = getUserData(userId);
-        const transactions = userData?.transactions || [];
-
-        if (transactions.length === 0) {
-            await bot.sendMessage(chatId, '📭 **Belum ada transaksi**\n\nYuk catat pemasukan/pengeluaran dulu!', { parse_mode: 'Markdown' });
-            return true;
-        }
-
-        // Sort just in case (though sync handles it)
-        const recent = transactions.slice(0, 10);
-
-        // Helper for formatting
-        const formatMoney = (amount) => {
-            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
-        };
-
-        const formatDate = (dateStr) => {
-            const date = new Date(dateStr);
-            const now = new Date();
-            const diffTime = now - date;
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-            if (diffDays === 0) return 'Hari ini';
-            if (diffDays === 1) return 'Kemarin';
-            return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-        };
-
-        let message = `💰 **Riwayat Transaksi (10 Terakhir)**\n\n`;
-
-        recent.forEach((t) => {
-            const isIncome = t.type === 'income';
-            const icon = isIncome ? '🟢' : '🔴';
-            const sign = isIncome ? '+' : '-';
-            const amountStr = formatMoney(Math.abs(t.amount));
-            const note = t.note || t.category || '-';
-            const dateInfo = formatDate(t.date);
-
-            message += `${icon} **${sign}${amountStr}**\n   ${note} • _${dateInfo}_\n\n`;
-        });
-
-        const currentBalance = userData?.currentBalance || 0;
-        message += `💳 **Saldo Akhir:** ${formatMoney(currentBalance)}`;
-
-        await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-    } catch (e) {
-        console.error('[NLP] Error Lihat Transaksi:', e);
-        await bot.sendMessage(chatId, 'Gagal ambil data transaksi.');
-    }
-    return true;
-}
+// handleLihatTransaksi is removed because we use processListTransactions from commands/transaction.js
