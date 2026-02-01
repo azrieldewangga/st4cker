@@ -8,6 +8,7 @@ import {
     processDeleteTask,
     processEditTask
 } from '../../commands/listtasks.js';
+import { generateDynamicResponse } from '../nlp-service.js';
 
 export async function handleTaskIntent(bot, msg, intent, data, broadcastEvent) {
     const chatId = msg.chat.id;
@@ -22,23 +23,37 @@ export async function handleTaskIntent(bot, msg, intent, data, broadcastEvent) {
             return `${y}-${m}-${dy}`;
         };
 
-        const rawDate = data.parsedDate || new Date();
-        const dateStr = toLocalYMD(rawDate); // Fallback to Today? Or should parsing handle it?
+        // Helper to extract value safely
+        const getVal = (key) => data[key]?.value || '';
 
-        // Assuming data.waktu.parsed exists if passed from main handler, 
-        // else nlp-service dateParser handled it.
-        // nlp-handler logic uses data.parsedDate.
+        // Extract Date: Use 'parsed' date object if available in data.waktu/data.date
+        let targetDate = new Date();
+        if (data.waktu?.parsed) targetDate = new Date(data.waktu.parsed);
+        else if (data.date?.parsed) targetDate = new Date(data.date.parsed);
 
+        const dateStr = toLocalYMD(targetDate);
+        const courseName = getVal('matkul') || 'General';
+        const taskType = getVal('tipe_tugas') || 'Tugas';
+
+        // Map Enriched Data to Task Processor
         const res = await processTaskCreation(bot, chatId, userId, {
-            courseId: data.courseId,
-            courseName: data.matkul || data.course || 'General',
-            type: data.tipe_tugas || 'Tugas',
+            courseId: data.matkul?.courseId, // Critical Fix: Access .courseId inside .matkul
+            courseName: courseName,
+            type: taskType,
             deadline: dateStr,
-            notes: data.note || '',
+            notes: getVal('note') || '',
             semester: ''
         }, broadcastEvent);
 
-        if (res.success) bot.sendMessage(chatId, res.message, { parse_mode: 'Markdown' });
+        if (res.success) {
+            // Use dynamic response
+            const dynamicMsg = await generateDynamicResponse('task_created', {
+                type: taskType,
+                courseName: courseName,
+                deadline: dateStr
+            });
+            bot.sendMessage(chatId, dynamicMsg);
+        }
         else bot.sendMessage(chatId, `❌ ${res.message}`);
         return true;
     }

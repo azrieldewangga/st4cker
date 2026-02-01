@@ -1,19 +1,14 @@
-import { getUserData } from '../store.js';
+
+import { DbService } from '../services/dbService.js';
 
 // Handler for /balance command
-export function handleBalanceCommand(bot, msg) {
+export async function handleBalanceCommand(bot, msg) {
     const userId = msg.from.id.toString();
     const chatId = msg.chat.id;
 
-    const userData = getUserData(userId);
-
-    // Check if user has synced data
-    if (!userData) {
-        bot.sendMessage(chatId, '⚠️ Please sync your data from the properties desktop app first.');
-        return;
-    }
-
-    const balance = userData.currentBalance;
+    // Fetch user from DB
+    const user = await DbService.getUser(userId);
+    const balance = user?.currentBalance || 0;
 
     // Format to IDR
     const formatter = new Intl.NumberFormat('id-ID', {
@@ -22,7 +17,7 @@ export function handleBalanceCommand(bot, msg) {
         minimumFractionDigits: 0
     });
 
-    const formattedBalance = formatter.format(balance || 0);
+    const formattedBalance = formatter.format(balance);
 
     bot.sendMessage(chatId, `💰 *Current Balance:*\n${formattedBalance}`, {
         parse_mode: 'Markdown',

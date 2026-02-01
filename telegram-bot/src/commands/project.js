@@ -1,5 +1,6 @@
+
 import crypto from 'crypto';
-import { getUserData, saveUserData } from '../store.js';
+import { DbService } from '../services/dbService.js';
 import { parseDate } from '../nlp/dateParser.js';
 
 import {
@@ -55,8 +56,7 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
     // --- LOGGING CALLBACKS ---
     if (data.startsWith('log_proj_')) {
         const projectId = data.replace('log_proj_', '');
-        const userData = getUserData(userId);
-        const project = userData.projects.find(p => p.id === projectId);
+        const project = await DbService.getProjectById(projectId);
 
         if (!project) {
             return bot.answerCallbackQuery(query.id, { text: 'Project not found/synced.' });
@@ -65,11 +65,11 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         // Start Log Flow: Ask Status First
         updateSession(userId, {
             state: STATES.AWAITING_LOG_STATUS,
-            data: { projectId, projectName: project.name, currentProgress: project.totalProgress || 0 }
+            data: { projectId, projectName: project.title, currentProgress: project.totalProgress || 0 }
         });
 
         bot.answerCallbackQuery(query.id);
-        bot.sendMessage(chatId, `📝 Catat progress buat *${project.name}*\n\nUpdate Status Project:`, {
+        bot.sendMessage(chatId, `📝 Catat progress buat *${project.title}*\n\nUpdate Status Project:`, {
             reply_markup: {
                 inline_keyboard: [
                     [{ text: 'Active', callback_data: 'LOG_STATUS_active' }],
@@ -90,7 +90,6 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
             return bot.answerCallbackQuery(query.id, { text: 'Session expired.' });
         }
 
-        // Clean up status buttons
         try {
             await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message.message_id });
         } catch (e) { }
@@ -132,15 +131,14 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
     // --- DELETE FLOW ---
     if (data.startsWith('del_proj_')) {
         const projectId = data.replace('del_proj_', '');
-        const userData = getUserData(userId);
-        const project = userData.projects.find(p => p.id === projectId);
+        const project = await DbService.getProjectById(projectId);
 
         if (!project) {
             bot.answerCallbackQuery(query.id, { text: 'Project not found.' });
             return processListProjects(bot, chatId, userId, 1, 'delete');
         }
 
-        bot.editMessageText(`⚠️ **Konfirmasi Hapus Project**\n\n📌 **${project.name}**\nProgress: ${project.totalProgress}%\n\nYakin mau dihapus permanen?`, {
+        bot.editMessageText(`⚠️ **Konfirmasi Hapus Project**\n\n📌 **${project.title}**\nProgress: ${project.totalProgress}%\n\nYakin mau dihapus permanen?`, {
             chat_id: chatId,
             message_id: query.message.message_id,
             parse_mode: 'Markdown',
@@ -229,30 +227,25 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         const priority = data.replace('SET_PROJ_PRIO_', '');
         const session = getSession(userId);
         if (session && session.data.projectId) {
-            const userData = getUserData(userId);
-            const project = userData.projects.find(p => p.id === session.data.projectId);
-            if (project) {
-                project.priority = priority;
-                saveUserData(userId, userData);
+            await DbService.updateProject(session.data.projectId, { priority });
 
-                // Broadcast Update
-                if (broadcastEvent) {
-                    broadcastEvent(userId, {
-                        eventId: crypto.randomUUID(),
-                        eventType: 'project.updated',
-                        timestamp: new Date().toISOString(),
-                        payload: { id: session.data.projectId, updates: { priority } },
-                        source: 'telegram'
-                    });
-                }
-
-                bot.editMessageText(`✅ Priority diubah jadi: **${priority}**`, {
-                    chat_id: chatId,
-                    message_id: query.message.message_id,
-                    parse_mode: 'Markdown'
+            // Broadcast Update
+            if (broadcastEvent) {
+                broadcastEvent(userId, {
+                    eventId: crypto.randomUUID(),
+                    eventType: 'project.updated',
+                    timestamp: new Date().toISOString(),
+                    payload: { id: session.data.projectId, updates: { priority } },
+                    source: 'telegram'
                 });
-                clearSession(userId);
             }
+
+            bot.editMessageText(`✅ Priority diubah jadi: **${priority}**`, {
+                chat_id: chatId,
+                message_id: query.message.message_id,
+                parse_mode: 'Markdown'
+            });
+            clearSession(userId);
         }
         return;
     }
@@ -271,29 +264,19 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
         bot.answerCallbackQuery(query.id);
 
         if (type === 'course') {
-            // Show Courses
-            const userData = getUserData(userId);
-            if (!userData || !userData.courses || userData.courses.length === 0) {
-                bot.sendMessage(chatId, '⚠️ Belum ada course yg sync. Pilih Personal Project aja atau sync dulu desktop app.');
-                return;
-            }
-
-            const courseButtons = userData.courses.map(c => [{
-                text: c.name,
-                callback_data: `COURSE_${c.id}`
-            }]);
-
+            // Since we don't have courses in DB yet, prompt for name manually
             updateSession(userId, {
-                state: STATES.AWAITING_PROJECT_COURSE,
+                state: STATES.AWAITING_PROJECT_COURSE, // Reusing state but treating as text input expectation
                 data: { ...userSession.data, projectType: 'course' }
             });
 
-            bot.editMessageText(`📚 Pilih **Matkul**:`, {
+            // Ask for text
+            bot.editMessageText(`📚 Ketik Nama **Matkul** project ini:`, {
                 chat_id: chatId,
                 message_id: query.message.message_id,
-                reply_markup: { inline_keyboard: courseButtons },
                 parse_mode: 'Markdown'
             });
+
         } else {
             // Personal -> Skip to Priority
             updateSession(userId, {
@@ -303,28 +286,6 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
 
             askPriority(bot, chatId, query.message.message_id);
         }
-        return;
-    }
-
-    // Course Selection
-    if (data.startsWith('COURSE_')) {
-        const courseId = data.replace('COURSE_', '');
-        const userSession = getSession(userId);
-
-        if (!userSession || userSession.state !== STATES.AWAITING_PROJECT_COURSE) return;
-
-        // Fetch Course Name
-        const userData = getUserData(userId);
-        const course = userData.courses ? userData.courses.find(c => c.id === courseId) : null;
-        const courseName = course ? course.name : 'Unknown Course';
-
-        updateSession(userId, {
-            state: STATES.AWAITING_PROJECT_PRIORITY,
-            data: { ...userSession.data, courseId, courseName }
-        });
-
-        bot.answerCallbackQuery(query.id);
-        askPriority(bot, chatId, query.message.message_id); // Pass messageId
         return;
     }
 
@@ -342,7 +303,6 @@ export const handleProjectCallback = async (bot, query, broadcastEvent) => {
 
         bot.answerCallbackQuery(query.id);
 
-        // FIX: Edit the priority selection message to hide buttons
         const priorityEmoji = priority === 'low' ? '🟢' : priority === 'medium' ? '🟡' : '🔴';
         const priorityText = priority.charAt(0).toUpperCase() + priority.slice(1);
         bot.editMessageText(`⚡ Priority: ${priorityEmoji} ${priorityText}`, {
@@ -503,17 +463,14 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
 
     if (userSession.state === STATES.AWAITING_EDIT_INPUT) {
         const { field } = userSession.data;
-
         try {
             const result = await handleEditInput(bot, msg, field);
-
-            // Broadcast Update if successful
             if (result && broadcastEvent) {
                 broadcastEvent(userId, {
                     eventId: crypto.randomUUID(),
                     eventType: 'project.updated',
                     timestamp: new Date().toISOString(),
-                    payload: result, // {id, updates}
+                    payload: result,
                     source: 'telegram'
                 });
             }
@@ -566,6 +523,19 @@ export const handleProjectInput = async (bot, msg, broadcastEvent) => {
                 ]
             }
         });
+        return true;
+    }
+
+    // NEW: Handle Manual Course Name Input (Replaces Button Selection)
+    if (userSession.state === STATES.AWAITING_PROJECT_COURSE) {
+        const courseName = msg.text.trim();
+
+        updateSession(userId, {
+            state: STATES.AWAITING_PROJECT_PRIORITY,
+            data: { ...userSession.data, courseName, courseId: null }
+        });
+
+        askPriority(bot, chatId);
         return true;
     }
 

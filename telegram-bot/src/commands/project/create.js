@@ -1,7 +1,8 @@
+
 import crypto from 'crypto';
-import { getUserData, saveUserData } from '../../store.js';
-import { updateSession, getSession } from './session.js';
-import { escapeMarkdown, formatDate } from './utils.js';
+import { DbService } from '../../services/dbService.js';
+import { updateSession } from './session.js';
+import { escapeMarkdown } from './utils.js';
 import { STATES } from './constants.js';
 
 export async function processProjectCreation(bot, chatId, userId, data, broadcastEvent) {
@@ -41,63 +42,64 @@ export async function processProjectCreation(bot, chatId, userId, data, broadcas
         });
     }
 
-    const eventId = crypto.randomUUID();
-    const event = {
-        eventId: eventId,
-        eventType: 'project.created',
-        telegramUserId: userId,
-        timestamp: new Date().toISOString(),
-        payload: {
+    try {
+        // Create in DB
+        const result = await DbService.createProject(userId, {
             title: finalTitle,
             description: description || '',
             deadline,
             priority,
-            type: projectType,
-            courseId: courseId,
-            attachments // Pass attachments to Desktop App
-        },
-        source: 'telegram'
-    };
+            type: projectType || 'personal',
+            courseId: courseId || null,
+            courseName: courseName || ''
+        });
 
-    let isOffline = false;
-    if (broadcastEvent) {
-        const result = broadcastEvent(userId, event);
-        if (result && result.online === false) isOffline = true;
+        if (!result.success) throw new Error('DB creation failed');
+
+        const eventId = result.id; // Use DB ID
+
+        const event = {
+            eventId: eventId,
+            eventType: 'project.created',
+            telegramUserId: userId,
+            timestamp: new Date().toISOString(),
+            payload: {
+                id: eventId, // ensure payload ID matches DB
+                title: finalTitle,
+                description: description || '',
+                deadline,
+                priority,
+                type: projectType,
+                courseId: courseId,
+                attachments // Pass attachments to Desktop App (Desktop handles storage or ignore)
+            },
+            source: 'telegram'
+        };
+
+        let isOffline = false;
+        if (broadcastEvent) {
+            const res = await broadcastEvent(userId, event);
+            if (res && res.online === false) isOffline = true;
+        }
+
+        const escTitle = escapeMarkdown(finalTitle);
+        const escDesc = escapeMarkdown(description || '-');
+        const escCourse = escapeMarkdown(courseName || '');
+
+        let message = `✅ *Project Created!*\n\n📌 ${escTitle}\n📅 Due: ${deadline}\n⚡ Priority: ${priority}\n📂 Type: ${projectType === 'course' ? `Course Project (${escCourse})` : 'Personal'}\n📝 Desc: ${escDesc}\n\n_Siap dieksekusi!_`;
+
+        if (isOffline) {
+            message += '\n\n☁️ _Saved to Cloud (Desktop Offline)_';
+        }
+
+        return {
+            success: true,
+            message
+        };
+    } catch (e) {
+        console.error('[Project Create] Error:', e);
+        return { success: false, message: 'Gagal membuat project di database.' };
     }
-
-    // Optimistic Update (Save full data locally)
-    const userData = getUserData(userId) || {};
-    if (!userData.projects) userData.projects = [];
-
-    userData.projects.push({
-        id: eventId,
-        name: finalTitle,
-        description: description || '',
-        status: 'in_progress',
-        totalProgress: 0,
-        deadline,
-        priority,
-        type: projectType,
-        courseId,
-        attachments,
-        createdAt: new Date().toISOString()
-    });
-    saveUserData(userId, userData);
-
-    const escTitle = escapeMarkdown(finalTitle);
-    const escDesc = escapeMarkdown(description || '-');
-    const escCourse = escapeMarkdown(courseName);
-
-    let message = `✅ *Project Created!*\n\n📌 ${escTitle}\n📅 Due: ${deadline}\n⚡ Priority: ${priority}\n📂 Type: ${projectType === 'course' ? `Course Project (${escCourse})` : 'Personal'}\n📝 Desc: ${escDesc}\n\n_Siap dieksekusi!_`;
-
-    if (isOffline) {
-        message += '\n\n☁️ _Saved to Cloud (Desktop Offline)_';
-    }
-
-    return {
-        success: true,
-        message
-    };
 }
 
 export const handleCreateProjectCommand = async (bot, msg) => {

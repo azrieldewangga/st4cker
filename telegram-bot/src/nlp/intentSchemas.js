@@ -50,10 +50,9 @@ export const schemas = {
     },
 
     // Project intents
-    // Project intents
     buat_project: {
         required: ['project', 'project_type', 'waktu', 'priority', 'note', 'link'],
-        optional: ['matkul'] // matkul is optional (inferred or skipped for personal)
+        optional: ['matkul']
     },
     edit_project: {
         required: ['project'],

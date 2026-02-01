@@ -1,17 +1,23 @@
-import { getUserData } from '../../store.js';
+
+import { DbService } from '../../services/dbService.js';
 import { PAGE_SIZE, STATUS_ICONS, PRIORITY_ICONS } from './constants.js';
 
 export async function processListProjects(bot, chatId, userId, page = 1, mode = 'view') {
-    const userData = getUserData(userId);
+    // Fetch from DB
+    const projects = await DbService.getProjects(userId);
 
-    if (!userData || !userData.projects || userData.projects.length === 0) {
+    if (!projects || projects.length === 0) {
         return bot.sendMessage(chatId, '📂 *Belum ada Project*\n\nKetik /project buat bikin baru!', { parse_mode: 'Markdown' });
     }
 
-    // Filter Active Only
-    const activeProjects = userData.projects
-        .filter(p => p.status !== 'completed')
-        .sort((a, b) => new Date(a.deadline) - new Date(b.deadline)); // Sort by deadline
+    // Filter Active Only (already handled by DbService.getProjects usually, but re-confirming logic)
+    // DbService.getProjects returns only 'active'.
+    const activeProjects = projects.sort((a, b) => {
+        // Handle null deadline
+        const dA = a.deadline ? new Date(a.deadline) : new Date(8640000000000000);
+        const dB = b.deadline ? new Date(b.deadline) : new Date(8640000000000000);
+        return dA - dB;
+    });
 
     if (activeProjects.length === 0) {
         return bot.sendMessage(chatId, '✅ *Semua Project Selesai!*\n\nSantai dulu bang 😎', { parse_mode: 'Markdown' });
@@ -20,7 +26,6 @@ export async function processListProjects(bot, chatId, userId, page = 1, mode = 
     // Pagination
     const totalPages = Math.ceil(activeProjects.length / PAGE_SIZE);
 
-    // Adjust page if out of bounds
     if (page < 1) page = 1;
     if (page > totalPages) page = totalPages;
 
@@ -38,20 +43,23 @@ export async function processListProjects(bot, chatId, userId, page = 1, mode = 
 
     items.forEach((proj, idx) => {
         const realIdx = start + idx + 1;
-        const daysLeft = Math.ceil((new Date(proj.deadline) - new Date()) / (1000 * 60 * 60 * 24));
+        const daysLeft = proj.deadline
+            ? Math.ceil((new Date(proj.deadline) - new Date()) / (1000 * 60 * 60 * 24))
+            : 999;
+
         const statusIcon = proj.status === 'in_progress' ? STATUS_ICONS.in_progress : STATUS_ICONS.on_hold;
 
         // Priority Icon
         let prioIcon = PRIORITY_ICONS[proj.priority] || '';
 
-        response += `${realIdx}. ${statusIcon} **${proj.name}**\n`;
+        response += `${realIdx}. ${statusIcon} **${proj.title}**\n`; // using .title (DB schema) vs .name (old schema)
         response += `   📊 ${proj.totalProgress || 0}% | ${prioIcon} ${proj.priority}\n`;
-        response += `   📅 ${proj.deadline} (${daysLeft > 0 ? daysLeft + ' hari lagi' : 'OVERDUE ⚠️'})\n\n`;
+        response += `   📅 ${proj.deadline || 'No Deadline'} (${daysLeft > 990 ? '-' : (daysLeft > 0 ? daysLeft + ' hari lagi' : 'OVERDUE ⚠️')})\n\n`;
 
         // Buttons based on Mode
         if (mode === 'view') {
             inlineKeyboard.push([{
-                text: `📝 Log: ${proj.name}`,
+                text: `📝 Log: ${proj.title}`,
                 callback_data: `log_proj_${proj.id}`
             }]);
         } else if (mode === 'delete') {
@@ -75,7 +83,6 @@ export async function processListProjects(bot, chatId, userId, page = 1, mode = 
 
     if (navRow.length > 0) inlineKeyboard.push(navRow);
 
-    // Cancel / Back Button for Action Modes
     if (mode !== 'view') {
         inlineKeyboard.push([{ text: '🔙 Kembali / Selesai', callback_data: 'cancel_proj_action' }]);
     }

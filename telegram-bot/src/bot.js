@@ -7,6 +7,7 @@ import { handleBalanceCommand } from './commands/balance.js';
 import { handleTransactionCommand, handleTransactionCallback, handleTransactionInput, handleTransactionNote, clearSession as clearTxSession } from './commands/transaction.js';
 import { handleProjectsCommand, handleLogCommand, handleProjectCallback, handleProjectInput, handleCreateProjectCommand, clearSession as clearProjSession } from './commands/project.js';
 import { handleNaturalLanguage, handleNLPCallback } from './nlp/index.js';
+import { NLPTester } from './nlp/nlp-tester.js';
 import { initScheduler } from './scheduler.js';
 
 import { broadcastEvent } from './server.js';
@@ -24,6 +25,9 @@ const bot = new TelegramBot(token, { polling: true });
 
 // Initialize Scheduler (Morning Brief)
 initScheduler(bot);
+
+// Initialize NLP Tester
+const nlpTester = new NLPTester(bot, broadcastEvent);
 
 // Set Telegram Command Menu
 bot.setMyCommands([
@@ -66,7 +70,7 @@ bot.onText(/\/start/, async (msg) => {
 
     try {
         // Check if already paired
-        const sessions = getUserSessions(telegramUserId);
+        const sessions = await getUserSessions(telegramUserId);
 
         if (sessions.length > 0) {
             // Already paired
@@ -102,7 +106,7 @@ bot.on('callback_query', async (query) => {
     // Handle pairing code generation (no auth required)
     if (query.data === 'generate_code') {
         try {
-            const { code, expiresAt } = createPairingCode(telegramUserId);
+            const { code, expiresAt } = await createPairingCode(telegramUserId);
             const expiryTime = new Date(expiresAt).toLocaleTimeString('id-ID', {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -122,7 +126,7 @@ bot.on('callback_query', async (query) => {
     }
 
     // All other callbacks require active session
-    if (!hasActiveSession(telegramUserId)) {
+    if (!await hasActiveSession(telegramUserId)) {
         bot.answerCallbackQuery(query.id, { text: 'Not connected. Use /start to pair first.' });
         return;
     }
@@ -167,9 +171,9 @@ bot.on('callback_query', async (query) => {
         handleProjectCallback(bot, query, broadcastEvent);
     } else if (query.data === 'confirm_unpair') {
         // Handle Unpair Confirmation
-        const sessions = getUserSessions(telegramUserId);
+        const sessions = await getUserSessions(telegramUserId);
         if (sessions.length > 0) {
-            sessions.forEach(s => revokeSession(s.session_token));
+            sessions.forEach(s => revokeSession(s.sessionToken));
         }
 
         bot.answerCallbackQuery(query.id, { text: 'Device disconnected.' });
@@ -180,6 +184,18 @@ bot.on('callback_query', async (query) => {
         bot.answerCallbackQuery(query.id, { text: 'Batal unpair.' });
         try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) { }
         return;
+    } else if (query.data.startsWith('nlp_test_cat_')) {
+        const category = query.data.replace('nlp_test_cat_', '');
+        nlpTester.startCategory(chatId, telegramUserId, category);
+        bot.answerCallbackQuery(query.id, { text: `Starting ${category} tests...` });
+    } else if (query.data === 'nlp_test_next') {
+        nlpTester.runNext(telegramUserId);
+        bot.answerCallbackQuery(query.id);
+        try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) { }
+    } else if (query.data === 'nlp_test_stop') {
+        nlpTester.stop(chatId, telegramUserId);
+        bot.answerCallbackQuery(query.id);
+        try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) { }
     } else if (query.data.startsWith('nlp_')) {
         // NLP callback handlers
         handleNLPCallback(bot, query, broadcastEvent);
@@ -187,23 +203,23 @@ bot.on('callback_query', async (query) => {
 });
 
 // /listprojects command
-bot.onText(/\/listprojects/, (msg) => {
+bot.onText(/\/listprojects/, async (msg) => {
     const telegramUserId = msg.from.id.toString();
-    if (!hasActiveSession(telegramUserId)) return bot.sendMessage(msg.chat.id, '❌ Not connected. Use /start to pair first.');
+    if (!await hasActiveSession(telegramUserId)) return bot.sendMessage(msg.chat.id, '❌ Not connected. Use /start to pair first.');
     handleProjectsCommand(bot, msg);
 });
 
 // /listtasks command
-bot.onText(/\/listtasks/, (msg) => {
+bot.onText(/\/listtasks/, async (msg) => {
     const telegramUserId = msg.from.id.toString();
-    if (!hasActiveSession(telegramUserId)) return bot.sendMessage(msg.chat.id, '❌ Not connected. Use /start to pair first.');
+    if (!await hasActiveSession(telegramUserId)) return bot.sendMessage(msg.chat.id, '❌ Not connected. Use /start to pair first.');
     handleListTasks(bot, msg);
 });
 
 // /edittask command
-bot.onText(/\/edittask/, (msg) => {
+bot.onText(/\/edittask/, async (msg) => {
     const telegramUserId = msg.from.id.toString();
-    if (!hasActiveSession(telegramUserId)) return bot.sendMessage(msg.chat.id, '❌ Not connected. Use /start to pair first.');
+    if (!await hasActiveSession(telegramUserId)) return bot.sendMessage(msg.chat.id, '❌ Not connected. Use /start to pair first.');
     handleEditTaskCommand(bot, msg);
 });
 
@@ -211,17 +227,35 @@ bot.onText(/\/edittask/, (msg) => {
 bot.onText(/\/help/, (msg) => {
     const chatId = msg.chat.id;
 
-    const helpText = `📚 *st4cker Quick Commands*\n\n*Setup:*\n/start - Generate pairing code\n/unpair - Disconnect desktop\n\n*Tasks:*\n/task - Add assignment\n/edittask - Edit task status\n/listtasks - View all tasks\n\n*Projects:*\n/project - Create project\n/progress - Log progress\n\n*Transactions:*\n/expense - Record expense\n/income - Record income\n\n*Utilities:*\n/status - Connection status\n/help - Show this help`;
+    const helpText = `📚 *st4cker Quick Commands*\n\n*Setup:*\n/start - Generate pairing code\n/unpair - Disconnect desktop\n\n*Tasks:*\n/task - Add assignment\n/edittask - Edit task status\n/listtasks - View all tasks\n\n*Projects:*\n/project - Create project\n/progress - Log progress\n\n*Transactions:*\n/expense - Record expense\n/income - Record income\n\n*Utilities:*\n/status - Connection status\n/help - Show this help\n/nlp_test - Run NLP CRUD scenarios`;
 
     bot.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
 });
 
+// /nlp_test command
+bot.onText(/\/nlp_test/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramUserId = msg.from.id.toString();
+    if (!await hasActiveSession(telegramUserId)) return bot.sendMessage(chatId, '❌ Not connected. Use /start to pair first.');
+
+    bot.sendMessage(chatId, '🧪 **NLP Scenario Testing**\nPilih kategori yang mau ditest:', {
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '💸 Transactions (20)', callback_data: 'nlp_test_cat_transaction' }],
+                [{ text: '📝 Tasks (15)', callback_data: 'nlp_test_cat_task' }],
+                [{ text: '🚀 Projects (20)', callback_data: 'nlp_test_cat_project' }]
+            ]
+        }
+    });
+});
+
 // /status command
-bot.onText(/\/status/, (msg) => {
+bot.onText(/\/status/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramUserId = msg.from.id.toString();
 
-    const sessions = getUserSessions(telegramUserId);
+    const sessions = await getUserSessions(telegramUserId);
 
     if (sessions.length === 0) {
         bot.sendMessage(chatId, '❌ *Not Connected*\n\nUse /start to pair with st4cker desktop app.', {
@@ -253,11 +287,11 @@ bot.onText(/\/unpair/, (msg) => {
     });
 });
 
-bot.onText(/\/task/, (msg) => {
+bot.onText(/\/task/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramUserId = msg.from.id.toString();
 
-    if (!hasActiveSession(telegramUserId)) {
+    if (!await hasActiveSession(telegramUserId)) {
         bot.sendMessage(chatId, '❌ Not connected. Use /start to pair first.');
         return;
     }
@@ -271,7 +305,7 @@ const KNOWN_COMMANDS = [
     '/project', '/projects', '/log', '/progress',
     '/expense', '/income', '/balance',
     '/editproject', '/deleteproject',
-    '/summary',
+    '/summary', '/nlp_test',
     '/skip' // Special case
 ];
 
@@ -308,7 +342,7 @@ bot.on('message', async (msg) => {
         }
     }
 
-    if (!hasActiveSession(userId)) return;
+    if (!await hasActiveSession(userId)) return;
 
     // 3. HANDLER CHAIN
     // Try handling as task input first

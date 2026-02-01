@@ -1,5 +1,7 @@
 import crypto from 'crypto';
-import db from './database.js';
+import { db } from './db/index.js';
+import { pairingCodes, sessions, devices, users } from './db/schema.js';
+import { eq, and, gt, sql, desc } from 'drizzle-orm';
 
 // Generate random 6-character alphanumeric code
 function generateCode() {
@@ -16,56 +18,60 @@ function generateSessionToken() {
     return crypto.randomUUID();
 }
 
-// Create pairing code
-export function createPairingCode(telegramUserId) {
-    const now = Date.now();
+/**
+ * Create pairing code
+ */
+export async function createPairingCode(telegramUserId) {
+    const now = new Date();
     const code = generateCode();
-    const expiresAt = now + (5 * 60 * 1000); // 5 minutes
+    const expiresAt = new Date(now.getTime() + (5 * 60 * 1000)); // 5 minutes
 
     // Check rate limiting (max 3 attempts per 10 minutes)
-    const recentCodes = db.prepare(`
-    SELECT COUNT(*) as count 
-    FROM pairing_codes 
-    WHERE telegram_user_id = ? 
-      AND created_at > ?
-  `).get(telegramUserId, now - (10 * 60 * 1000));
+    const tenMinutesAgo = new Date(now.getTime() - (10 * 60 * 1000));
+    const recentCodes = await db.select({ count: sql`count(*)` })
+        .from(pairingCodes)
+        .where(and(
+            eq(pairingCodes.telegramUserId, telegramUserId.toString()),
+            gt(pairingCodes.createdAt, tenMinutesAgo)
+        ));
 
-    if (recentCodes.count >= 3) {
+    if (Number(recentCodes[0].count) >= 3) {
         throw new Error('Rate limit exceeded. Wait 10 minutes before generating new code.');
     }
 
     // Delete old codes for this user
-    db.prepare('DELETE FROM pairing_codes WHERE telegram_user_id = ?')
-        .run(telegramUserId);
+    await db.delete(pairingCodes).where(eq(pairingCodes.telegramUserId, telegramUserId.toString()));
 
     // Insert new code
-    db.prepare(`
-    INSERT INTO pairing_codes (code, telegram_user_id, created_at, expires_at)
-    VALUES (?, ?, ?, ?)
-  `).run(code, telegramUserId, now, expiresAt);
+    await db.insert(pairingCodes).values({
+        code,
+        telegramUserId: telegramUserId.toString(),
+        createdAt: now,
+        expiresAt
+    });
 
     console.log(`[Pairing] Generated code ${code} for user ${telegramUserId}`);
 
     return { code, expiresAt };
 }
 
-// Verify pairing code and create session
-export function verifyPairingCode(code) {
-    const now = Date.now();
+/**
+ * Verify pairing code and create session
+ */
+export async function verifyPairingCode(code) {
+    const now = new Date();
 
     // Find code
-    const pairingCode = db.prepare(`
-    SELECT * FROM pairing_codes 
-    WHERE code = ?
-  `).get(code);
+    const res = await db.select().from(pairingCodes).where(eq(pairingCodes.code, code.toUpperCase())).limit(1);
+    const pairingCode = res[0];
 
     if (!pairingCode) {
         return { success: false, error: 'Invalid code' };
     }
 
     // Check if expired
-    if (now > pairingCode.expires_at) {
-        db.prepare('DELETE FROM pairing_codes WHERE code = ?').run(code);
+    if (now > pairingCode.expiresAt) {
+        await db.delete(pairingCodes).where(eq(pairingCodes.code, code.toUpperCase()));
         return { success: false, error: 'Code expired' };
     }
 
@@ -77,91 +83,116 @@ export function verifyPairingCode(code) {
     // Generate session
     const sessionToken = generateSessionToken();
     const deviceId = crypto.randomUUID();
-    const expiresAt = now + (30 * 24 * 60 * 60 * 1000); // 30 days
+    const expiresAt = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days
 
-    // Create session
-    db.prepare(`
-    INSERT INTO sessions (session_token, telegram_user_id, device_id, created_at, expires_at, last_activity)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(sessionToken, pairingCode.telegram_user_id, deviceId, now, expiresAt, now);
+    // Create session in transaction
+    await db.transaction(async (tx) => {
+        // 1. Mark code as used
+        await tx.update(pairingCodes).set({ used: true }).where(eq(pairingCodes.code, code.toUpperCase()));
 
-    // Mark code as used
-    db.prepare('UPDATE pairing_codes SET used = 1 WHERE code = ?').run(code);
+        // 2. Create session
+        await tx.insert(sessions).values({
+            sessionToken,
+            telegramUserId: pairingCode.telegramUserId,
+            deviceId,
+            createdAt: now,
+            expiresAt,
+            lastActivity: now
+        });
+    });
 
-    console.log(`[Pairing] Code ${code} verified, session created for user ${pairingCode.telegram_user_id}`);
+    console.log(`[Pairing] Code ${code} verified, session created for user ${pairingCode.telegramUserId}`);
 
     return {
         success: true,
         sessionToken,
         deviceId,
-        telegramUserId: pairingCode.telegram_user_id,
-        expiresAt
+        telegramUserId: pairingCode.telegramUserId,
+        expiresAt: expiresAt.getTime()
     };
 }
 
-// Validate session token
-export function validateSession(sessionToken) {
-    const now = Date.now();
+/**
+ * Validate session token
+ */
+export async function validateSession(sessionToken) {
+    const now = new Date();
 
-    const session = db.prepare(`
-    SELECT * FROM sessions WHERE session_token = ?
-  `).get(sessionToken);
+    const res = await db.select().from(sessions).where(eq(sessions.sessionToken, sessionToken)).limit(1);
+    const session = res[0];
 
     if (!session) {
         return { valid: false, error: 'Session not found' };
     }
 
-    if (now > session.expires_at) {
-        db.prepare('DELETE FROM sessions WHERE session_token = ?').run(sessionToken);
+    if (now > session.expiresAt) {
+        await db.delete(sessions).where(eq(sessions.sessionToken, sessionToken));
         return { valid: false, error: 'Session expired' };
     }
 
     // Update last activity
-    db.prepare(`
-    UPDATE sessions SET last_activity = ? WHERE session_token = ?
-  `).run(now, sessionToken);
+    await db.update(sessions)
+        .set({ lastActivity: now })
+        .where(eq(sessions.sessionToken, sessionToken));
 
     return {
         valid: true,
-        telegramUserId: session.telegram_user_id,
-        deviceId: session.device_id
+        telegramUserId: session.telegramUserId,
+        deviceId: session.deviceId
     };
 }
 
-// Unpair (delete session)
-export function unpairSession(sessionToken) {
-    db.prepare('DELETE FROM sessions WHERE session_token = ?').run(sessionToken);
+/**
+ * Unpair (delete session)
+ */
+export async function unpairSession(sessionToken) {
+    await db.delete(sessions).where(eq(sessions.sessionToken, sessionToken));
     return true;
 }
 
-// Get sessions for a telegram user
-export function getUserSessions(telegramUserId) {
-    return db.prepare('SELECT * FROM sessions WHERE telegram_user_id = ?').all(telegramUserId);
+/**
+ * Get sessions for a telegram user
+ */
+export async function getUserSessions(telegramUserId) {
+    return await db.select().from(sessions)
+        .where(eq(sessions.telegramUserId, telegramUserId.toString()))
+        .orderBy(desc(sessions.lastActivity));
 }
 
-// Helper: Check if user has active session
-export function hasActiveSession(telegramUserId) {
-    const session = db.prepare(`
-        SELECT session_token 
-        FROM sessions 
-        WHERE telegram_user_id = ? AND expires_at > ?
-        LIMIT 1
-    `).get(telegramUserId, Date.now());
+/**
+ * Helper: Check if user has active session
+ */
+export async function hasActiveSession(telegramUserId) {
+    const now = new Date();
+    const res = await db.select({ id: sessions.sessionToken })
+        .from(sessions)
+        .where(and(
+            eq(sessions.telegramUserId, telegramUserId.toString()),
+            gt(sessions.expiresAt, now)
+        ))
+        .limit(1);
 
-    return !!session;
+    return res.length > 0;
 }
 
-// Helper: Get session info
-export function getSessionInfo(telegramUserId) {
-    return db.prepare(`
-        SELECT * 
-        FROM sessions 
-        WHERE telegram_user_id = ? AND expires_at > ?
-        LIMIT 1
-    `).get(telegramUserId, Date.now());
+/**
+ * Helper: Get session info
+ */
+export async function getSessionInfo(telegramUserId) {
+    const now = new Date();
+    const res = await db.select().from(sessions)
+        .where(and(
+            eq(sessions.telegramUserId, telegramUserId.toString()),
+            gt(sessions.expiresAt, now)
+        ))
+        .limit(1);
+
+    return res[0] || null;
 }
 
-// Helper: Revoke session (alias for unpair)
-export function revokeSession(sessionToken) {
-    return unpairSession(sessionToken);
+/**
+ * Helper: Revoke session (alias for unpair)
+ */
+export async function revokeSession(sessionToken) {
+    return await unpairSession(sessionToken);
 }

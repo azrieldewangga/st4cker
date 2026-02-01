@@ -1,6 +1,7 @@
+
 import crypto from 'crypto';
-import { getUserData, saveUserData } from '../../store.js';
-import { updateSession, getSession, clearSession } from './session.js';
+import { DbService } from '../../services/dbService.js';
+import { getSession, clearSession } from './session.js';
 import { processListProjects } from './list.js';
 import { parseDate } from '../../nlp/dateParser.js';
 
@@ -21,8 +22,7 @@ export const handleEditInput = async (bot, msg, field) => {
     const session = getSession(userId);
 
     const projectId = session.data.projectId;
-    const userData = getUserData(userId);
-    const project = userData.projects.find(p => p.id === projectId);
+    const project = await DbService.getProjectById(projectId);
 
     if (!project) {
         bot.sendMessage(chatId, '❌ Project not found.');
@@ -30,6 +30,7 @@ export const handleEditInput = async (bot, msg, field) => {
         return true;
     }
 
+    const updates = {};
     if (field === 'deadline') {
         const parsedDate = parseDate(input);
         if (!parsedDate) {
@@ -40,32 +41,28 @@ export const handleEditInput = async (bot, msg, field) => {
         const yyyy = parsedDate.getFullYear();
         const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
         const dd = String(parsedDate.getDate()).padStart(2, '0');
-        const formatted = `${yyyy}-${mm}-${dd}`;
-
-        project.deadline = formatted;
+        updates.deadline = `${yyyy}-${mm}-${dd}`;
     } else if (field === 'title') {
-        project.name = input;
+        updates.title = input; // Schema uses title
     }
 
-    saveUserData(userId, userData);
+    await DbService.updateProject(projectId, updates);
     bot.sendMessage(chatId, `✅ Project **${field}** berhasil diupdate!`, { parse_mode: 'Markdown' });
 
     // Return the update payload for broadcasting
     return {
         id: projectId,
-        updates: { [field === 'title' ? 'name' : field]: field === 'deadline' ? project.deadline : input }
+        updates: updates // { title: ..., deadline: ... }
     };
 };
 
 export const handleDeleteConfirmation = async (bot, chatId, userId, projectId, broadcastEvent) => {
-    const userData = getUserData(userId);
-    const idx = userData.projects.findIndex(p => p.id === projectId);
-
+    const project = await DbService.getProjectById(projectId);
     let details = '';
-    if (idx !== -1) {
-        details = userData.projects[idx].name;
-        userData.projects.splice(idx, 1);
-        saveUserData(userId, userData);
+
+    if (project) {
+        details = project.title;
+        await DbService.deleteProject(projectId);
 
         // Broadcast
         if (broadcastEvent) {

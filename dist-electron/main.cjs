@@ -469,11 +469,11 @@ electron_1.app.on('ready', async () => {
                 }
                 console.log(`[Telegram] Initializing WebSocket with token: ${token ? token.slice(0, 8) + '...' : 'NONE'}`);
                 console.log(`[Telegram] Connecting to ${WEBSOCKET_URL}`);
-                // Force WebSocket transport to avoid polling issues
+                // Force WebSocket transport
                 try {
                     telegramSocket = ioClient(WEBSOCKET_URL, {
                         auth: { token: token },
-                        transports: ['websocket'], // Force websocket
+                        transports: ['websocket'],
                         reconnection: true,
                         reconnectionDelay: 1000,
                         reconnectionAttempts: 20
@@ -585,16 +585,31 @@ electron_1.app.on('ready', async () => {
                         // --- EVENT PROCESSING ---
                         if (event.eventType === 'task.created') {
                             const { courseId, courseName, type, dueDate, notes, semester } = event.payload;
+                            // SAFE PARSING SEMESTER
+                            let parsedSemester = 1;
+                            try {
+                                if (typeof semester === 'string') {
+                                    parsedSemester = parseInt(semester.replace('Semester ', ''));
+                                }
+                                else if (typeof semester === 'number') {
+                                    parsedSemester = semester;
+                                }
+                                if (isNaN(parsedSemester))
+                                    parsedSemester = 1;
+                            }
+                            catch (e) {
+                                console.error('[Telegram] Error parsing semester:', semester, e);
+                            }
                             // Create assignment
                             const newAssignment = {
                                 id: (0, crypto_1.randomUUID)(),
-                                title: type, // Title is typically the type (Tugas, Quiz)
-                                course: courseName,
-                                type: type,
+                                title: type || 'Untitled Task', // Fallback
+                                course: courseName || 'General', // Fallback
+                                type: type || 'Tugas',
                                 status: 'pending',
                                 deadline: dueDate,
-                                note: notes,
-                                semester: parseInt(semester.replace('Semester ', '')),
+                                note: notes || '',
+                                semester: parsedSemester,
                                 createdAt: new Date().toISOString(),
                                 updatedAt: new Date().toISOString()
                             };
@@ -854,12 +869,18 @@ electron_1.app.on('ready', async () => {
                         else if (event.eventType === 'transaction.created') {
                             const payload = event.payload;
                             console.log('[Telegram] Received transaction.created:', payload);
+                            // HELPER TO EXTRACT VALUE
+                            const getValue = (field) => (field && typeof field === 'object' && field.value !== undefined) ? field.value : field;
+                            const noteVal = getValue(payload.note);
+                            const amtVal = getValue(payload.amount);
+                            const catVal = getValue(payload.category);
+                            const typeVal = getValue(payload.type);
                             const newTransaction = {
                                 id: event.eventId, // Using eventId as transaction ID to safe-guard duplication naturally
-                                title: payload.note || payload.description || payload.type,
-                                type: payload.type,
-                                category: payload.category,
-                                amount: payload.amount,
+                                title: noteVal || payload.description || typeVal,
+                                type: typeVal,
+                                category: catVal,
+                                amount: typeof amtVal === 'string' ? parseFloat(amtVal) : amtVal,
                                 currency: 'IDR',
                                 date: payload.date || new Date().toISOString(),
                                 createdAt: new Date().toISOString(),
@@ -868,7 +889,7 @@ electron_1.app.on('ready', async () => {
                             transactions_cjs_1.transactions.create(newTransaction);
                             new (require('electron').Notification)({
                                 title: 'Transaction Added',
-                                body: `${payload.type === 'income' ? '+' : '-'} Rp ${payload.amount.toLocaleString('id-ID')} (${payload.category})`
+                                body: `${typeVal === 'income' ? '+' : '-'} Rp ${(typeof amtVal === 'number' ? amtVal : parseFloat(amtVal)).toLocaleString('id-ID')} (${catVal})`
                             }).show();
                             success = true;
                         }
@@ -923,6 +944,11 @@ electron_1.app.on('ready', async () => {
                     }
                     catch (error) {
                         console.error(`[Telegram] Failed to process ${event.eventType}:`, error);
+                        // Add notification for debug
+                        new (require('electron').Notification)({
+                            title: 'Telegram Sync Error',
+                            body: `Failed to process ${event.eventType}. Check logs.`
+                        }).show();
                     }
                 });
                 // Check if paired on app start and connect
