@@ -3,14 +3,14 @@
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "outDir": "../dist-electron",
+    "outDir": "../dist-new",
     "rootDir": "./",
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true // Important for electron imports
   },
   "include": [
-    "**/*.cts",
-    "**/*.ts"
+    "./**/*.cts",
+    "./**/*.ts"
   ]
 }

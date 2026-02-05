@@ -419,11 +419,12 @@ const Schedule = () => {
     const filteredCourses = courses.filter(c => c.name && c.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return (
-        <div className="flex flex-col h-full space-y-6">
+        <ScrollArea className="h-[calc(100vh-3rem)]">
+        <div className="flex flex-col space-y-6 p-6 pr-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Schedule</h2>
-                    <p className="text-muted-foreground">Manage your weekly classes.</p>
+                    <h2 className="text-2xl font-semibold tracking-tight">Schedule</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Manage your weekly classes.</p>
                 </div>
             </div>
 
@@ -757,7 +758,8 @@ const Schedule = () => {
                     document.body
                 )
             }
-        </div >
+        </div>
+        </ScrollArea>
     );
 };
 

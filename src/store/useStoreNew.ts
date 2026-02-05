@@ -8,13 +8,15 @@ import { createSettingsSlice, SettingsSlice } from './slices/settingsSlice';
 import { createMiscSlice, MiscSlice } from './slices/miscSlice';
 import { createUndoRedoSlice, UndoRedoSlice } from './slices/undoRedoSlice';
 
+
 export type AppState = AssignmentSlice &
     TransactionSlice &
     ProjectSlice &
     PerformanceSlice &
     SettingsSlice &
     MiscSlice &
-    UndoRedoSlice & {
+    UndoRedoSlice &
+ {
         initApp: (skipDelay?: boolean) => Promise<void>;
     };
 
@@ -27,6 +29,7 @@ export const useStore = create<AppState>()((...a) => ({
     ...createMiscSlice(...a),
     ...createUndoRedoSlice(...a),
 
+
     initApp: async (skipDelay = false) => {
         const store = a[0];
         store({ isAppReady: false });
@@ -37,6 +40,7 @@ export const useStore = create<AppState>()((...a) => ({
             fetchTransactions,
             fetchAssignments,
             fetchSubscriptions,
+            fetchProjects,
             checkSubscriptionDeductions,
             seedDatabase,
             fetchExchangeRate
@@ -50,7 +54,8 @@ export const useStore = create<AppState>()((...a) => ({
             fetchUserProfile(),
             fetchTransactions(),
             fetchAssignments(),
-            fetchSubscriptions()
+            fetchSubscriptions(),
+            fetchProjects()
         ];
 
         checkSubscriptionDeductions().catch(err => console.error('Auto-deduct error:', err));

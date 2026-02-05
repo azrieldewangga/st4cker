@@ -1,24 +1,70 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStoreNew';
+import { useUIPreferencesStore } from '../store/useUIPreferencesStore';
 import {
-    AreaChart, Area, ResponsiveContainer,
+    PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Sector,
+    LineChart, Line, AreaChart, Area, CartesianGrid, Tooltip, TooltipProps
 } from 'recharts';
-import { Wallet, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight, ShoppingBag, Music, Coffee, Zap, Home, GraduationCap, Smartphone, MoreHorizontal, Plus, Download } from 'lucide-react';
-import { format, isSameMonth, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
+import { 
+    Wallet, TrendingUp, TrendingDown, DollarSign, MoreHorizontal, Plus, Download, 
+    CreditCard, ArrowUpRight, ArrowDownRight, ListTodo, CheckCircle2, Calendar,
+    ShoppingBag, Music, Coffee, Zap, Home, GraduationCap, Smartphone, Utensils, Car, FileText,
+    ChartLine, Filter, Settings2, Share2, Maximize2, RefreshCw, ChevronRight as ChevronRightIcon,
+    BarChart2, BarChart3, LineChartIcon, TrendingUpIcon, Grid3X3, Check,
+    ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, AlertCircle
+} from 'lucide-react';
+import { format, isSameMonth, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isAfter, isSameDay, subDays, isWithinInterval } from 'date-fns';
 import { cn } from "@/lib/utils";
 import { exportToCSV } from '../utils/export';
 import { toast } from "sonner";
-import { EXCHANGE_RATES } from '@/lib/constants';
 
 // Shadcn Components
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import {
-    Tabs,
-    TabsContent,
-} from "@/components/ui/tabs";
-import { AnimatedTabsList, AnimatedTabsTrigger } from "@/components/ui/animated/AnimatedTabs";
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
+import { NumberStepper } from "@/components/ui/number-stepper";
+import { DatePicker } from "@/components/ui/date-picker";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    DropdownMenuCheckboxItem,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
     Select,
     SelectContent,
@@ -26,75 +72,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import SubscriptionsTab from '../components/cashflow/SubscriptionsTab';
 import TransactionModal from '../components/cashflow/TransactionModal';
-import { OverviewChart } from '../components/cashflow/OverviewChart';
-import { Separator } from "@/components/ui/separator";
-import { useTheme } from "@/components/theme-provider";
 
-const Cashflow = () => {
-    // Use direct store access to prevent object recreation
-    const transactions = useStore(state => state.transactions);
-    const fetchTransactions = useStore(state => state.fetchTransactions);
-    const currency = useStore(state => state.currency);
-    const setCurrency = useStore(state => state.setCurrency);
-    const exchangeRate = useStore(state => state.exchangeRate);
-    const { theme } = useTheme();
-    const [period, setPeriod] = useState<'Weekly' | 'Monthly' | 'Yearly'>('Yearly');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState("tracker");
-
-    useEffect(() => {
-        fetchTransactions();
-
-        // Hot Reload / Real-time updates
-        const handleRefresh = () => {
-            fetchTransactions();
-        };
-
-        // Safe check for Electron API
-        // @ts-ignore
-        const api = window.electronAPI;
-        if (api && typeof api.onRefreshData === 'function') {
-            api.onRefreshData(handleRefresh);
-        }
-
-        return () => {
-            // @ts-ignore
-            const api = window.electronAPI;
-            if (api && typeof api.offRefreshData === 'function') {
-                api.offRefreshData();
-            }
-        }
-    }, [fetchTransactions]);
-
-    const handleExport = async () => {
-        const { success, filePath, error } = await exportToCSV(transactions, `Cashflow_Export_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-        if (success) {
-            toast("Export Successful", {
-                description: `File saved to: ${filePath}`,
-            });
-        } else if (error) {
-            toast.error(`Export failed: ${error}`);
-        }
-    };
-
-    // Keyboard Shortcut: Ctrl+N to open Add Transaction modal
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-            const cmdKey = isMac ? e.metaKey : e.ctrlKey;
-
-            // Ctrl + N: Add Transaction
-            if (cmdKey && e.key.toLowerCase() === 'n') {
-                e.preventDefault();
-                setIsModalOpen(true);
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+// ==================== STATS CARDS ====================
+function StatsCards() {
+    const transactions = useStore((state) => state.transactions);
+    const currency = useStore((state) => state.currency);
+    const exchangeRate = useStore((state) => state.exchangeRate);
+    const currentMonthDate = new Date();
+    const lastMonthDate = subMonths(currentMonthDate, 1);
 
     const formatMoney = (amountIDR: number) => {
         if (currency === 'IDR') {
@@ -104,12 +90,7 @@ const Cashflow = () => {
         }
     };
 
-    // --- Dynamic Calculations (Same logic as before) ---
-    const currentMonthDate = new Date();
-    const sortedTransactions = useMemo(() => {
-        return [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions]);
-
+    // Total Balance
     const totalBalance = useMemo(() => {
         return transactions.reduce((acc, tx) => {
             const amount = Number(tx.amount);
@@ -118,402 +99,1050 @@ const Cashflow = () => {
         }, 0);
     }, [transactions]);
 
-    const { monthlyIncome, monthlyExpense } = useMemo(() => {
+    // Monthly calculations
+    const { monthlyIncome, monthlyExpense, lastMonthIncome, lastMonthExpense } = useMemo(() => {
         return transactions.reduce((acc, tx) => {
-            if (isSameMonth(new Date(tx.date), currentMonthDate)) {
-                const amount = Number(tx.amount);
-                if (amount < 0) {
-                    acc.monthlyExpense += Math.abs(amount);
-                } else if (tx.type === 'income') {
-                    acc.monthlyIncome += amount;
-                } else {
-                    acc.monthlyExpense += amount;
-                }
+            const amount = Number(tx.amount);
+            const txDate = new Date(tx.date);
+            
+            if (isSameMonth(txDate, currentMonthDate)) {
+                if (amount < 0) acc.monthlyExpense += Math.abs(amount);
+                else if (tx.type === 'income') acc.monthlyIncome += amount;
+                else acc.monthlyExpense += amount;
             }
+            
+            if (isSameMonth(txDate, lastMonthDate)) {
+                if (amount < 0) acc.lastMonthExpense += Math.abs(amount);
+                else if (tx.type === 'income') acc.lastMonthIncome += amount;
+                else acc.lastMonthExpense += amount;
+            }
+            
             return acc;
-        }, { monthlyIncome: 0, monthlyExpense: 0 });
+        }, { monthlyIncome: 0, monthlyExpense: 0, lastMonthIncome: 0, lastMonthExpense: 0 });
     }, [transactions]);
 
-    const financialData = useMemo(() => {
+    const expenseTrend = lastMonthExpense > 0 ? ((monthlyExpense - lastMonthExpense) / lastMonthExpense) * 100 : 0;
+    const incomeTrend = lastMonthIncome > 0 ? ((monthlyIncome - lastMonthIncome) / lastMonthIncome) * 100 : 0;
+    const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100 : 0;
+
+    const statsData = [
+        {
+            title: "Account Balance",
+            value: formatMoney(totalBalance),
+            change: incomeTrend >= 0 ? "+" : "",
+            changeValue: `${incomeTrend.toFixed(0)}%`,
+            subText: "vs last month",
+            isPositive: incomeTrend >= 0,
+            icon: Wallet,
+            showProgress: false,
+        },
+        {
+            title: "Monthly Income",
+            value: formatMoney(monthlyIncome),
+            change: incomeTrend >= 0 ? "+" : "",
+            changeValue: `${Math.abs(incomeTrend).toFixed(0)}%`,
+            subText: "vs last month",
+            isPositive: incomeTrend >= 0,
+            icon: TrendingUp,
+            showProgress: false,
+        },
+        {
+            title: "Monthly Expense",
+            value: formatMoney(monthlyExpense),
+            change: expenseTrend <= 0 ? "" : "+",
+            changeValue: `${Math.abs(expenseTrend).toFixed(0)}%`,
+            subText: "vs last month",
+            isPositive: expenseTrend <= 0,
+            icon: TrendingDown,
+            showProgress: false,
+        },
+        {
+            title: "Savings Rate",
+            value: `${Math.round(savingsRate)}%`,
+            change: savingsRate >= 20 ? "Good" : "Low",
+            changeValue: "",
+            subText: savingsRate >= 20 ? "Keep it up!" : "Try to save more",
+            isPositive: savingsRate >= 20,
+            icon: CheckCircle2,
+            showProgress: true,
+            progressValue: Math.max(0, Math.min(100, savingsRate)),
+        },
+    ];
+
+    return (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 rounded-xl border bg-card p-4 sm:p-5">
+            {statsData.map((stat, index) => (
+                <div key={stat.title} className="flex items-start">
+                    <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <stat.icon className="size-4" />
+                            <span className="text-xs font-medium truncate">
+                                {stat.title}
+                            </span>
+                        </div>
+                        <p className="text-2xl font-semibold leading-tight tracking-tight">
+                            {stat.value}
+                        </p>
+                        {stat.showProgress && (
+                            <div className="w-full">
+                                <Progress value={stat.progressValue} className="h-1.5" />
+                            </div>
+                        )}
+                        <div className="flex items-center gap-1.5 text-xs">
+                            <span className={stat.isPositive ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
+                                {stat.change}{stat.changeValue}
+                            </span>
+                            <span className="text-muted-foreground">{stat.subText}</span>
+                        </div>
+                    </div>
+                    {index < statsData.length - 1 && (
+                        <div className="hidden lg:block w-px h-full bg-border mx-4" />
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// ==================== SPENDING HABIT CHART ====================
+const timeRangeLabels = {
+    "7days": "Last 7 days",
+    "30days": "Last 30 days",
+    "90days": "Last 90 days",
+};
+
+function SpendingHabitChart() {
+    const [timeRange, setTimeRange] = useState<"7days" | "30days" | "90days">("30days");
+    const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+    const transactions = useStore((state) => state.transactions);
+    const currency = useStore((state) => state.currency);
+
+    const spendingData = useMemo(() => {
         const now = new Date();
-        if (period === 'Yearly') {
-            const start = new Date(currentMonthDate.getFullYear(), 0, 1);
-            const end = new Date(currentMonthDate.getFullYear(), 11, 31);
-            const months = eachDayOfInterval({ start, end }).filter(d => d.getDate() === 1);
-            return months.map(monthStart => {
-                const monthName = format(monthStart, 'MMM');
-                if (monthStart > now) {
-                    return { name: monthName, income: 0, expense: 0, balance: null };
-                }
-                const monthTx = transactions.filter(t => isSameMonth(new Date(t.date), monthStart));
-                const inc = monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-                const exp = monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-                // Balance is sum of income and expense (since expense is stored as negative)
-                return { name: monthName, income: inc, expense: exp, balance: inc + exp };
-            });
-        } else if (period === 'Monthly') {
-            const startOfMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth(), 1);
-            const endOfCurrentMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 0);
+        const daysBack = timeRange === "7days" ? 7 : timeRange === "30days" ? 30 : 90;
+        const startDate = subDays(now, daysBack);
 
-            const weeks = [];
-            let currentStart = startOfMonth;
-            let weekCount = 1;
-            while (currentStart <= endOfCurrentMonth) {
-                const currentEnd = endOfWeek(currentStart, { weekStartsOn: 1 });
-                const actualEnd = currentEnd > endOfCurrentMonth ? endOfCurrentMonth : currentEnd;
+        const expenses = transactions.filter((t) => {
+            const d = new Date(t.date);
+            return (
+                t.type === "expense" &&
+                (isAfter(d, startDate) || isSameDay(d, startDate))
+            );
+        });
 
-                if (currentStart > now) {
-                    weeks.push({ name: `Week ${weekCount}`, income: 0, expense: 0, balance: null });
-                } else {
-                    const weekTx = transactions.filter(t => {
-                        const d = new Date(t.date);
-                        return d >= currentStart && d <= actualEnd;
-                    });
-                    const inc = weekTx.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-                    const exp = weekTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-                    weeks.push({ name: `Week ${weekCount}`, income: inc, expense: exp, balance: inc + exp });
-                }
+        const categoryMap: Record<string, number> = {};
+        const allowedCategories = ["Food", "Transport", "Shopping", "Bills", "Subscription", "Others"];
+        allowedCategories.forEach((c) => (categoryMap[c] = 0));
 
-                currentStart = new Date(currentEnd);
-                currentStart.setDate(currentStart.getDate() + 1);
-                weekCount++;
+        expenses.forEach((t) => {
+            let cat = t.category || "Others";
+            if (cat === "Education") cat = "Subscription";
+            if (allowedCategories.includes(cat)) {
+                categoryMap[cat] += Math.abs(Number(t.amount));
             }
-            return weeks;
-        } else {
-            const start = startOfWeek(currentMonthDate, { weekStartsOn: 1 });
-            const end = endOfWeek(currentMonthDate, { weekStartsOn: 1 });
-            const days = eachDayOfInterval({ start, end });
-            return days.map(d => {
-                const dayName = format(d, 'EEE');
-                if (d > now) {
-                    return { name: dayName, income: 0, expense: 0, balance: null };
-                }
-                const dayTx = transactions.filter(t => isSameDay(new Date(t.date), d));
-                const inc = dayTx.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-                const exp = dayTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-                return { name: dayName, income: inc, expense: exp, balance: inc + exp };
-            });
-        }
-    }, [period, transactions, currentMonthDate]);
+        });
 
-    const overviewChartData = useMemo(() => {
-        const now = new Date();
-        // Sort ascending for balance calculation
-        const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        let buckets = [];
-
-        if (period === 'Yearly') {
-            const startOfYear = new Date(currentMonthDate.getFullYear(), 0, 1);
-            const endOfYear = new Date(currentMonthDate.getFullYear(), 11, 31);
-            const months = eachDayOfInterval({ start: startOfYear, end: endOfYear }).filter(d => d.getDate() === 1);
-            buckets = months.map(d => {
-                const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-                return { start: d, end, name: format(d, 'MMM'), isFuture: d > now };
-            });
-        } else if (period === 'Monthly') {
-            const startOfMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth(), 1);
-            const endOfCurrentMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 0, 23, 59, 59);
-
-            let currentStart = startOfMonth;
-            let weekCount = 1;
-            while (currentStart <= endOfCurrentMonth) {
-                const currentEnd = endOfWeek(currentStart, { weekStartsOn: 1 });
-                const actualEnd = currentEnd > endOfCurrentMonth ? endOfCurrentMonth : currentEnd;
-                actualEnd.setHours(23, 59, 59);
-
-                buckets.push({
-                    start: new Date(currentStart),
-                    end: new Date(actualEnd),
-                    name: `Week ${weekCount}`,
-                    isFuture: currentStart > now
-                });
-                currentStart = new Date(currentEnd);
-                currentStart.setDate(currentStart.getDate() + 1);
-                weekCount++;
-            }
-        } else {
-            const start = startOfWeek(currentMonthDate, { weekStartsOn: 1 });
-            const end = endOfWeek(currentMonthDate, { weekStartsOn: 1 });
-            const days = eachDayOfInterval({ start, end });
-            buckets = days.map(d => {
-                const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-                return { start: d, end: dayEnd, name: format(d, 'EEE'), isFuture: d > now };
-            });
-        }
-
-        const firstBucketStart = buckets.length > 0 ? buckets[0].start : new Date();
-
-        // Helper to handle legacy positive expenses
-        const getEffectiveAmount = (tx: any) => {
-            const val = Number(tx.amount);
-            return (tx.type === 'expense' && val > 0) ? -val : val;
+        const colors: Record<string, string> = {
+            Food: "#35b9e9",
+            Transport: "#6e3ff3",
+            Shopping: "#375dfb",
+            Bills: "#e255f2",
+            Subscription: "#10b981",
+            Others: "#94a3b8",
         };
 
-        let currentBalance = sorted.reduce((acc, tx) => {
-            if (new Date(tx.date) < firstBucketStart) return acc + getEffectiveAmount(tx);
-            return acc;
-        }, 0);
+        return allowedCategories
+            .map((cat) => ({ name: cat, value: categoryMap[cat], color: colors[cat] }))
+            .filter((d) => d.value > 0);
+    }, [transactions, timeRange]);
 
-        const results = [];
-        for (const bucket of buckets) {
-            if (bucket.isFuture) {
-                results.push({ name: bucket.name, balance: null, val: null });
-                continue;
+    const totalSpending = spendingData.reduce((acc, item) => acc + item.value, 0);
+
+    const formatMoney = (val: number) => {
+        return new Intl.NumberFormat(currency === "IDR" ? "id-ID" : "en-US", {
+            style: "currency",
+            currency,
+            maximumFractionDigits: 0,
+        }).format(val);
+    };
+
+    const formatShort = (val: number) => {
+        if (currency === "IDR") {
+            if (val >= 1000000) {
+                return `${(val / 1000000).toFixed(2)} JT`;
             }
-
-            let peak = currentBalance;
-            const bucketTx = sorted.filter(tx => {
-                const d = new Date(tx.date);
-                return d >= bucket.start && d <= bucket.end;
-            });
-
-            bucketTx.forEach(tx => {
-                currentBalance += getEffectiveAmount(tx);
-                peak = Math.max(peak, currentBalance);
-            });
-
-            results.push({ name: bucket.name, balance: peak, val: peak });
+            if (val >= 1000) {
+                return `${(val / 1000).toFixed(0)} Rb`;
+            }
+        } else {
+            if (val >= 1000000) {
+                return `${(val / 1000000).toFixed(2)}M`;
+            }
+            if (val >= 1000) {
+                return `${(val / 1000).toFixed(1)}K`;
+            }
         }
-        return results;
+        return val.toString();
+    };
 
-    }, [period, transactions, currentMonthDate]);
+    const onPieEnter = (_: unknown, index: number) => setActiveIndex(index);
+    const onPieLeave = () => setActiveIndex(null);
 
-    const dataIncome = useMemo(() => financialData.map(d => ({ name: d.name, val: d.income })), [financialData]);
-    const dataExpense = useMemo(() => financialData.map(d => ({ name: d.name, val: d.expense })), [financialData]);
+    const renderActiveShape = (props: unknown) => {
+        const typedProps = props as {
+            cx: number;
+            cy: number;
+            innerRadius: number;
+            outerRadius: number;
+            startAngle: number;
+            endAngle: number;
+            fill: string;
+        };
+        return (
+            <g>
+                <Sector
+                    cx={typedProps.cx}
+                    cy={typedProps.cy}
+                    innerRadius={typedProps.innerRadius}
+                    outerRadius={typedProps.outerRadius + 8}
+                    startAngle={typedProps.startAngle}
+                    endAngle={typedProps.endAngle}
+                    fill={typedProps.fill}
+                />
+            </g>
+        );
+    };
 
-    const getIcon = (category: string) => {
+    return (
+        <div className="flex flex-col gap-4 p-4 sm:p-6 rounded-xl border bg-card w-full xl:w-[340px]">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                    <Button variant="outline" size="icon" className="size-7 sm:size-8">
+                        <ChartLine className="size-4 sm:size-[18px] text-muted-foreground" />
+                    </Button>
+                    <span className="text-sm sm:text-base font-medium">Spending Habit</span>
+                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="size-7 sm:size-8">
+                            <MoreHorizontal className="size-4 text-muted-foreground" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[180px]">
+                        <DropdownMenuLabel>Time Range</DropdownMenuLabel>
+                        {(Object.keys(timeRangeLabels) as Array<keyof typeof timeRangeLabels>).map((range) => (
+                            <DropdownMenuCheckboxItem
+                                key={range}
+                                checked={timeRange === range}
+                                onCheckedChange={() => setTimeRange(range)}
+                            >
+                                {timeRangeLabels[range]}
+                            </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+
+            {/* Vertical Layout: Donut center, Labels below */}
+            <div className="flex flex-col items-center gap-4">
+                {/* Donut Chart */}
+                <div className="relative shrink-0 size-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={spendingData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius="42%"
+                                outerRadius="70%"
+                                paddingAngle={2}
+                                dataKey="value"
+                                strokeWidth={0}
+                                activeIndex={activeIndex !== null ? activeIndex : undefined}
+                                activeShape={renderActiveShape}
+                                onMouseEnter={onPieEnter}
+                                onMouseLeave={onPieLeave}
+                            >
+                                {spendingData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                        </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-xl font-semibold">{formatShort(totalSpending)}</span>
+                        <span className="text-[10px] text-muted-foreground">Total</span>
+                    </div>
+                </div>
+
+                {/* 2 Column Labels Grid */}
+                <div className="w-full max-w-[280px] grid grid-cols-2 gap-x-6 gap-y-2 justify-items-start">
+                    {spendingData.map((item, index) => (
+                        <div
+                            key={item.name}
+                            className={`flex items-center gap-2 cursor-pointer transition-opacity ${activeIndex !== null && activeIndex !== index ? "opacity-50" : ""
+                                }`}
+                            onMouseEnter={() => setActiveIndex(index)}
+                            onMouseLeave={() => setActiveIndex(null)}
+                        >
+                            <div
+                                className="w-1 h-4 rounded-sm shrink-0"
+                                style={{ backgroundColor: item.color }}
+                            />
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[10px] text-muted-foreground leading-none truncate">{item.name}</span>
+                                <span className="text-xs font-semibold tabular-nums leading-tight">{formatMoney(item.value)}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Settings2 className="size-3" />
+                <span>{timeRangeLabels[timeRange]}</span>
+            </div>
+        </div>
+    );
+}
+
+// ==================== CASHFLOW CHART ====================
+const periodLabels = {
+    "3months": "Last 3 Months",
+    "6months": "Last 6 Months",
+    year: "Full Year",
+};
+
+type ChartType = "bar" | "line" | "area";
+type TimePeriod = "3months" | "6months" | "year";
+
+function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
+    if (!active || !payload?.length) return null;
+
+    const income = payload.find((p) => p.dataKey === "income")?.value || 0;
+    const expense = payload.find((p) => p.dataKey === "expense")?.value || 0;
+    const diff = Number(income) - Number(expense);
+
+    return (
+        <div className="bg-popover border border-border rounded-lg p-2 sm:p-3 shadow-lg">
+            <p className="text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">{label}</p>
+            <div className="space-y-1 sm:space-y-1.5">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="size-2 sm:size-2.5 rounded-full" style={{ background: "#6e3ff3" }} />
+                    <span className="text-[10px] sm:text-sm text-muted-foreground">Income:</span>
+                    <span className="text-[10px] sm:text-sm font-medium text-foreground">
+                        Rp {Number(income).toLocaleString()}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="size-2 sm:size-2.5 rounded-full" style={{ background: "#e255f2" }} />
+                    <span className="text-[10px] sm:text-sm text-muted-foreground">Expense:</span>
+                    <span className="text-[10px] sm:text-sm font-medium text-foreground">
+                        Rp {Number(expense).toLocaleString()}
+                    </span>
+                </div>
+                <div className="pt-1 border-t border-border mt-1">
+                    <span className={`text-[10px] sm:text-xs font-medium ${diff >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                        {diff >= 0 ? "+" : ""}{diff.toLocaleString()} net
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function getDataForPeriod(data: { month: string; income: number; expense: number }[], period: TimePeriod) {
+    switch (period) {
+        case "3months":
+            return data.slice(-3);
+        case "6months":
+            return data.slice(-6);
+        case "year":
+        default:
+            return data;
+    }
+}
+
+function CashflowChart() {
+    const [currentInsight, setCurrentInsight] = useState(0);
+
+    const transactions = useStore((state) => state.transactions);
+    const currency = useStore((state) => state.currency);
+    
+    // Use persisted state from separate UI preferences store (separate from Dashboard)
+    const { 
+        cashflowChartType: chartType, 
+        cashflowPeriod: period, 
+        cashflowShowGrid: showGrid, 
+        cashflowShowIncome: showIncome, 
+        cashflowShowExpense: showExpense, 
+        cashflowSmoothCurve: smoothCurve,
+        setCashflowChartType: setChartType,
+        setCashflowPeriod: setPeriod,
+        setCashflowShowGrid: setShowGrid,
+        setCashflowShowIncome: setShowIncome,
+        setCashflowShowExpense: setShowExpense,
+        setCashflowSmoothCurve: setSmoothCurve
+    } = useUIPreferencesStore();
+
+    // Generate monthly data from transactions
+    const fullYearData = useMemo(() => {
+        const now = new Date();
+        const months: { month: string; income: number; expense: number }[] = [];
+
+        for (let i = 11; i >= 0; i--) {
+            const monthStart = startOfMonth(subMonths(now, i));
+            const monthEnd = endOfMonth(subMonths(now, i));
+            const monthName = format(monthStart, "MMM");
+
+            const monthTx = transactions.filter((t) => {
+                const d = new Date(t.date);
+                return isWithinInterval(d, { start: monthStart, end: monthEnd });
+            });
+
+            const income = monthTx
+                .filter((t) => t.type === "income")
+                .reduce((sum, t) => sum + Number(t.amount), 0);
+            const expense = monthTx
+                .filter((t) => t.type === "expense")
+                .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+
+            months.push({ month: monthName, income, expense });
+        }
+
+        return months;
+    }, [transactions]);
+
+    const chartData = getDataForPeriod(fullYearData, period);
+
+    const totalIncome = chartData.reduce((acc, item) => acc + item.income, 0);
+    const totalExpense = chartData.reduce((acc, item) => acc + item.expense, 0);
+
+    // Helper function to format money - must be defined before useMemo
+    const formatMoney = (val: number) => {
+        return new Intl.NumberFormat(currency === "IDR" ? "id-ID" : "en-US", {
+            style: "currency",
+            currency,
+            maximumFractionDigits: 0,
+        }).format(val);
+    };
+
+    // Generate insights based on data
+    const insights = useMemo(() => {
+        const ins: string[] = [];
+        if (chartData.length === 0) return ["No data available for the selected period"];
+
+        const maxIncome = chartData.reduce((max, item) => item.income > max.income ? item : max, chartData[0]);
+        ins.push(`${maxIncome.month} has the highest income of ${formatMoney(maxIncome.income)}`);
+
+        const maxExpense = chartData.reduce((max, item) => item.expense > max.expense ? item : max, chartData[0]);
+        ins.push(`${maxExpense.month} has the highest spending of ${formatMoney(maxExpense.expense)}`);
+
+        const avgIncome = totalIncome / chartData.length;
+        ins.push(`Average monthly income is ${formatMoney(avgIncome)}`);
+
+        const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : "0";
+        ins.push(`Savings rate is ${savingsRate}% for the selected period`);
+
+        return ins;
+    }, [chartData, totalIncome, totalExpense, formatMoney]);
+
+    return (
+        <div className="flex-1 flex flex-col gap-4 sm:gap-6 p-4 sm:p-6 rounded-xl border bg-card min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-2 sm:gap-2.5 flex-1">
+                    <Button variant="outline" size="icon" className="size-7 sm:size-8">
+                        <BarChart2 className="size-4 sm:size-[18px] text-muted-foreground" />
+                    </Button>
+                    <span className="text-sm sm:text-base font-medium">Cashflow</span>
+                </div>
+                <div className="hidden sm:flex items-center gap-3 sm:gap-5">
+                    <div className="flex items-center gap-1.5">
+                        <div className="size-2.5 sm:size-3 rounded-full" style={{ background: "#6e3ff3" }} />
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">Income</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="size-2.5 sm:size-3 rounded-full" style={{ background: "#e255f2" }} />
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">Expense</span>
+                    </div>
+                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="size-7 sm:size-8">
+                            <MoreHorizontal className="size-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuLabel>Chart Options</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                                <BarChart3 className="size-4 mr-2" />
+                                Chart Type
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                                <DropdownMenuItem onClick={() => setChartType("bar")}>
+                                    <BarChart3 className="size-4 mr-2" />
+                                    Bar Chart
+                                    {chartType === "bar" && <Check className="size-4 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setChartType("line")}>
+                                    <LineChartIcon className="size-4 mr-2" />
+                                    Line Chart
+                                    {chartType === "line" && <Check className="size-4 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setChartType("area")}>
+                                    <TrendingUp className="size-4 mr-2" />
+                                    Area Chart
+                                    {chartType === "area" && <Check className="size-4 ml-auto" />}
+                                </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                                <Calendar className="size-4 mr-2" />
+                                Time Period
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                                {(Object.keys(periodLabels) as TimePeriod[]).map((key) => (
+                                    <DropdownMenuItem key={key} onClick={() => setPeriod(key)}>
+                                        {periodLabels[key]}
+                                        {period === key && <Check className="size-4 ml-auto" />}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem checked={showGrid} onCheckedChange={setShowGrid}>
+                            <Grid3X3 className="size-4 mr-2" />
+                            Show Grid Lines
+                        </DropdownMenuCheckboxItem>
+                        {(chartType === "line" || chartType === "area") && (
+                            <DropdownMenuCheckboxItem checked={smoothCurve} onCheckedChange={setSmoothCurve}>
+                                <TrendingUp className="size-4 mr-2" />
+                                Smooth Curve
+                            </DropdownMenuCheckboxItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-xs">Data Series</DropdownMenuLabel>
+                        <DropdownMenuCheckboxItem checked={showIncome} onCheckedChange={setShowIncome}>
+                            <div className="size-3 rounded-full mr-2" style={{ background: "#6e3ff3" }} />
+                            Show Income
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={showExpense} onCheckedChange={setShowExpense}>
+                            <div className="size-3 rounded-full mr-2" style={{ background: "#e255f2" }} />
+                            Show Expense
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            onClick={() => {
+                                setChartType("bar");
+                                setPeriod("6months");
+                                setShowGrid(true);
+                                setShowIncome(true);
+                                setShowExpense(true);
+                                setSmoothCurve(true);
+                            }}
+                        >
+                            <RefreshCw className="size-4 mr-2" />
+                            Reset to Default
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-10 flex-1 min-h-0">
+                <div className="flex flex-col gap-4 w-full lg:w-[200px] xl:w-[220px] shrink-0">
+                    <div className="space-y-2 sm:space-y-4">
+                        <p className="text-xl sm:text-2xl lg:text-[28px] font-semibold leading-tight tracking-tight">
+                            {formatMoney(totalIncome)}
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">Total Income ({periodLabels[period]})</p>
+                    </div>
+
+                    <div className="bg-muted/50 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+                        <p className="text-xs sm:text-sm font-semibold">🏆 Best Performing Month</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
+                            {insights[currentInsight]}
+                        </p>
+                        <div className="flex items-center gap-2.5 sm:gap-3.5">
+                            <ChevronLeft
+                                className="size-3 sm:size-3.5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                                onClick={() =>
+                                    setCurrentInsight((prev) =>
+                                        prev === 0 ? insights.length - 1 : prev - 1
+                                    )
+                                }
+                            />
+                            <div className="flex-1 flex items-center gap-1">
+                                {insights.map((_, index) => (
+                                    <div
+                                        key={index}
+                                        className={`flex-1 h-0.5 rounded-full transition-colors ${index === currentInsight
+                                            ? "bg-foreground"
+                                            : "bg-muted-foreground/30"
+                                            }`}
+                                    />
+                                ))}
+                            </div>
+                            <ChevronRight
+                                className="size-3 sm:size-3.5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                                onClick={() =>
+                                    setCurrentInsight((prev) =>
+                                        prev === insights.length - 1 ? 0 : prev + 1
+                                    )
+                                }
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex-1 aspect-[16/9] min-w-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        {chartType === "bar" ? (
+                            <BarChart data={chartData} barGap={2}>
+                                <defs>
+                                    <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#6e3ff3" stopOpacity={1} />
+                                        <stop offset="100%" stopColor="#6e3ff3" stopOpacity={0.6} />
+                                    </linearGradient>
+                                    <linearGradient id="expenseGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#e255f2" stopOpacity={1} />
+                                        <stop offset="100%" stopColor="#e255f2" stopOpacity={0.6} />
+                                    </linearGradient>
+                                </defs>
+                                {showGrid && <CartesianGrid strokeDasharray="0" stroke="#e4e4e7" vertical={false} />}
+                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#71717a", fontSize: 10 }} dy={8} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#71717a", fontSize: 10 }} dx={-5} width={50} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
+                                <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f4f4f5", radius: 4 }} />
+                                {showIncome && <Bar dataKey="income" fill="url(#incomeGradient)" radius={[4, 4, 0, 0]} maxBarSize={28} />}
+                                {showExpense && <Bar dataKey="expense" fill="url(#expenseGradient)" radius={[4, 4, 0, 0]} maxBarSize={28} />}
+                            </BarChart>
+                        ) : chartType === "line" ? (
+                            <LineChart data={chartData}>
+                                {showGrid && <CartesianGrid strokeDasharray="0" stroke="#e4e4e7" vertical={false} />}
+                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#71717a", fontSize: 10 }} dy={8} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#71717a", fontSize: 10 }} dx={-5} width={50} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
+                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: "#d4d4d8" }} />
+                                {showIncome && (
+                                    <Line
+                                        type={smoothCurve ? "monotone" : "linear"}
+                                        dataKey="income"
+                                        stroke="#6e3ff3"
+                                        strokeWidth={2}
+                                        dot={{ fill: "#6e3ff3", strokeWidth: 0, r: 3 }}
+                                        activeDot={{ r: 5, fill: "#6e3ff3" }}
+                                    />
+                                )}
+                                {showExpense && (
+                                    <Line
+                                        type={smoothCurve ? "monotone" : "linear"}
+                                        dataKey="expense"
+                                        stroke="#e255f2"
+                                        strokeWidth={2}
+                                        dot={{ fill: "#e255f2", strokeWidth: 0, r: 3 }}
+                                        activeDot={{ r: 5, fill: "#e255f2" }}
+                                    />
+                                )}
+                            </LineChart>
+                        ) : (
+                            <AreaChart data={chartData}>
+                                <defs>
+                                    <linearGradient id="incomeAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#6e3ff3" stopOpacity={0.3} />
+                                        <stop offset="100%" stopColor="#6e3ff3" stopOpacity={0.05} />
+                                    </linearGradient>
+                                    <linearGradient id="expenseAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#e255f2" stopOpacity={0.3} />
+                                        <stop offset="100%" stopColor="#e255f2" stopOpacity={0.05} />
+                                    </linearGradient>
+                                </defs>
+                                {showGrid && <CartesianGrid strokeDasharray="0" stroke="#e4e4e7" vertical={false} />}
+                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#71717a", fontSize: 10 }} dy={8} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#71717a", fontSize: 10 }} dx={-5} width={50} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
+                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: "#d4d4d8" }} />
+                                {showIncome && (
+                                    <Area type={smoothCurve ? "monotone" : "linear"} dataKey="income" stroke="#6e3ff3" strokeWidth={2} fill="url(#incomeAreaGradient)" />
+                                )}
+                                {showExpense && (
+                                    <Area type={smoothCurve ? "monotone" : "linear"} dataKey="expense" stroke="#e255f2" strokeWidth={2} fill="url(#expenseAreaGradient)" />
+                                )}
+                            </AreaChart>
+                        )}
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ==================== RECENT TRANSACTIONS TABLE ====================
+function RecentTransactionsTable() {
+    const transactions = useStore((state) => state.transactions);
+    const currency = useStore((state) => state.currency);
+    const exchangeRate = useStore((state) => state.exchangeRate);
+
+    const formatMoney = (amountIDR: number) => {
+        if (currency === 'IDR') {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amountIDR);
+        } else {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountIDR / exchangeRate);
+        }
+    };
+
+    const sortedTransactions = useMemo(() => {
+        return [...transactions]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 10);
+    }, [transactions]);
+
+    const getCategoryIcon = (category: string) => {
         switch (category.toLowerCase()) {
             case 'food': return Coffee;
             case 'transport': return Zap;
             case 'shopping': return ShoppingBag;
-            case 'entertainment': return Music;
             case 'bills': return Home;
             case 'education': return GraduationCap;
-            case 'others': return MoreHorizontal;
-            case 'transfer': return DollarSign;
             default: return DollarSign;
         }
     };
 
     return (
-        <div className="flex flex-col space-y-6">
-            <div className="flex items-center justify-between space-y-2 mb-6">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Cashflow</h2>
-                    <p className="text-muted-foreground">Monitor financial health and subscriptions.</p>
+        <div className="rounded-xl border bg-card">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:px-6 sm:py-3.5">
+                <div className="flex items-center gap-2 sm:gap-2.5 flex-1">
+                    <Button variant="outline" size="icon" className="size-7 sm:size-8 shrink-0">
+                        <ListTodo className="size-4 sm:size-[18px] text-muted-foreground" />
+                    </Button>
+                    <span className="text-sm sm:text-base font-medium">Recent Transactions</span>
+                    <Badge variant="secondary" className="ml-1 text-[10px] sm:text-xs">
+                        {sortedTransactions.length}
+                    </Badge>
                 </div>
-                <div className="flex items-center space-x-2">
-                    <Button onClick={handleExport} variant="outline" size="icon" title="Export to CSV" aria-label="Export to CSV">
-                        <Download className="h-4 w-4" />
-                    </Button>
-                    <Button onClick={() => setCurrency(currency === 'IDR' ? 'USD' : 'IDR')} variant="outline" aria-label={`Switch currency to ${currency === 'IDR' ? 'USD' : 'IDR'}`}>
-                        {currency} Mode
-                    </Button>
+                <div className="relative flex-1 sm:flex-none">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-4 sm:size-5 text-muted-foreground" />
+                    <Input
+                        placeholder="Search..."
+                        className="pl-9 sm:pl-10 w-full sm:w-[160px] lg:w-[200px] h-8 sm:h-9 text-sm"
+                    />
                 </div>
             </div>
 
-            <Tabs defaultValue="tracker" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                <AnimatedTabsList className="w-fit">
-                    <AnimatedTabsTrigger value="tracker" activeTab={activeTab} group="cashflow">Tracker</AnimatedTabsTrigger>
-                    <AnimatedTabsTrigger value="subscriptions" activeTab={activeTab} group="cashflow">Subscriptions</AnimatedTabsTrigger>
-                </AnimatedTabsList>
-
-                <TabsContent value="tracker" className="space-y-4">
-                    {/* KPI Cards */}
-                    <Card className="flex flex-col shadow-sm">
-                        {/* Top: KPI Row with Separators */}
-                        <div className="flex flex-col lg:flex-row p-6 lg:space-x-4 space-y-4 lg:space-y-0 text-clip">
-                            {/* Total Balance */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex items-center justify-between text-sm font-medium">
-                                        Total Balance
-                                        <Wallet className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                    <div>
-                                        <div className="text-2xl font-bold">{formatMoney(totalBalance)}</div>
-                                        <div className="h-[40px] mt-2">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={overviewChartData}>
-                                                    <defs>
-                                                        <linearGradient id="colorBalanceSmall" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <Area type="monotone" dataKey="val" stroke="#10b981" fill="url(#colorBalanceSmall)" strokeWidth={2} />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Separator orientation="vertical" className="hidden lg:block h-auto w-[1px]" />
-
-                            {/* Monthly Income */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex items-center justify-between text-sm font-medium">
-                                        Monthly Income
-                                        <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-                                    </div>
-                                    <div>
-                                        <div className="text-2xl font-bold text-emerald-500">{formatMoney(monthlyIncome)}</div>
-                                        <div className="h-[40px] mt-2">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={dataIncome}>
-                                                    <defs>
-                                                        <linearGradient id="colorIncomeSmall" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <Area type="monotone" dataKey="val" stroke="#10b981" fill="url(#colorIncomeSmall)" strokeWidth={2} />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Separator orientation="vertical" className="hidden lg:block h-auto w-[1px]" />
-
-                            {/* Monthly Expense */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex items-center justify-between text-sm font-medium">
-                                        Monthly Expense
-                                        <ArrowDownRight className="h-4 w-4 text-rose-500" />
-                                    </div>
-                                    <div>
-                                        <div className="text-2xl font-bold text-rose-500">{formatMoney(monthlyExpense)}</div>
-                                        <div className="h-[40px] mt-2">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={dataExpense}>
-                                                    <defs>
-                                                        <linearGradient id="colorExpenseSmall" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2} />
-                                                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <Area type="monotone" dataKey="val" stroke="#f43f5e" fill="url(#colorExpenseSmall)" strokeWidth={2} />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Separator orientation="vertical" className="hidden lg:block h-auto w-[1px]" />
-
-                            {/* Net Savings */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex items-center justify-between text-sm font-medium">
-                                        Net Savings
-                                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                    <div>
-                                        <div className={cn("text-2xl font-bold", monthlyIncome - monthlyExpense >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                                            {formatMoney(monthlyIncome - monthlyExpense)}
-                                        </div>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            {monthlyIncome - monthlyExpense >= 0 ? "You're saving money!" : "Spending more than income."}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        {/* Bottom: Use flex-col for layout structure, children are standard divs imitating Card header/content */}
-                        <div className="flex flex-col lg:flex-row">
-                            {/* Left: Overview */}
-                            <div className="flex-[4] flex flex-col min-w-0">
-                                <OverviewChart
-                                    data={overviewChartData}
-                                    period={period}
-                                    headerAction={
-                                        <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
-                                            <SelectTrigger className="w-[120px]">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Weekly">Weekly</SelectItem>
-                                                <SelectItem value="Monthly">Monthly</SelectItem>
-                                                <SelectItem value="Yearly">Yearly</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    }
-                                />
-                            </div>
-
-                            <Separator orientation="vertical" className="hidden lg:block h-auto w-[1px]" />
-
-                            {/* Right: Recent Transactions */}
-                            <div className="flex-[3] flex flex-col min-w-0">
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle>Recent Transactions</CardTitle>
-                                    <Button size="sm" onClick={() => setIsModalOpen(true)}>
-                                        <Plus className="mr-2 h-4 w-4" /> Add
-                                    </Button>
-                                </CardHeader>
-                                <CardContent className="pr-2 flex flex-col flex-1 h-[400px]">
-                                    <ScrollArea className="flex-1 pr-2 h-full">
-                                        <div className="space-y-4">
-                                            {sortedTransactions.length === 0 ? (
-                                                <p className="text-sm text-center text-muted-foreground py-10">No transactions recorded.</p>
-                                            ) : (
-                                                sortedTransactions.slice(0, 10).map((tx) => {
-                                                    const Icon = getIcon(tx.category);
-                                                    const isIncome = tx.type === 'income';
-                                                    return (
-                                                        <div key={tx.id} className="flex items-center justify-between">
-                                                            <div className="flex items-center space-x-4">
-                                                                <div className={cn("p-2 rounded-full bg-muted", isIncome ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10")}>
-                                                                    <Icon className="h-4 w-4" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-sm font-medium leading-none">{tx.title}</p>
-                                                                    <p className="text-xs text-muted-foreground">{tx.category} • {format(new Date(tx.date), 'MMM d')}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className={cn("font-medium text-sm", isIncome ? "text-emerald-500" : "text-rose-500")}>
-                                                                {isIncome ? "+" : "-"}{formatMoney(Math.abs(tx.amount))}
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })
-                                            )}
-                                        </div>
-                                    </ScrollArea>
-
-                                    <div className="mt-4 pt-4 border-t">
-                                        <Button variant="outline" className="w-full" onClick={(e: React.MouseEvent) => {
-                                            e.preventDefault();
-                                            // @ts-ignore
-                                            if (window.electronAPI) window.electronAPI.openWindow(`/history?theme=${theme}`, 900, 600);
-                                        }}>
-                                            View Full History
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </div>
-                        </div>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="subscriptions">
-                    <SubscriptionsTab formatMoney={formatMoney} />
-                </TabsContent>
-            </Tabs>
-
-            <TransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+            <div className="px-3 sm:px-6 pb-3 sm:pb-4 overflow-x-auto">
+                <Table>
+                    <TableHeader>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                            <TableHead className="w-[40px] font-medium text-muted-foreground text-xs sm:text-sm">#</TableHead>
+                            <TableHead className="min-w-[100px] font-medium text-muted-foreground text-xs sm:text-sm">Title</TableHead>
+                            <TableHead className="min-w-[80px] font-medium text-muted-foreground text-xs sm:text-sm">Category</TableHead>
+                            <TableHead className="min-w-[80px] font-medium text-muted-foreground text-xs sm:text-sm">Date</TableHead>
+                            <TableHead className="min-w-[100px] font-medium text-muted-foreground text-xs sm:text-sm text-right">Amount</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {sortedTransactions.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground text-sm">
+                                    No transactions found.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            sortedTransactions.map((tx, index) => {
+                                const Icon = getCategoryIcon(tx.category);
+                                const isIncome = tx.type === 'income';
+                                return (
+                                    <TableRow key={tx.id}>
+                                        <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex items-center justify-center size-6 sm:size-7 rounded-md bg-muted text-[10px] font-bold shrink-0">
+                                                    <Icon className="size-3 sm:size-4" />
+                                                </div>
+                                                <span className="font-medium text-xs sm:text-sm truncate">{tx.title}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-xs sm:text-sm">{tx.category}</TableCell>
+                                        <TableCell className="text-muted-foreground text-xs sm:text-sm">
+                                            {format(new Date(tx.date), "MMM d, yyyy")}
+                                        </TableCell>
+                                        <TableCell className={`text-right font-medium text-xs sm:text-sm ${isIncome ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            {isIncome ? '+' : '-'}{formatMoney(Math.abs(Number(tx.amount)))}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
         </div>
     );
+}
+
+// ==================== MAIN COMPONENT ====================
+const Cashflow = () => {
+    const fetchTransactions = useStore(state => state.fetchTransactions);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    useEffect(() => {
+        fetchTransactions();
+        const handleRefresh = () => fetchTransactions();
+        // @ts-ignore
+        const api = window.electronAPI;
+        if (api && typeof api.onRefreshData === 'function') {
+            api.onRefreshData(handleRefresh);
+        }
+        return () => {
+            // @ts-ignore
+            const api = window.electronAPI;
+            if (api && typeof api.offRefreshData === 'function') {
+                api.offRefreshData();
+            }
+        }
+    }, [fetchTransactions]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const cmdKey = isMac ? e.metaKey : e.ctrlKey;
+            if (cmdKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                setIsModalOpen(true);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    return (
+        <ScrollArea className="h-[calc(100vh-3rem)]">
+            <div className="flex flex-col space-y-6 p-6 pr-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Cashflow</h2>
+                        <p className="text-sm text-muted-foreground mt-1">Monitor financial health and transactions.</p>
+                    </div>
+                    <Button onClick={() => setIsModalOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" /> Add Transaction
+                    </Button>
+                </div>
+
+                {/* Stats Cards */}
+                <StatsCards />
+
+                {/* Charts Row */}
+                <div className="flex flex-col xl:flex-row gap-4 sm:gap-6">
+                    <SpendingHabitChart />
+                    <CashflowChart />
+                </div>
+
+                {/* Recent Transactions Table */}
+                <RecentTransactionsTable />
+
+                {/* Subscriptions Section */}
+                <SubscriptionsSection />
+            </div>
+            <TransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+        </ScrollArea>
+    );
 };
+
+// ==================== SUBSCRIPTIONS SECTION ====================
+function SubscriptionsSection() {
+    const subscriptions = useStore(state => state.subscriptions);
+    const addSubscription = useStore(state => state.addSubscription);
+    const deleteSubscription = useStore(state => state.deleteSubscription);
+    const currency = useStore((state) => state.currency);
+    const exchangeRate = useStore((state) => state.exchangeRate);
+    const [isAddOpen, setIsAddOpen] = useState(false);
+    const [newSub, setNewSub] = useState<{
+        name: string;
+        cost: string;
+        date: Date;
+    }>({
+        name: '',
+        cost: '',
+        date: new Date()
+    });
+    const [deleteDialog, setDeleteDialog] = useState<{
+        isOpen: boolean;
+        subscription: any | null;
+    }>({ isOpen: false, subscription: null });
+
+    const formatMoney = (amountIDR: number) => {
+        if (currency === 'IDR') {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amountIDR);
+        } else {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountIDR / exchangeRate);
+        }
+    };
+
+    const handleAdd = () => {
+        if (!newSub.name || !newSub.cost || !newSub.date) return;
+        addSubscription({
+            name: newSub.name,
+            cost: parseFloat(newSub.cost.replace(/,/g, '')),
+            dueDay: newSub.date.getDate(),
+        });
+        setIsAddOpen(false);
+        setNewSub({ name: '', cost: '', date: new Date() });
+    };
+
+    const handleDeleteClick = (e: React.MouseEvent, sub: any) => {
+        e.stopPropagation();
+        setDeleteDialog({ isOpen: true, subscription: sub });
+    };
+
+    const handleConfirmDelete = () => {
+        const sub = deleteDialog.subscription;
+        if (!sub) return;
+        deleteSubscription(sub.id);
+        setDeleteDialog({ isOpen: false, subscription: null });
+    };
+
+    const totalMonthly = useMemo(() => {
+        return subscriptions.reduce((acc, sub) => acc + sub.cost, 0);
+    }, [subscriptions]);
+
+    return (
+        <div className="space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Monthly Cost</CardTitle>
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{formatMoney(totalMonthly)}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Based on {subscriptions.length} active subscriptions
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Subscriptions Count</CardTitle>
+                        <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{subscriptions.length}</div>
+                        <p className="text-xs text-muted-foreground">Active recurring payments</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Subscriptions Table */}
+            <Card className="h-full">
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Subscriptions</CardTitle>
+                        <p className="text-sm text-muted-foreground">Manage your recurring payments.</p>
+                    </div>
+                    <Button onClick={() => setIsAddOpen(true)} size="sm">
+                        <Plus className="mr-2 h-4 w-4" /> Add Subscription
+                    </Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="px-3 sm:px-6 pb-3 sm:pb-4 overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                                    <TableHead className="w-[40px] font-medium text-muted-foreground text-xs sm:text-sm">#</TableHead>
+                                    <TableHead className="min-w-[150px] font-medium text-muted-foreground text-xs sm:text-sm">Name</TableHead>
+                                    <TableHead className="min-w-[100px] font-medium text-muted-foreground text-xs sm:text-sm">Cost</TableHead>
+                                    <TableHead className="min-w-[100px] font-medium text-muted-foreground text-xs sm:text-sm">Due Day</TableHead>
+                                    <TableHead className="w-[50px]"></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {subscriptions.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground text-sm">
+                                            No subscriptions found.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    subscriptions.map((sub, index) => (
+                                        <TableRow key={sub.id}>
+                                            <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
+                                            <TableCell className="font-medium text-xs sm:text-sm">{sub.name}</TableCell>
+                                            <TableCell className="text-xs sm:text-sm">{formatMoney(sub.cost)}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="text-xs">Day {sub.dueDay}</Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Button variant="ghost" size="icon" className="size-7 sm:size-8" onClick={(e: React.MouseEvent) => handleDeleteClick(e, sub)}>
+                                                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Add Subscription Dialog */}
+            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add Subscription</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="grid gap-2">
+                            <Label>Name</Label>
+                            <Input placeholder="Netflix, Spotify..." value={newSub.name} onChange={e => setNewSub({ ...newSub, name: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>Amount</Label>
+                                <NumberStepper
+                                    value={newSub.cost}
+                                    onChange={(val) => setNewSub({ ...newSub, cost: val })}
+                                    placeholder="0"
+                                    min={0}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Subscription Date</Label>
+                                <DatePicker
+                                    date={newSub.date}
+                                    setDate={(date) => date && setNewSub({ ...newSub, date: date })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
+                        <Button onClick={handleAdd}>Add Subscription</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialog.isOpen} onOpenChange={(open) => !open && setDeleteDialog({ isOpen: false, subscription: null })}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Subscription?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete <span className="font-semibold">{deleteDialog.subscription?.name}</span>? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
+    );
+}
 
 export default Cashflow;

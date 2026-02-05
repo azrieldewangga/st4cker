@@ -26,6 +26,7 @@ import {
     PaginationPrevious,
 } from "@/components/ui/pagination";
 import { SkeletonCard, SkeletonTable } from '../components/shared/Skeleton';
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmptyState } from '../components/shared/EmptyState';
 
 const Performance = () => {
@@ -118,12 +119,16 @@ const Performance = () => {
     }, [userProfile]);
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-[calc(100vh-3rem)]">
+        <div className="space-y-6 p-6 pr-4">
             <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold flex items-center gap-2">
-                    <GraduationCap />
-                    Prestasi Akademik
-                </h1>
+                <div>
+                    <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+                        <GraduationCap className="h-6 w-6" />
+                        Prestasi Akademik
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">Track your academic performance and grades.</p>
+                </div>
                 <Button variant="outline" size="sm" onClick={() => {
                     void (async () => {
                         // Prepare export data
@@ -423,6 +428,7 @@ const Performance = () => {
             </Pagination>
 
         </div>
+        </ScrollArea>
     );
 };
 

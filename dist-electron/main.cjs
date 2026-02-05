@@ -97,6 +97,27 @@ const createWindow = () => {
     else {
         mainWindow?.loadFile(path_1.default.join(__dirname, '../dist/index.html'));
     }
+    // Handle external links (target="_blank")
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        // Check if URL is external (http/https) and not localhost (dev server)
+        const isExternal = url.startsWith('http') && !url.includes('localhost:') && !url.includes('127.0.0.1:');
+        if (isExternal) {
+            require('electron').shell.openExternal(url);
+            return { action: 'deny' };
+        }
+        // Ensure even internal links don't open new windows (e.g. Ctrl+Click)
+        // If it's strictly internal but trying to open a new window, just deny it to keep single-window app feels
+        // Or if you want multi-window for internal stuff, allow it. But usually for this app, deny is safer.
+        return { action: 'deny' };
+    });
+    // Prevent navigation to external sites within the same window (e.g. drag & drop link)
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        const isExternal = url.startsWith('http') && !url.includes('localhost:') && !url.includes('127.0.0.1:');
+        if (isExternal) {
+            event.preventDefault();
+            require('electron').shell.openExternal(url);
+        }
+    });
     // Wait for main window to be ready
     mainWindow.once('ready-to-show', () => {
         console.log('[Main] MainWindow ready-to-show triggered');
@@ -434,12 +455,30 @@ electron_1.app.on('ready', async () => {
         const settings = electron_1.app.getLoginItemSettings();
         return settings.openAtLogin;
     });
+    electron_1.ipcMain.removeHandler('settings:toggleStartup');
     electron_1.ipcMain.handle('settings:toggleStartup', (_, openAtLogin) => {
         electron_1.app.setLoginItemSettings({
             openAtLogin: openAtLogin,
             path: electron_1.app.getPath('exe') // Important for production
         });
         return electron_1.app.getLoginItemSettings().openAtLogin;
+    });
+    // Utils
+    electron_1.ipcMain.removeHandler('utils:openExternal');
+    electron_1.ipcMain.handle('utils:openExternal', (_, url) => {
+        return require('electron').shell.openExternal(url);
+    });
+    electron_1.ipcMain.removeHandler('utils:openPath');
+    electron_1.ipcMain.handle('utils:openPath', async (_, path) => {
+        // Validation basic
+        if (!path)
+            return 'No path provided';
+        return await require('electron').shell.openPath(path);
+    });
+    electron_1.ipcMain.removeHandler('utils:saveFile');
+    electron_1.ipcMain.handle('utils:saveFile', async (_, content, defaultName, extensions) => {
+        // Basic implementation or placeholder if needed
+        return { success: false, error: 'Not implemented' };
     });
     // ========================================
     // Telegram Sync - Inline Implementation

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Project } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +44,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import ProjectModal from './ProjectModal';
-import ProjectDetailsModal from './ProjectDetailsModal';
 import LogProgressDialog from './LogProgressDialog';
 import { ProjectCardSkeleton } from '@/components/ui/skeleton';
 
@@ -57,6 +57,8 @@ interface ProjectsTabProps {
 }
 
 const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }) => {
+    const navigate = useNavigate();
+
     // Use stable selectors - NO object destructuring to prevent re-renders
     const projects = useStore(state => state.projects);
     const courses = useStore(state => state.courses);
@@ -68,7 +70,6 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
 
     // Dialog State
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [viewingProjectId, setViewingProjectId] = useState<string | null>(null);
 
     // Log Progress State
     const [logProgressProjectId, setLogProgressProjectId] = useState<string | null>(null);
@@ -231,7 +232,7 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                 </div>
             ) : (
                 <>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 max-w-3xl">
+                    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
                         {filteredProjects.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((project) => {
                             const daysLeft = getDaysRemaining(project.deadline);
                             // Auto-generate color from priority
@@ -278,7 +279,16 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                                             <div className="flex items-center gap-2 mb-1.5">
                                                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                                                     <div
-                                                        className={cn("h-full transition-all", project.status === 'completed' ? "bg-green-500" : "bg-primary")}
+                                                        className={cn(
+                                                            "h-full transition-all",
+                                                            project.totalProgress <= 25
+                                                                ? "bg-yellow-500"
+                                                                : project.totalProgress <= 50
+                                                                    ? "bg-orange-500"
+                                                                    : project.totalProgress <= 75
+                                                                        ? "bg-blue-500"
+                                                                        : "bg-green-500"
+                                                        )}
                                                         style={{ width: `${project.totalProgress}%` }}
                                                     />
                                                 </div>
@@ -305,7 +315,7 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setViewingProjectId(project.id);
+                                                                navigate(`/projects/${project.id}`);
                                                             }}
                                                         >
                                                             <Maximize2 className="w-4 h-4 mr-2" />
@@ -376,19 +386,6 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                 initialData={editingId ? projects.find(p => p.id === editingId) || null : null}
             />
 
-            <ProjectDetailsModal
-                isOpen={!!viewingProjectId}
-                onClose={() => setViewingProjectId(null)}
-                projectId={viewingProjectId}
-                onEdit={(p) => {
-                    setEditingId(p.id);
-                }}
-                onLogProgress={(p) => {
-                    setLogProgressProjectId(p.id);
-                    setLogProgressCurrent(p.totalProgress);
-                }}
-            />
-
             <LogProgressDialog
                 isOpen={logProgressProjectId !== null}
                 onClose={() => setLogProgressProjectId(null)}
@@ -402,6 +399,16 @@ const ProjectsTab: React.FC<ProjectsTabProps> = ({ isModalOpen, setIsModalOpen }
                     style={{ top: contextMenu.y, left: contextMenu.x }}
                     onClick={(e) => e.stopPropagation()}
                 >
+                    <Button
+                        variant="ghost"
+                        className="w-full justify-start h-8 text-sm"
+                        onClick={() => {
+                            navigate(`/projects/${contextMenu.projectId}`);
+                            setContextMenu(null);
+                        }}
+                    >
+                        <Maximize2 className="w-3 h-3 mr-2" /> Detail
+                    </Button>
                     <Button
                         variant="ghost"
                         className="w-full justify-start h-8 text-sm"

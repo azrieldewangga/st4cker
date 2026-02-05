@@ -1,0 +1,163 @@
+openapi: 3.0.0
+info:
+  title: St4cker Agent API
+  description: API for AI Agents (OpenClaw) to control St4cker (Tasks, Projects, Transactions).
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local Development Server
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /tasks:
+    get:
+      summary: List tasks
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, completed, missed]
+        - in: query
+          name: course
+          schema:
+            type: string
+        - in: query
+          name: priority
+          schema:
+            type: string
+            enum: [low, medium, high]
+      responses:
+        '200':
+          description: List of tasks
+    post:
+      summary: Create a new task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - course
+                - deadline
+              properties:
+                title:
+                  type: string
+                course:
+                  type: string
+                deadline:
+                  type: string
+                  format: date-time
+                note:
+                  type: string
+                type:
+                  type: string
+                  enum: [Tugas, Ujian, Kuis, Proyek]
+      responses:
+        '201':
+          description: Task created
+
+  /tasks/{id}:
+    patch:
+      summary: Update a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending, completed]
+                deadline:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Task updated
+
+  /projects:
+    get:
+      summary: List projects
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, completed, archived]
+      responses:
+        '200':
+          description: List of projects
+    post:
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                status:
+                  type: string
+                priority:
+                  type: string
+                deadline:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Project created
+
+  /transactions:
+    get:
+      summary: List recent transactions
+      responses:
+        '200':
+          description: List of transactions
+    post:
+      summary: Create a new transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+                - type
+                - category
+              properties:
+                amount:
+                  type: number
+                type:
+                  type: string
+                  enum: [income, expense]
+                category:
+                  type: string
+                title:
+                  type: string
+      responses:
+        '201':
+          description: Transaction created

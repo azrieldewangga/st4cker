@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { app, BrowserWindow, ipcMain } from 'electron';
+console.log('--- STARTING MAIN PROCESS V2 (FRESH BUILD) ---');
 import { pathToFileURL } from 'url';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -81,9 +82,8 @@ const createWindow = () => {
         minWidth: 1024,
         minHeight: 768,
         frame: false,
-        transparent: true, // Enable transparency
-        backgroundMaterial: 'none',
-        backgroundColor: '#1a1b1e', // Force solid dark background
+        transparent: false,
+        backgroundColor: '#00000000', // Transparent background
 
         show: false, // Don't show immediately
         icon: path.join(__dirname, app.isPackaged ? '../dist/icon.ico' : '../public/icon.ico'),
@@ -103,6 +103,31 @@ const createWindow = () => {
     } else {
         mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
     }
+
+    // Handle external links (target="_blank")
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        // Check if URL is external (http/https) and not localhost (dev server)
+        const isExternal = url.startsWith('http') && !url.includes('localhost:') && !url.includes('127.0.0.1:');
+
+        if (isExternal) {
+            require('electron').shell.openExternal(url);
+            return { action: 'deny' };
+        }
+
+        // Ensure even internal links don't open new windows (e.g. Ctrl+Click)
+        // If it's strictly internal but trying to open a new window, just deny it to keep single-window app feels
+        // Or if you want multi-window for internal stuff, allow it. But usually for this app, deny is safer.
+        return { action: 'deny' };
+    });
+
+    // Prevent navigation to external sites within the same window (e.g. drag & drop link)
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        const isExternal = url.startsWith('http') && !url.includes('localhost:') && !url.includes('127.0.0.1:');
+        if (isExternal) {
+            event.preventDefault();
+            require('electron').shell.openExternal(url);
+        }
+    });
 
     // Wait for main window to be ready
     mainWindow.once('ready-to-show', () => {
@@ -456,6 +481,7 @@ app.on('ready', async () => {
         return settings.openAtLogin;
     });
 
+    ipcMain.removeHandler('settings:toggleStartup');
     ipcMain.handle('settings:toggleStartup', (_, openAtLogin) => {
         app.setLoginItemSettings({
             openAtLogin: openAtLogin,
@@ -463,6 +489,7 @@ app.on('ready', async () => {
         });
         return app.getLoginItemSettings().openAtLogin;
     });
+
 
 
     // ========================================
@@ -1178,8 +1205,11 @@ app.on('ready', async () => {
 
     // Utilities (Shell & File System)
     const { shell } = require('electron');
+    ipcMain.removeHandler('utils:openExternal');
     ipcMain.handle('utils:openExternal', (_, url) => shell.openExternal(url));
+    ipcMain.removeHandler('utils:openPath');
     ipcMain.handle('utils:openPath', (_, path) => shell.openPath(path));
+    ipcMain.removeHandler('utils:saveFile');
     ipcMain.handle('utils:saveFile', async (_, content, defaultName, extensions = ['csv']) => {
         const win = BrowserWindow.getFocusedWindow();
         if (!win) return { success: false, error: 'No focused window' };

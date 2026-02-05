@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  st4cker-bot:
+    build: .
+    container_name: st4cker-bot
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Jakarta
+      # Load other env vars from .env file
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./src/db:/app/src/db # Mount db directory for persistence if using sqlite
+    networks:
+      - st4cker-net
+
+networks:
+  st4cker-net:
+    driver: bridge

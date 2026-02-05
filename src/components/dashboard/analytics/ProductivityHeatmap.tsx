@@ -16,6 +16,19 @@ import {
 
 export function ProductivityHeatmap() {
     const assignments = useStore(state => state.assignments);
+    const courses = useStore(state => state.courses);
+    const userProfile = useStore(state => state.userProfile);
+
+    // Filter assignments by current semester
+    const currentSemester = userProfile?.semester;
+    const relevantAssignments = assignments.filter(a => {
+        if (a.semester !== undefined && a.semester !== null) {
+            return a.semester === currentSemester;
+        }
+        // Fallback: check course semester
+        const course = courses.find(c => c.id === a.courseId);
+        return course ? course.semester === currentSemester : true;
+    });
 
     // --- 3. Productivity Heatmap (GitHub Style) ---
     // Last ~6 months equivalent (26 weeks)
@@ -36,7 +49,7 @@ export function ProductivityHeatmap() {
 
         // Map completions
         const completionMap: Record<string, number> = {};
-        assignments.forEach(a => {
+        relevantAssignments.forEach(a => {
             if (a.status === 'done' && a.updatedAt) {
                 const dateKey = format(new Date(a.updatedAt), 'yyyy-MM-dd');
                 completionMap[dateKey] = (completionMap[dateKey] || 0) + 1;
@@ -65,7 +78,7 @@ export function ProductivityHeatmap() {
         if (currentWeek.length > 0) weeks.push({ days: currentWeek });
 
         return weeks;
-    }, [assignments, startDate]);
+    }, [relevantAssignments, startDate]);
 
     // Helper to generate month labels
     // We scan the weeks. If a week contains the 1st of a month (or first week of data for that month), we label it.

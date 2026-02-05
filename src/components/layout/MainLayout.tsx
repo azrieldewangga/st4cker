@@ -166,7 +166,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     return (
         <div className="h-screen w-screen overflow-hidden bg-transparent flex flex-col">
             {/* Custom Window Frame */}
-            <div className="flex flex-col h-full w-full bg-background rounded-xl overflow-hidden shadow-2xl border border-border relative ring-1 ring-white/10">
+            <div className="flex flex-col h-full w-full bg-background overflow-hidden">
                 {/* Blur Overlay when Child Window is Open */}
                 {isChildWindowOpen && (
                     <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />

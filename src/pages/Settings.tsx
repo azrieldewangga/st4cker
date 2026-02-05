@@ -1,3 +1,4 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import React, { useEffect, useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
@@ -376,7 +377,16 @@ const Settings = () => {
     const isProfileView = view === 'profile';
 
     return (
-        <div className="flex flex-col gap-6 p-1 max-w-4xl mx-auto pb-10">
+        <ScrollArea className="h-[calc(100vh-3rem)]">
+        <div className="flex flex-col gap-6 max-w-4xl mx-auto p-6 pb-10 pr-4">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-semibold tracking-tight">Settings</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Manage your preferences and account.</p>
+                </div>
+            </div>
+
             {isProfileView ? (
                 // --- PROFILE VIEW ---
                 <>
@@ -765,6 +775,7 @@ const Settings = () => {
                 </DialogContent>
             </Dialog>
         </div >
+        </ScrollArea>
     );
 };
 

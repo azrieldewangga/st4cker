@@ -98,8 +98,18 @@ export function NotificationsTab() {
         const now = new Date();
 
         // 1. Assignment Notifications
+        const currentSemester = userProfile?.semester;
         assignments.forEach(a => {
             if (a.status === 'done') return; // Skip completed
+            
+            // Filter by semester: check assignment.semester or course.semester
+            if (a.semester !== undefined && a.semester !== null) {
+                if (a.semester !== currentSemester) return;
+            } else {
+                // Fallback: check course semester
+                const course = courses?.find(c => c.id === a.courseId);
+                if (course && course.semester !== currentSemester) return;
+            }
 
             const dueDate = new Date(a.deadline);
             const daysLeft = differenceInDays(dueDate, now);
@@ -183,7 +193,7 @@ export function NotificationsTab() {
             return a.date.getTime() - b.date.getTime();
         });
 
-    }, [assignments, subscriptions, transactions]); // Added transactions to dependency array
+    }, [assignments, subscriptions, transactions, courses, userProfile]); // Added dependencies for semester filtering
 
     if (notifications.length === 0) {
         return (

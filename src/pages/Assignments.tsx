@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/useStoreNew';
 import { AssignmentStatus, Assignment } from '../types/models';
 import { Plus, GripVertical, MoreHorizontal, Search, Trash2, Copy, Edit } from 'lucide-react';
 import { toast } from "sonner";
 import { format } from 'date-fns';
 import { cn } from "@/lib/utils";
+import { FilterChip } from "@/components/filter-chip";
 import {
     DndContext,
     closestCenter,
@@ -70,6 +72,7 @@ import AssignmentModal from '../components/assignments/AssignmentModal';
 import ProjectsTab from '../components/projects/ProjectsTab';
 import { SkeletonTable } from '../components/shared/Skeleton';
 import { EmptyState } from '../components/shared/EmptyState';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Sortable Row
 interface SortableRowProps {
@@ -351,7 +354,8 @@ const Assignments = () => {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [assignmentToDelete, setAssignmentToDelete] = useState<string | null>(null);
     const [isBulkDelete, setIsBulkDelete] = useState(false);
-    const [activeTab, setActiveTab] = useState('tasks');
+    const [searchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'tasks');
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
 
     // Selection State
@@ -522,11 +526,11 @@ const Assignments = () => {
 
     if (!userProfile) {
         return (
-            <div className="h-full flex flex-col space-y-8 p-8 pt-6">
+            <div className="h-full flex flex-col space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-3xl font-bold tracking-tight">Assignments</h2>
-                        <p className="text-muted-foreground">Manage your tasks and deadlines.</p>
+                        <h2 className="text-2xl font-semibold tracking-tight">Assignments</h2>
+                        <p className="text-sm text-muted-foreground mt-1">Manage your tasks and deadlines.</p>
                     </div>
                 </div>
                 <SkeletonTable rows={8} />
@@ -535,30 +539,30 @@ const Assignments = () => {
     }
 
     return (
-        <div className="h-full flex flex-col space-y-8 p-8 pt-6">
-            <Tabs defaultValue="tasks" className="w-full" onValueChange={setActiveTab}>
-                <div className="flex items-center justify-between space-y-2 mb-4">
+        <ScrollArea className="h-[calc(100vh-3rem)]">
+        <div className="space-y-6 p-6 pr-4">
+            <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
+                <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-3xl font-bold tracking-tight">Assignments</h2>
-                        <p className="text-muted-foreground">Manage your tasks and deadlines.</p>
+                        <h2 className="text-2xl font-semibold tracking-tight">Assignments</h2>
+                        <p className="text-sm text-muted-foreground mt-1">Manage your tasks and deadlines.</p>
                     </div>
-                </div>
+                    <div className="flex items-center gap-4">
+                        <AnimatedTabsList>
+                            <AnimatedTabsTrigger value="tasks" activeTab={activeTab} group="assignments">Tasks</AnimatedTabsTrigger>
+                            <AnimatedTabsTrigger value="projects" activeTab={activeTab} group="assignments">Projects</AnimatedTabsTrigger>
+                        </AnimatedTabsList>
 
-                <div className="flex items-center justify-between mb-4">
-                    <AnimatedTabsList>
-                        <AnimatedTabsTrigger value="tasks" activeTab={activeTab} group="assignments">Tasks</AnimatedTabsTrigger>
-                        <AnimatedTabsTrigger value="projects" activeTab={activeTab} group="assignments">Projects</AnimatedTabsTrigger>
-                    </AnimatedTabsList>
-
-                    {activeTab === 'tasks' ? (
-                        <Button onClick={() => { setEditingId(null); setIsModalOpen(true); }}>
-                            <Plus className="mr-2 h-4 w-4" /> New Assignment
-                        </Button>
-                    ) : (
-                        <Button onClick={() => setIsProjectModalOpen(true)}>
-                            <Plus className="mr-2 h-4 w-4" /> New Project
-                        </Button>
-                    )}
+                        {activeTab === 'tasks' ? (
+                            <Button onClick={() => { setEditingId(null); setIsModalOpen(true); }}>
+                                <Plus className="mr-2 h-4 w-4" /> New Assignment
+                            </Button>
+                        ) : (
+                            <Button onClick={() => setIsProjectModalOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> New Project
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 <TabsContent value="tasks" className="space-y-4">
@@ -607,6 +611,36 @@ const Assignments = () => {
                             </Button>
                         </div>
                     </div>
+
+                    {/* Active Filter Chips */}
+                    {(search || statusFilter !== 'all' || courseFilter !== 'all') && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            {search && (
+                                <FilterChip
+                                    label={`Search: "${search}"`}
+                                    onRemove={() => setSearch('')}
+                                />
+                            )}
+                            {statusFilter !== 'all' && (
+                                <FilterChip
+                                    label={`Status: ${statusFilter === 'to-do' ? 'To Do' : statusFilter === 'progress' ? 'In Progress' : 'Completed'}`}
+                                    onRemove={() => setStatusFilter('all')}
+                                />
+                            )}
+                            {courseFilter !== 'all' && (
+                                <FilterChip
+                                    label={`Course: ${courseFilter}`}
+                                    onRemove={() => setCourseFilter('all')}
+                                />
+                            )}
+                            <button
+                                onClick={() => { setSearch(''); setStatusFilter('all'); setCourseFilter('all'); }}
+                                className="text-sm text-primary hover:underline ml-2"
+                            >
+                                Clear all
+                            </button>
+                        </div>
+                    )}
 
                     {/* Table */}
                     <div className="rounded-md border bg-card">
@@ -733,6 +767,7 @@ const Assignments = () => {
                 </TabsContent>
             </Tabs>
         </div>
+        </ScrollArea>
     );
 };
 

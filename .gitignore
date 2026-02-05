@@ -29,3 +29,10 @@ release/
 # Project planning (private)
 IMPLEMENTATION_PLAN.md
 RELEASE_NOTES_v1.6.1.md
+*.zip
+square-ui-master/
+tsc_debug.txt
+debug_info.txt
+data/
+project-dashboard-main/
+project-dashboard-main.zip

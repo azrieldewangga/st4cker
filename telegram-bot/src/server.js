@@ -38,6 +38,12 @@ app.use(cors({
 
 app.use(express.json());
 
+// API Routes (Agentic)
+import apiRoutes from './api_routes.js';
+app.use('/api/v1', apiRoutes);
+
+// Request logging middleware
+
 // Request logging middleware
 app.use((req, res, next) => {
     console.log(`[Server] ${req.method} ${req.url}`);

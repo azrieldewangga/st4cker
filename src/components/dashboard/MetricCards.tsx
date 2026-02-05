@@ -54,8 +54,18 @@ export function MetricCards() {
     });
     const gpa = totalSks > 0 ? (totalPoints / totalSks).toFixed(2) : "0.00";
 
-    // 3. Active Tasks
-    const activeAssignments = assignments.filter(a => a.status !== 'done').length;
+    // 3. Active Tasks (Filtered by current semester)
+    const currentSemester = userProfile?.semester;
+    const activeAssignments = assignments.filter(a => {
+        if (a.status === 'done') return false;
+        // Filter by semester: check assignment.semester or course.semester
+        if (a.semester !== undefined && a.semester !== null) {
+            return a.semester === currentSemester;
+        }
+        // Fallback: check course semester
+        const course = courses.find(c => c.id === a.courseId);
+        return course ? course.semester === currentSemester : true;
+    }).length;
 
     // 4. Next Class
     // Simple logic: Find next class today
