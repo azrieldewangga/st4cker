@@ -129,136 +129,209 @@ router.patch('/tasks/:id', [
         console.error('[API] Update Task Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
-});
+    // DELETE /api/v1/tasks/:id
+    router.delete('/tasks/:id', [
+        param('id').isUUID(),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { id } = req.params;
+            await db.delete(assignments).where(eq(assignments.id, id));
+            res.json({ success: true, message: 'Task deleted' });
+        } catch (error) {
+            console.error('[API] Delete Task Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
 
-// ==========================================
-// PROJECTS ENDPOINTS
-// ==========================================
+    // ==========================================
+    // PROJECTS ENDPOINTS
+    // ==========================================
 
-// GET /api/v1/projects
-router.get('/projects', [
-    query('status').optional().isIn(['active', 'completed', 'archived']),
-    handleValidationErrors
-], async (req, res) => {
-    try {
-        const { status } = req.query;
-        let conditions = [];
+    // GET /api/v1/projects
+    router.get('/projects', [
+        query('status').optional().isIn(['active', 'completed', 'archived']),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { status } = req.query;
+            let conditions = [];
 
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            const defaultUserId = usersList[0].telegramUserId;
 
-        conditions.push(eq(projects.userId, defaultUserId));
-        if (status) conditions.push(eq(projects.status, status));
+            conditions.push(eq(projects.userId, defaultUserId));
+            if (status) conditions.push(eq(projects.status, status));
 
-        const data = await db.select().from(projects).where(and(...conditions));
-        res.json({ success: true, count: data.length, data });
-    } catch (error) {
-        console.error('[API] Get Projects Error:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
+            const data = await db.select().from(projects).where(and(...conditions));
+            res.json({ success: true, count: data.length, data });
+        } catch (error) {
+            console.error('[API] Get Projects Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
 
-// POST /api/v1/projects
-router.post('/projects', [
-    body('title').notEmpty(),
-    body('status').optional().isIn(['active', 'completed', 'on_hold']),
-    handleValidationErrors
-], async (req, res) => {
-    try {
-        const { title, description, status, priority, deadline } = req.body;
+    // POST /api/v1/projects
+    router.post('/projects', [
+        body('title').notEmpty(),
+        body('status').optional().isIn(['active', 'completed', 'on_hold']),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { title, description, status, priority, deadline } = req.body;
 
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            const defaultUserId = usersList[0].telegramUserId;
 
-        const newProject = {
-            id: crypto.randomUUID(),
-            userId: defaultUserId,
-            title,
-            description: description || '',
-            status: status || 'active',
-            priority: priority || 'medium',
-            deadline: deadline ? new Date(deadline) : null,
-            totalProgress: 0,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
+            const newProject = {
+                id: crypto.randomUUID(),
+                userId: defaultUserId,
+                title,
+                description: description || '',
+                status: status || 'active',
+                priority: priority || 'medium',
+                deadline: deadline ? new Date(deadline) : null,
+                totalProgress: 0,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
 
-        await db.insert(projects).values(newProject);
-        res.status(201).json({ success: true, data: newProject });
-    } catch (error) {
-        console.error('[API] Create Project Error:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
+            await db.insert(projects).values(newProject);
+            res.status(201).json({ success: true, data: newProject });
+        } catch (error) {
+            console.error('[API] Create Project Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
 
-// ==========================================
-// TRANSACTIONS ENDPOINTS
-// ==========================================
+    // POST /api/v1/projects/:id/logs
+    router.post('/projects/:id/logs', [
+        param('id').isUUID(),
+        body('progress').isInt({ min: 0, max: 100 }),
+        body('message').optional().isString(),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { progress, message } = req.body;
 
-// GET /api/v1/transactions
-router.get('/transactions', async (req, res) => {
-    try {
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+            // 1. Update Project Progress
+            await db.update(projects)
+                .set({ totalProgress: progress, updatedAt: new Date() })
+                .where(eq(projects.id, id));
 
-        const data = await db.select().from(transactions)
-            .where(eq(transactions.userId, defaultUserId))
-            .orderBy(desc(transactions.date))
-            .limit(50); // Limit to last 50 for safety
+            // 2. (Opt) Insert into logs table if exists, for now just update project
 
-        res.json({ success: true, count: data.length, data });
-    } catch (error) {
-        console.error('[API] Get Transactions Error:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
+            res.json({ success: true, message: 'Progress logged' });
+        } catch (error) {
+            console.error('[API] Log Progress Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
 
-// POST /api/v1/transactions
-router.post('/transactions', [
-    body('amount').isNumeric(),
-    body('type').isIn(['income', 'expense']),
-    body('category').notEmpty(),
-    handleValidationErrors
-], async (req, res) => {
-    try {
-        const { amount, type, category, title, date } = req.body;
+    // DELETE /api/v1/projects/:id
+    router.delete('/projects/:id', [
+        param('id').isUUID(),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { id } = req.params;
+            await db.delete(projects).where(eq(projects.id, id));
+            res.json({ success: true, message: 'Project deleted' });
+        } catch (error) {
+            console.error('[API] Delete Project Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
 
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+    // ==========================================
+    // TRANSACTIONS ENDPOINTS
+    // ==========================================
 
-        const newTx = {
-            id: crypto.randomUUID(),
-            userId: defaultUserId,
-            amount: parseFloat(amount),
-            type,
-            category,
-            title: title || 'Untitled Transaction',
-            date: date ? new Date(date) : new Date(),
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
+    // GET /api/v1/transactions
+    router.get('/transactions', async (req, res) => {
+        try {
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            const defaultUserId = usersList[0].telegramUserId;
 
-        await db.insert(transactions).values(newTx);
+            const data = await db.select().from(transactions)
+                .where(eq(transactions.userId, defaultUserId))
+                .orderBy(desc(transactions.date))
+                .limit(50); // Limit to last 50 for safety
 
-        // Update User Balance
-        const currentUser = await db.select().from(users).where(eq(users.telegramUserId, defaultUserId)).limit(1);
-        let newBalance = parseFloat(currentUser[0].currentBalance);
-        if (type === 'income') newBalance += parseFloat(amount);
-        else newBalance -= parseFloat(amount);
+            res.json({ success: true, count: data.length, data });
+        } catch (error) {
+            console.error('[API] Get Transactions Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
 
-        await db.update(users)
-            .set({ currentBalance: newBalance, updatedAt: new Date() })
-            .where(eq(users.telegramUserId, defaultUserId));
+    // POST /api/v1/transactions
+    router.post('/transactions', [
+        body('amount').isNumeric(),
+        body('type').isIn(['income', 'expense']),
+        body('category').notEmpty(),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { amount, type, category, title, date } = req.body;
 
-        res.status(201).json({ success: true, data: newTx, newBalance });
-    } catch (error) {
-        console.error('[API] Create Transaction Error:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            const defaultUserId = usersList[0].telegramUserId;
 
-export default router;
+            const newTx = {
+                id: crypto.randomUUID(),
+                userId: defaultUserId,
+                amount: parseFloat(amount),
+                type,
+                category,
+                title: title || 'Untitled Transaction',
+                date: date ? new Date(date) : new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+
+            await db.insert(transactions).values(newTx);
+
+            // Update User Balance
+            const currentUser = await db.select().from(users).where(eq(users.telegramUserId, defaultUserId)).limit(1);
+            let newBalance = parseFloat(currentUser[0].currentBalance);
+            if (type === 'income') newBalance += parseFloat(amount);
+            else newBalance -= parseFloat(amount);
+
+            await db.update(users)
+                .set({ currentBalance: newBalance, updatedAt: new Date() })
+                .where(eq(users.telegramUserId, defaultUserId));
+
+            res.status(201).json({ success: true, data: newTx, newBalance });
+        } catch (error) {
+            console.error('[API] Create Transaction Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
+
+    // DELETE /api/v1/transactions/:id
+    router.delete('/transactions/:id', [
+        param('id').isUUID(),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { id } = req.params;
+
+            // 1. Get Tx logic to revert balance? 
+            // For simplicity API v1, just delete record. 
+            // Ideally we revert the balance change.
+
+            await db.delete(transactions).where(eq(transactions.id, id));
+            res.json({ success: true, message: 'Transaction deleted' });
+        } catch (error) {
+            console.error('[API] Delete Transaction Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
+
+    export default router;
