@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { HistoryService } from '../services/historyService.js';
+import { OpenClawService } from '../services/openClawService.js';
 
 dotenv.config();
 
@@ -178,6 +179,38 @@ export async function parseMessage(text, userId = null) {
     if (!text) return { intents: [], entities: {} };
 
     try {
+        // SMART ROUTING LOGIC (OpenClaw vs Internal)
+        // ------------------------------------------
+
+        const lowerText = text.toLowerCase();
+
+        // 1. Heavy Tasks -> OpenClaw (Pro)
+        const heavyKeywords = ['coding', 'buatkan kode', 'python', 'script', 'pdf', 'analisis', 'review jurnal', 'deep dive', 'debug'];
+        if (process.env.OPENCLAW_ENDPOINT && heavyKeywords.some(w => lowerText.includes(w))) {
+            console.log('[NLP] Routing to OpenClaw (PRO Model)...');
+            const clawResponse = await OpenClawService.sendPrompt(text, 'pro');
+            if (clawResponse) {
+                return {
+                    intents: [{ name: 'openclaw_response', confidence: 1.0 }],
+                    entities: { response: [{ value: clawResponse }] }
+                };
+            }
+        }
+
+        // 2. Light Tasks -> OpenClaw (Flash)
+        const lightKeywords = ['cari', 'search', 'googling', 'cuaca', 'berita', 'siapa itu', 'summary url', 'rangkum link'];
+        if (process.env.OPENCLAW_ENDPOINT && lightKeywords.some(w => lowerText.includes(w))) {
+            console.log('[NLP] Routing to OpenClaw (FLASH/Skill)...');
+            const clawResponse = await OpenClawService.sendPrompt(text, 'flash');
+            if (clawResponse) {
+                return {
+                    intents: [{ name: 'openclaw_response', confidence: 1.0 }],
+                    entities: { response: [{ value: clawResponse }] }
+                };
+            }
+        }
+
+        // 3. Fallback / Internal St4cker Logic
         return await retryWithBackoff(async () => {
             const systemPrompt = await getSystemPrompt(userId);
             const dynamicPrompt = `${systemPrompt} \n\nUser Message: "${text}"`;

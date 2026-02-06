@@ -147,6 +147,16 @@ export async function handleNaturalLanguage(bot, msg, broadcastEvent) {
     const intent = topIntent.name;
     const entities = result.entities;
 
+    // --- Handling OpenClaw Response ---
+    if (intent === 'openclaw_response') {
+        const responseText = entities.response?.[0]?.value || '⚠️ No response from OpenClaw Agent.';
+        // Format nicely if it's code
+        const opts = { parse_mode: 'Markdown' };
+        await bot.sendMessage(chatId, `🤖 *St4cker (via OpenClaw)*:\n\n${responseText}`, opts);
+        return true;
+    }
+
+
     // 6. Enrich entities
     const enriched = enrichEntities(entities, text, msg.from.id.toString());
 
