@@ -201,7 +201,28 @@ router.patch('/tasks/:id', [
             await db.insert(projects).values(newProject);
             res.status(201).json({ success: true, data: newProject });
         } catch (error) {
-            console.error('[API] Create Project Error:', error);
+        }
+    });
+
+    // PATCH /api/v1/projects/:id
+    router.patch('/projects/:id', [
+        param('id').isUUID(),
+        body('status').optional().isIn(['active', 'completed', 'on_hold', 'archived']),
+        body('title').optional().isString(),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { id } = req.params;
+            const updates = req.body;
+            updates.updatedAt = new Date();
+
+            await db.update(projects)
+                .set(updates)
+                .where(eq(projects.id, id));
+
+            res.json({ success: true, message: 'Project updated' });
+        } catch (error) {
+            console.error('[API] Update Project Error:', error);
             res.status(500).json({ error: 'Internal Server Error' });
         }
     });
@@ -309,7 +330,27 @@ router.patch('/tasks/:id', [
 
             res.status(201).json({ success: true, data: newTx, newBalance });
         } catch (error) {
-            console.error('[API] Create Transaction Error:', error);
+        }
+    });
+
+    // PATCH /api/v1/transactions/:id
+    router.patch('/transactions/:id', [
+        param('id').isUUID(),
+        body('amount').optional().isNumeric(),
+        handleValidationErrors
+    ], async (req, res) => {
+        try {
+            const { id } = req.params;
+            const updates = req.body;
+            updates.updatedAt = new Date();
+
+            await db.update(transactions)
+                .set(updates)
+                .where(eq(transactions.id, id));
+
+            res.json({ success: true, message: 'Transaction updated' });
+        } catch (error) {
+            console.error('[API] Update Transaction Error:', error);
             res.status(500).json({ error: 'Internal Server Error' });
         }
     });
