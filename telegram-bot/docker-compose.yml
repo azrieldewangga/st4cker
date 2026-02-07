@@ -1,23 +1,56 @@
 version: '3.8'
 
 services:
+  # --------------------------------------------------------------------------------
+  # 1. DATABASE (The Master Node)
+  # --------------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: st4cker-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-st4cker_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeMeSecurely123!}
+      POSTGRES_DB: ${POSTGRES_DB:-st4cker_db}
+      TZ: Asia/Jakarta
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Exposed for Desktop App Direct Access or Debugging
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U st4cker_admin -d st4cker_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - st4cker-net
+
+  # --------------------------------------------------------------------------------
+  # 2. BACKEND API & BOT (Listens on Port 3000)
+  # --------------------------------------------------------------------------------
   st4cker-bot:
     build: .
     container_name: st4cker-bot
     restart: always
     ports:
-      - "3000:3000"
+      - "3000:3000" # Main Entrypoint for OpenClaw & Desktop App (if using API)
     environment:
       - NODE_ENV=production
       - TZ=Asia/Jakarta
-      # Load other env vars from .env file
+      # Connect to LOCAL DB service (service name: "postgres", port: 5432)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-st4cker_admin}:${POSTGRES_PASSWORD:-ChangeMeSecurely123!}@postgres:5432/${POSTGRES_DB:-st4cker_db}
+      # Load other secrets (Telegram, Gemini, etc.)
     env_file:
       - .env
-    volumes:
-      - ./data:/app/data
-      - ./src/db:/app/src/db # Mount db directory for persistence if using sqlite
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - st4cker-net
+
+volumes:
+  postgres_data:
 
 networks:
   st4cker-net:
