@@ -19,7 +19,7 @@ services:
       # Exposed for Desktop App Direct Access or Debugging
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U st4cker_admin -d st4cker_db"]
+      test: [ "CMD-SHELL", "pg_isready -U st4cker_admin -d st4cker_db" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,7 +30,8 @@ services:
   # 2. BACKEND API & BOT (Listens on Port 3000)
   # --------------------------------------------------------------------------------
   st4cker-bot:
-    build: .
+    # Build Context: Relative to this file (in Root) -> telegram-bot/Dockerfile
+    build: ./telegram-bot
     container_name: st4cker-bot
     restart: always
     ports:
@@ -42,7 +43,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-st4cker_admin}:${POSTGRES_PASSWORD:-ChangeMeSecurely123!}@postgres:5432/${POSTGRES_DB:-st4cker_db}
       # Load other secrets (Telegram, Gemini, etc.)
     env_file:
-      - .env
+      - telegram-bot/.env # Assuming .env is inside telegram-bot folder
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +52,7 @@ services:
 
 volumes:
   postgres_data:
+
 
 networks:
   st4cker-net:
