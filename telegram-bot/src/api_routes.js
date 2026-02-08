@@ -4,6 +4,7 @@ import { db } from './db/index.js';
 import { assignments, projects, transactions, users } from './db/schema.js';
 import { eq, and, desc, like } from 'drizzle-orm';
 import crypto from 'crypto';
+import { broadcastEvent } from './server.js';
 
 const router = express.Router();
 
@@ -98,7 +99,12 @@ router.post('/tasks', [
 
         await db.insert(assignments).values(newTask);
 
-        // TODO: Trigger Notification or Broadcast if needed
+        // Broadcast Event
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'task.created',
+            payload: newTask
+        });
 
         res.status(201).json({ success: true, data: newTask });
     } catch (error) {
@@ -124,6 +130,18 @@ router.patch('/tasks/:id', [
             .set(updates)
             .where(eq(assignments.id, id));
 
+        // Broadcast Event
+        // We need to fetch the updated task or construct the payload. Ideally fetch.
+        // For efficiency, just send ID and updates
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
+
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'task.updated',
+            payload: { id, ...updates }
+        });
+
         res.json({ success: true, message: 'Task updated' });
     } catch (error) {
         console.error('[API] Update Task Error:', error);
@@ -137,6 +155,15 @@ router.patch('/tasks/:id', [
         try {
             const { id } = req.params;
             await db.delete(assignments).where(eq(assignments.id, id));
+            const usersList = await db.select().from(users).limit(1);
+            const defaultUserId = usersList[0].telegramUserId;
+
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'task.deleted',
+                payload: { id }
+            });
+
             res.json({ success: true, message: 'Task deleted' });
         } catch (error) {
             console.error('[API] Delete Task Error:', error);
@@ -199,6 +226,12 @@ router.patch('/tasks/:id', [
             };
 
             await db.insert(projects).values(newProject);
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'project.created',
+                payload: newProject
+            });
+
             res.status(201).json({ success: true, data: newProject });
         } catch (error) {
         }
@@ -219,6 +252,15 @@ router.patch('/tasks/:id', [
             await db.update(projects)
                 .set(updates)
                 .where(eq(projects.id, id));
+
+            const usersList = await db.select().from(users).limit(1);
+            const defaultUserId = usersList[0].telegramUserId;
+
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'project.updated',
+                payload: { id, ...updates }
+            });
 
             res.json({ success: true, message: 'Project updated' });
         } catch (error) {
@@ -245,6 +287,15 @@ router.patch('/tasks/:id', [
 
             // 2. (Opt) Insert into logs table if exists, for now just update project
 
+            const usersList = await db.select().from(users).limit(1);
+            const defaultUserId = usersList[0].telegramUserId;
+
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'project.updated', // Using project.updated for logs too for now
+                payload: { id, totalProgress: progress, message }
+            });
+
             res.json({ success: true, message: 'Progress logged' });
         } catch (error) {
             console.error('[API] Log Progress Error:', error);
@@ -260,6 +311,15 @@ router.patch('/tasks/:id', [
         try {
             const { id } = req.params;
             await db.delete(projects).where(eq(projects.id, id));
+            const usersList = await db.select().from(users).limit(1);
+            const defaultUserId = usersList[0].telegramUserId;
+
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'project.deleted',
+                payload: { id }
+            });
+
             res.json({ success: true, message: 'Project deleted' });
         } catch (error) {
             console.error('[API] Delete Project Error:', error);
@@ -327,6 +387,15 @@ router.patch('/tasks/:id', [
             await db.update(users)
                 .set({ currentBalance: newBalance, updatedAt: new Date() })
                 .where(eq(users.telegramUserId, defaultUserId));
+
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'transaction.created',
+                payload: newTx
+            });
+
+            // Also broadcast balance update? Maybe separate event or include in payload
+            // For now, transaction lists usually trigger re-fetch of user data
 
             res.status(201).json({ success: true, data: newTx, newBalance });
         } catch (error) {
