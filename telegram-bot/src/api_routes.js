@@ -179,331 +179,333 @@ router.patch('/tasks/:id', [
         console.error('[API] Update Task Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
-    // DELETE /api/v1/tasks/:id
-    router.delete('/tasks/:id', [
-        param('id').isUUID(),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { id } = req.params;
-            await db.delete(assignments).where(eq(assignments.id, id));
-            const usersList = await db.select().from(users).limit(1);
-            const defaultUserId = usersList[0].telegramUserId;
+});
 
-            await broadcastEvent(defaultUserId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'task.deleted',
-                payload: { id }
-            });
+// DELETE /api/v1/tasks/:id
+router.delete('/tasks/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.delete(assignments).where(eq(assignments.id, id));
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
 
-            res.json({ success: true, message: 'Task deleted' });
-        } catch (error) {
-            console.error('[API] Delete Task Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'task.deleted',
+            payload: { id }
+        });
 
-    // ==========================================
-    // PROJECTS ENDPOINTS
-    // ==========================================
+        res.json({ success: true, message: 'Task deleted' });
+    } catch (error) {
+        console.error('[API] Delete Task Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
-    // GET /api/v1/projects
-    router.get('/projects', [
-        query('status').optional().isIn(['active', 'completed', 'archived']),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { status } = req.query;
-            let conditions = [];
+// ==========================================
+// PROJECTS ENDPOINTS
+// ==========================================
 
-            const usersList = await db.select().from(users).limit(1);
-            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-            const defaultUserId = usersList[0].telegramUserId;
+// GET /api/v1/projects
+router.get('/projects', [
+    query('status').optional().isIn(['active', 'completed', 'archived']),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { status } = req.query;
+        let conditions = [];
 
-            conditions.push(eq(projects.userId, defaultUserId));
-            if (status) conditions.push(eq(projects.status, status));
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
 
-            const data = await db.select().from(projects).where(and(...conditions));
-            res.json({ success: true, count: data.length, data });
-        } catch (error) {
-            console.error('[API] Get Projects Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        conditions.push(eq(projects.userId, defaultUserId));
+        if (status) conditions.push(eq(projects.status, status));
 
-    // POST /api/v1/projects
-    router.post('/projects', [
-        body('title').notEmpty().withMessage('Title is required'),
-        body('status').optional().isIn(['active', 'completed', 'on_hold'])
-            .withMessage('Status must be one of: active, completed, on_hold'),
-        body('priority').optional().isIn(['low', 'medium', 'high'])
-            .withMessage('Priority must be one of: low, medium, high'),
-        body('description').optional().isString(),
-        body('deadline').optional().isISO8601(),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { title, description, status, priority, deadline } = req.body;
+        const data = await db.select().from(projects).where(and(...conditions));
+        res.json({ success: true, count: data.length, data });
+    } catch (error) {
+        console.error('[API] Get Projects Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
-            const usersList = await db.select().from(users).limit(1);
-            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-            const defaultUserId = usersList[0].telegramUserId;
+// POST /api/v1/projects
+router.post('/projects', [
+    body('title').notEmpty().withMessage('Title is required'),
+    body('status').optional().isIn(['active', 'completed', 'on_hold'])
+        .withMessage('Status must be one of: active, completed, on_hold'),
+    body('priority').optional().isIn(['low', 'medium', 'high'])
+        .withMessage('Priority must be one of: low, medium, high'),
+    body('description').optional().isString(),
+    body('deadline').optional().isISO8601(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { title, description, status, priority, deadline } = req.body;
 
-            const newProject = {
-                id: crypto.randomUUID(),
-                userId: defaultUserId,
-                title,
-                description: description || '',
-                status: status || 'active',
-                priority: priority || 'medium',
-                deadline: deadline ? new Date(deadline) : null,
-                totalProgress: 0,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            };
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
 
-            await db.insert(projects).values(newProject);
-            await broadcastEvent(defaultUserId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'project.created',
-                payload: newProject
-            });
+        const newProject = {
+            id: crypto.randomUUID(),
+            userId: defaultUserId,
+            title,
+            description: description || '',
+            status: status || 'active',
+            priority: priority || 'medium',
+            deadline: deadline ? new Date(deadline) : null,
+            totalProgress: 0,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
 
-            res.status(201).json({ success: true, data: newProject });
-        } catch (error) {
-        }
-    });
+        await db.insert(projects).values(newProject);
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'project.created',
+            payload: newProject
+        });
 
-    // PATCH /api/v1/projects/:id
-    router.patch('/projects/:id', [
-        param('id').isUUID(),
-        body('status').optional().isIn(['active', 'completed', 'on_hold', 'archived'])
-            .withMessage('Status must be one of: active, completed, on_hold, archived'),
-        body('priority').optional().isIn(['low', 'medium', 'high'])
-            .withMessage('Priority must be one of: low, medium, high'),
-        body('title').optional().isString(),
-        body('description').optional().isString(),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { id } = req.params;
-            const updates = req.body;
-            updates.updatedAt = new Date();
+        res.status(201).json({ success: true, data: newProject });
+    } catch (error) {
+    }
+});
 
-            await db.update(projects)
-                .set(updates)
-                .where(eq(projects.id, id));
+// PATCH /api/v1/projects/:id
+router.patch('/projects/:id', [
+    param('id').isUUID(),
+    body('status').optional().isIn(['active', 'completed', 'on_hold', 'archived'])
+        .withMessage('Status must be one of: active, completed, on_hold, archived'),
+    body('priority').optional().isIn(['low', 'medium', 'high'])
+        .withMessage('Priority must be one of: low, medium, high'),
+    body('title').optional().isString(),
+    body('description').optional().isString(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        updates.updatedAt = new Date();
 
-            const usersList = await db.select().from(users).limit(1);
-            const defaultUserId = usersList[0].telegramUserId;
+        await db.update(projects)
+            .set(updates)
+            .where(eq(projects.id, id));
 
-            await broadcastEvent(defaultUserId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'project.updated',
-                payload: { id, ...updates }
-            });
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
 
-            res.json({ success: true, message: 'Project updated' });
-        } catch (error) {
-            console.error('[API] Update Project Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'project.updated',
+            payload: { id, ...updates }
+        });
 
-    // POST /api/v1/projects/:id/logs
-    router.post('/projects/:id/logs', [
-        param('id').isUUID(),
-        body('progress').isInt({ min: 0, max: 100 }).withMessage('Progress must be 0-100'),
-        body('message').notEmpty().withMessage('Message is required - describe what you worked on'),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { progress, message } = req.body;
+        res.json({ success: true, message: 'Project updated' });
+    } catch (error) {
+        console.error('[API] Update Project Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
-            // 1. Update Project Progress
-            await db.update(projects)
-                .set({ totalProgress: progress, updatedAt: new Date() })
-                .where(eq(projects.id, id));
+// POST /api/v1/projects/:id/logs
+router.post('/projects/:id/logs', [
+    param('id').isUUID(),
+    body('progress').isInt({ min: 0, max: 100 }).withMessage('Progress must be 0-100'),
+    body('message').notEmpty().withMessage('Message is required - describe what you worked on'),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { progress, message } = req.body;
 
-            // 2. (Opt) Insert into logs table if exists, for now just update project
+        // 1. Update Project Progress
+        await db.update(projects)
+            .set({ totalProgress: progress, updatedAt: new Date() })
+            .where(eq(projects.id, id));
 
-            const usersList = await db.select().from(users).limit(1);
-            const defaultUserId = usersList[0].telegramUserId;
+        // 2. (Opt) Insert into logs table if exists, for now just update project
 
-            await broadcastEvent(defaultUserId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'project.updated', // Using project.updated for logs too for now
-                payload: { id, totalProgress: progress, message }
-            });
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
 
-            res.json({ success: true, message: 'Progress logged' });
-        } catch (error) {
-            console.error('[API] Log Progress Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'project.updated', // Using project.updated for logs too for now
+            payload: { id, totalProgress: progress, message }
+        });
 
-    // DELETE /api/v1/projects/:id
-    router.delete('/projects/:id', [
-        param('id').isUUID(),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { id } = req.params;
-            await db.delete(projects).where(eq(projects.id, id));
-            const usersList = await db.select().from(users).limit(1);
-            const defaultUserId = usersList[0].telegramUserId;
+        res.json({ success: true, message: 'Progress logged' });
+    } catch (error) {
+        console.error('[API] Log Progress Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
-            await broadcastEvent(defaultUserId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'project.deleted',
-                payload: { id }
-            });
+// DELETE /api/v1/projects/:id
+router.delete('/projects/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.delete(projects).where(eq(projects.id, id));
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
 
-            res.json({ success: true, message: 'Project deleted' });
-        } catch (error) {
-            console.error('[API] Delete Project Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'project.deleted',
+            payload: { id }
+        });
 
-    // ==========================================
-    // TRANSACTIONS ENDPOINTS
-    // ==========================================
+        res.json({ success: true, message: 'Project deleted' });
+    } catch (error) {
+        console.error('[API] Delete Project Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
-    // GET /api/v1/transactions
-    router.get('/transactions', async (req, res) => {
-        try {
-            const usersList = await db.select().from(users).limit(1);
-            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-            const defaultUserId = usersList[0].telegramUserId;
+// ==========================================
+// TRANSACTIONS ENDPOINTS
+// ==========================================
 
-            const data = await db.select().from(transactions)
-                .where(eq(transactions.userId, defaultUserId))
-                .orderBy(desc(transactions.date))
-                .limit(50); // Limit to last 50 for safety
+// GET /api/v1/transactions
+router.get('/transactions', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
 
-            res.json({ success: true, count: data.length, data });
-        } catch (error) {
-            console.error('[API] Get Transactions Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        const data = await db.select().from(transactions)
+            .where(eq(transactions.userId, defaultUserId))
+            .orderBy(desc(transactions.date))
+            .limit(50); // Limit to last 50 for safety
 
-    // POST /api/v1/transactions
-    router.post('/transactions', [
-        body('amount').isNumeric(),
-        body('type').isIn(['income', 'expense']),
-        body('category').isIn(['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary', 'Other'])
-            .withMessage('Category must be one of: Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other'),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { amount, type, category, title, date } = req.body;
+        res.json({ success: true, count: data.length, data });
+    } catch (error) {
+        console.error('[API] Get Transactions Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
-            const usersList = await db.select().from(users).limit(1);
-            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-            const defaultUserId = usersList[0].telegramUserId;
+// POST /api/v1/transactions
+router.post('/transactions', [
+    body('amount').isNumeric(),
+    body('type').isIn(['income', 'expense']),
+    body('category').isIn(['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary', 'Other'])
+        .withMessage('Category must be one of: Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other'),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { amount, type, category, title, date } = req.body;
 
-            const newTx = {
-                id: crypto.randomUUID(),
-                userId: defaultUserId,
-                amount: parseFloat(amount),
-                type,
-                category,
-                title: title || 'Untitled Transaction',
-                date: date ? new Date(date) : new Date(),
-                createdAt: new Date(),
-                updatedAt: new Date()
-            };
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
 
-            await db.insert(transactions).values(newTx);
+        const newTx = {
+            id: crypto.randomUUID(),
+            userId: defaultUserId,
+            amount: parseFloat(amount),
+            type,
+            category,
+            title: title || 'Untitled Transaction',
+            date: date ? new Date(date) : new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
 
-            // Update User Balance
-            const currentUser = await db.select().from(users).where(eq(users.telegramUserId, defaultUserId)).limit(1);
-            let newBalance = parseFloat(currentUser[0].currentBalance);
-            if (type === 'income') newBalance += parseFloat(amount);
-            else newBalance -= parseFloat(amount);
+        await db.insert(transactions).values(newTx);
 
-            await db.update(users)
-                .set({ currentBalance: newBalance, updatedAt: new Date() })
-                .where(eq(users.telegramUserId, defaultUserId));
+        // Update User Balance
+        const currentUser = await db.select().from(users).where(eq(users.telegramUserId, defaultUserId)).limit(1);
+        let newBalance = parseFloat(currentUser[0].currentBalance);
+        if (type === 'income') newBalance += parseFloat(amount);
+        else newBalance -= parseFloat(amount);
 
-            await broadcastEvent(defaultUserId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'transaction.created',
-                payload: newTx
-            });
+        await db.update(users)
+            .set({ currentBalance: newBalance, updatedAt: new Date() })
+            .where(eq(users.telegramUserId, defaultUserId));
 
-            // Also broadcast balance update? Maybe separate event or include in payload
-            // For now, transaction lists usually trigger re-fetch of user data
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'transaction.created',
+            payload: newTx
+        });
 
-            res.status(201).json({ success: true, data: newTx, newBalance });
-        } catch (error) {
-        }
-    });
+        // Also broadcast balance update? Maybe separate event or include in payload
+        // For now, transaction lists usually trigger re-fetch of user data
 
-    // PATCH /api/v1/transactions/:id
-    router.patch('/transactions/:id', [
-        param('id').isUUID(),
-        body('amount').optional().isNumeric().withMessage('Amount must be a number'),
-        body('category').optional().isIn(['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary', 'Other'])
-            .withMessage('Category must be one of: Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other'),
-        body('note').optional().isString(),
-        body('title').optional().isString(),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { amount, category, note, title } = req.body;
+        res.status(201).json({ success: true, data: newTx, newBalance });
+    } catch (error) {
+    }
+});
 
-            // Build updates object with only provided fields
-            const updates = { updatedAt: new Date() };
-            if (amount !== undefined) updates.amount = parseFloat(amount);
-            if (category !== undefined) updates.category = category;
-            if (note !== undefined) updates.note = note;
-            if (title !== undefined) updates.title = title;
+// PATCH /api/v1/transactions/:id
+router.patch('/transactions/:id', [
+    param('id').isUUID(),
+    body('amount').optional().isNumeric().withMessage('Amount must be a number'),
+    body('category').optional().isIn(['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary', 'Other'])
+        .withMessage('Category must be one of: Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other'),
+    body('note').optional().isString(),
+    body('title').optional().isString(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { amount, category, note, title } = req.body;
 
-            await db.update(transactions)
-                .set(updates)
-                .where(eq(transactions.id, id));
+        // Build updates object with only provided fields
+        const updates = { updatedAt: new Date() };
+        if (amount !== undefined) updates.amount = parseFloat(amount);
+        if (category !== undefined) updates.category = category;
+        if (note !== undefined) updates.note = note;
+        if (title !== undefined) updates.title = title;
 
-            // Broadcast update event
-            const usersList = await db.select().from(users).limit(1);
-            const defaultUserId = usersList[0].telegramUserId;
+        await db.update(transactions)
+            .set(updates)
+            .where(eq(transactions.id, id));
 
-            await broadcastEvent(defaultUserId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'transaction.updated',
-                payload: { id, ...updates }
-            });
+        // Broadcast update event
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
 
-            res.json({ success: true, message: 'Transaction updated' });
-        } catch (error) {
-            console.error('[API] Update Transaction Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'transaction.updated',
+            payload: { id, ...updates }
+        });
 
-    // DELETE /api/v1/transactions/:id
-    router.delete('/transactions/:id', [
-        param('id').isUUID(),
-        handleValidationErrors
-    ], async (req, res) => {
-        try {
-            const { id } = req.params;
+        res.json({ success: true, message: 'Transaction updated' });
+    } catch (error) {
+        console.error('[API] Update Transaction Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
-            // 1. Get Tx logic to revert balance? 
-            // For simplicity API v1, just delete record. 
-            // Ideally we revert the balance change.
+// DELETE /api/v1/transactions/:id
+router.delete('/transactions/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
 
-            await db.delete(transactions).where(eq(transactions.id, id));
-            res.json({ success: true, message: 'Transaction deleted' });
-        } catch (error) {
-            console.error('[API] Delete Transaction Error:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
-        }
-    });
+        // 1. Get Tx logic to revert balance? 
+        // For simplicity API v1, just delete record. 
+        // Ideally we revert the balance change.
 
-    export default router;
+        await db.delete(transactions).where(eq(transactions.id, id));
+        res.json({ success: true, message: 'Transaction deleted' });
+    } catch (error) {
+        console.error('[API] Delete Transaction Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+export default router;
