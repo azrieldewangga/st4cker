@@ -386,7 +386,8 @@ router.patch('/tasks/:id', [
     router.post('/transactions', [
         body('amount').isNumeric(),
         body('type').isIn(['income', 'expense']),
-        body('category').notEmpty(),
+        body('category').isIn(['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary', 'Other'])
+            .withMessage('Category must be one of: Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other'),
         handleValidationErrors
     ], async (req, res) => {
         try {
@@ -437,17 +438,37 @@ router.patch('/tasks/:id', [
     // PATCH /api/v1/transactions/:id
     router.patch('/transactions/:id', [
         param('id').isUUID(),
-        body('amount').optional().isNumeric(),
+        body('amount').optional().isNumeric().withMessage('Amount must be a number'),
+        body('category').optional().isIn(['Food', 'Transport', 'Shopping', 'Bills', 'Subscription', 'Transfer', 'Salary', 'Other'])
+            .withMessage('Category must be one of: Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other'),
+        body('note').optional().isString(),
+        body('title').optional().isString(),
         handleValidationErrors
     ], async (req, res) => {
         try {
             const { id } = req.params;
-            const updates = req.body;
-            updates.updatedAt = new Date();
+            const { amount, category, note, title } = req.body;
+
+            // Build updates object with only provided fields
+            const updates = { updatedAt: new Date() };
+            if (amount !== undefined) updates.amount = parseFloat(amount);
+            if (category !== undefined) updates.category = category;
+            if (note !== undefined) updates.note = note;
+            if (title !== undefined) updates.title = title;
 
             await db.update(transactions)
                 .set(updates)
                 .where(eq(transactions.id, id));
+
+            // Broadcast update event
+            const usersList = await db.select().from(users).limit(1);
+            const defaultUserId = usersList[0].telegramUserId;
+
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'transaction.updated',
+                payload: { id, ...updates }
+            });
 
             res.json({ success: true, message: 'Transaction updated' });
         } catch (error) {
