@@ -313,8 +313,8 @@ router.patch('/tasks/:id', [
     // POST /api/v1/projects/:id/logs
     router.post('/projects/:id/logs', [
         param('id').isUUID(),
-        body('progress').isInt({ min: 0, max: 100 }),
-        body('message').optional().isString(),
+        body('progress').isInt({ min: 0, max: 100 }).withMessage('Progress must be 0-100'),
+        body('message').notEmpty().withMessage('Message is required - describe what you worked on'),
         handleValidationErrors
     ], async (req, res) => {
         try {
