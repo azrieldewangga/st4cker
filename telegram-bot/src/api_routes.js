@@ -5,6 +5,7 @@ import { assignments, projects, transactions, users } from './db/schema.js';
 import { eq, and, desc, like } from 'drizzle-orm';
 import crypto from 'crypto';
 import { broadcastEvent } from './server.js';
+import { getEntityCache } from './commands/task.js';
 
 const router = express.Router();
 
@@ -84,11 +85,22 @@ router.post('/tasks', [
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
         const defaultUserId = usersList[0].telegramUserId;
 
+        // Normalize Course Name via Synonym Cache
+        let normalizedCourse = course;
+        const entityCache = getEntityCache();
+        if (entityCache && entityCache['matkul']) {
+            const resolved = entityCache['matkul'].get(course.toLowerCase());
+            if (resolved) {
+                console.log(`[API] Resolved course: "${course}" -> "${resolved}"`);
+                normalizedCourse = resolved;
+            }
+        }
+
         const newTask = {
             id: crypto.randomUUID(),
             userId: defaultUserId,
             title,
-            course,
+            course: normalizedCourse,
             deadline: new Date(deadline),
             status: 'pending',
             type: type || 'Tugas',
