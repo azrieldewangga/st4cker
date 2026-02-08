@@ -85,6 +85,16 @@ export async function verifyPairingCode(code) {
     const deviceId = crypto.randomUUID();
     const expiresAt = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days
 
+    // Ensure user exists before creating session (to satisfy Foreign Key)
+    const userExists = await db.select().from(users).where(eq(users.telegramUserId, pairingCode.telegramUserId)).limit(1);
+    if (userExists.length === 0) {
+        await db.insert(users).values({
+            telegramUserId: pairingCode.telegramUserId,
+            currentBalance: 0,
+            semester: 1
+        }).onConflictDoNothing();
+    }
+
     // Create session in transaction
     await db.transaction(async (tx) => {
         // 1. Mark code as used
