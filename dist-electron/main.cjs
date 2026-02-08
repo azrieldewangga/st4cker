@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
 const electron_1 = require("electron");
+console.log('--- STARTING MAIN PROCESS V2 (FRESH BUILD) ---');
 const url_1 = require("url");
 const path_1 = __importDefault(require("path"));
 const crypto_1 = require("crypto");
@@ -76,9 +77,8 @@ const createWindow = () => {
         minWidth: 1024,
         minHeight: 768,
         frame: false,
-        transparent: true, // Enable transparency
-        backgroundMaterial: 'none',
-        backgroundColor: '#1a1b1e', // Force solid dark background
+        transparent: false,
+        backgroundColor: '#00000000', // Transparent background
         show: false, // Don't show immediately
         icon: path_1.default.join(__dirname, electron_1.app.isPackaged ? '../dist/icon.ico' : '../public/icon.ico'),
         webPreferences: {
@@ -463,30 +463,13 @@ electron_1.app.on('ready', async () => {
         });
         return electron_1.app.getLoginItemSettings().openAtLogin;
     });
-    // Utils
-    electron_1.ipcMain.removeHandler('utils:openExternal');
-    electron_1.ipcMain.handle('utils:openExternal', (_, url) => {
-        return require('electron').shell.openExternal(url);
-    });
-    electron_1.ipcMain.removeHandler('utils:openPath');
-    electron_1.ipcMain.handle('utils:openPath', async (_, path) => {
-        // Validation basic
-        if (!path)
-            return 'No path provided';
-        return await require('electron').shell.openPath(path);
-    });
-    electron_1.ipcMain.removeHandler('utils:saveFile');
-    electron_1.ipcMain.handle('utils:saveFile', async (_, content, defaultName, extensions) => {
-        // Basic implementation or placeholder if needed
-        return { success: false, error: 'Not implemented' };
-    });
     // ========================================
     // Telegram Sync - Inline Implementation
     // ========================================
     let telegramStore = null;
     let telegramSocket = null;
     let initTelegramWebSocket; // Defined outer scope
-    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'https://elegant-heart-production.up.railway.app';
+    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
     // Initialize Telegram modules async
     async function initTelegramModules() {
         try {
@@ -1131,8 +1114,11 @@ electron_1.app.on('ready', async () => {
     });
     // Utilities (Shell & File System)
     const { shell } = require('electron');
+    electron_1.ipcMain.removeHandler('utils:openExternal');
     electron_1.ipcMain.handle('utils:openExternal', (_, url) => shell.openExternal(url));
+    electron_1.ipcMain.removeHandler('utils:openPath');
     electron_1.ipcMain.handle('utils:openPath', (_, path) => shell.openPath(path));
+    electron_1.ipcMain.removeHandler('utils:saveFile');
     electron_1.ipcMain.handle('utils:saveFile', async (_, content, defaultName, extensions = ['csv']) => {
         const win = electron_1.BrowserWindow.getFocusedWindow();
         if (!win)

@@ -498,7 +498,7 @@ app.on('ready', async () => {
     let telegramStore: any = null;
     let telegramSocket: any = null;
     let initTelegramWebSocket: (token: string) => void; // Defined outer scope
-    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'https://elegant-heart-production.up.railway.app';
+    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
 
 
 

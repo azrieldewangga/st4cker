@@ -47,7 +47,7 @@
     }
   },
   "type": "module",
-  "main": "dist-new/main.cjs",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && tsc -p electron/tsconfig.json && vite build && node scripts/ensure-electron-config.js && electron-builder",

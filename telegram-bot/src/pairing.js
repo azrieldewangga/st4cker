@@ -95,6 +95,7 @@ export async function verifyPairingCode(code) {
             sessionToken,
             telegramUserId: pairingCode.telegramUserId,
             deviceId,
+            deviceName: 'Desktop Client',
             createdAt: now,
             expiresAt,
             lastActivity: now
