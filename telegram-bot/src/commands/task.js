@@ -112,6 +112,7 @@ export function getEntityCache() {
     try {
         try {
             const potentialPaths = [
+                path.resolve(__dirname, '../entities'), // Priority: Local src/entities (Self-contained)
                 path.resolve(__dirname, '../../../st4cker/entities'), // Local dev relative
                 path.resolve(process.cwd(), 'st4cker/entities'), // Docker/Root relative
                 path.resolve(process.cwd(), 'entities'), // Fallback

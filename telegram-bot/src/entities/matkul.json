@@ -1,0 +1,103 @@
+{
+    "name": "matkul",
+    "roles": [
+        "matkul"
+    ],
+    "lookups": [
+        "free-text",
+        "keywords"
+    ],
+    "keywords": [
+        {
+            "keyword": "Keamanan Jaringan dan Kriptografi",
+            "synonyms": [
+                "Keamanan Jaringan dan Kriptografi",
+                "kjk"
+            ]
+        },
+        {
+            "keyword": "Komputasi Bergerak",
+            "synonyms": [
+                "Komputasi Bergerak",
+                "kb",
+                "komber"
+            ]
+        },
+        {
+            "keyword": "Pemrograman Jaringan",
+            "synonyms": [
+                "Pemrograman Jaringan",
+                "pemjar",
+                "pj"
+            ]
+        },
+        {
+            "keyword": "Pengembangan Perangkat Lunak",
+            "synonyms": [
+                "Pengembangan Perangkat Lunak",
+                "ppl"
+            ]
+        },
+        {
+            "keyword": "Praktikum Keamanan Jaringan dan Kriptografi",
+            "synonyms": [
+                "Praktikum Keamanan Jaringan dan Kriptografi",
+                "kjk prak",
+                "prak kjk",
+                "praktikum kjk"
+            ]
+        },
+        {
+            "keyword": "Praktikum Komputasi Bergerak",
+            "synonyms": [
+                "Praktikum Komputasi Bergerak",
+                "kb prak",
+                "komber prak",
+                "prak kb",
+                "prak komber"
+            ]
+        },
+        {
+            "keyword": "Praktikum Pemrograman Jaringan",
+            "synonyms": [
+                "pemjar prak",
+                "pj",
+                "pj prak",
+                "prak pemjar",
+                "prak pj",
+                "praktikum pemrograman jaringan"
+            ]
+        },
+        {
+            "keyword": "Praktikum Pengembangan Perangkat Lunak",
+            "synonyms": [
+                "Praktikum Pengembangan Perangkat Lunak",
+                "ppl prak",
+                "prak ppl"
+            ]
+        },
+        {
+            "keyword": "Praktikum Sistem Terdistribusi",
+            "synonyms": [
+                "Praktikum Sistem Terdistribusi",
+                "prak sister",
+                "sister prak"
+            ]
+        },
+        {
+            "keyword": "Sistem Terdistribusi",
+            "synonyms": [
+                "Sistem Terdistribusi",
+                "sister"
+            ]
+        },
+        {
+            "keyword": "Workshop Sistem Pendukung Keputusan",
+            "synonyms": [
+                "Workshop Sistem Pendukung Keputusan",
+                "workshop spk",
+                "wspk"
+            ]
+        }
+    ]
+}
