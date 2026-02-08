@@ -281,6 +281,9 @@ app.post('/api/sync-user-data', async (req, res) => {
             .where(eq(assignments.userId, telegramUserId));
 
         // Delete assignments not in incoming payload (orphaned)
+        // Delete assignments not in incoming payload (orphaned)
+        // DISABLED: Server should be Master. Don't let Desktop delete server-side tasks just because Desktop doesn't have them yet.
+        /*
         let deletedCount = 0;
         for (const existing of currentAssignments) {
             if (!incomingIds.has(existing.id)) {
@@ -288,7 +291,9 @@ app.post('/api/sync-user-data', async (req, res) => {
                 deletedCount++;
             }
         }
-        if (deletedCount > 0) console.log(`[API] Deleted ${deletedCount} orphaned assignments`);
+        if (deletedCount > 0) console.log(`[API] Deleted ${deletedCount} orphaned orphaned assignments`);
+        */
+        console.log(`[API] Sync: Preserving server-side tasks (deletion disabled)`);
 
         // Upsert incoming assignments
         if (incomingAssignments.length > 0) {
