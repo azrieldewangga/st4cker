@@ -85,14 +85,34 @@ router.post('/tasks', [
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
         const defaultUserId = usersList[0].telegramUserId;
 
-        // Normalize Course Name via Synonym Cache
-        let normalizedCourse = course;
+        // Get Entity Cache for normalization
         const entityCache = getEntityCache();
+
+        // 1. Normalize Course Name via Synonym Cache
+        let normalizedCourse = course;
         if (entityCache && entityCache['matkul']) {
             const resolved = entityCache['matkul'].get(course.toLowerCase());
             if (resolved) {
                 console.log(`[API] Resolved course: "${course}" -> "${resolved}"`);
                 normalizedCourse = resolved;
+            }
+        }
+
+        // 2. Normalize Task Type via Synonym Cache
+        let normalizedType = type || 'Tugas';
+        if (entityCache && entityCache['tipe_tugas']) {
+            const resolvedType = entityCache['tipe_tugas'].get((type || 'tugas').toLowerCase());
+            if (resolvedType) {
+                console.log(`[API] Resolved type: "${type}" -> "${resolvedType}"`);
+                normalizedType = resolvedType;
+            }
+        }
+
+        // 3. Auto-Prefix "Praktikum " if task type is a report (Laporan*)
+        if (normalizedType.toLowerCase().includes('laporan')) {
+            if (!normalizedCourse.toLowerCase().startsWith('praktikum')) {
+                normalizedCourse = 'Praktikum ' + normalizedCourse;
+                console.log(`[API] Auto-prefixed Praktikum: "${normalizedCourse}"`);
             }
         }
 
@@ -103,7 +123,7 @@ router.post('/tasks', [
             course: normalizedCourse,
             deadline: new Date(deadline),
             status: 'pending',
-            type: type || 'Tugas',
+            type: normalizedType,
             note: note || '',
             createdAt: new Date(),
             updatedAt: new Date()

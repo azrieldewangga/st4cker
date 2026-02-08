@@ -160,7 +160,17 @@ Supported Intents:
         - Extract 'note' as Project Description if user provides details.
     - If user says "15rb", convert to 15000.
     - Resolve relative dates based on Current Date above.
-    - 'tipe_tugas' MUST be short formatted label (Tugas, Kuis, Praktikum, Laporan Resmi).
+    - TASK TYPE NORMALIZATION (STRICT):
+        - lapen, lap pen -> Laporan Pendahuluan
+        - lapres, lap resmi -> Laporan Resmi
+        - lapsem, lap sementara -> Laporan Sementara
+        - tugas, task -> Tugas
+        - kuis, quiz -> Quiz
+    - PRAKTIKUM AUTO-INFERENCE (CRITICAL):
+        - If task type is "Laporan Pendahuluan", "Laporan Resmi", or "Laporan Sementara", the course is AUTOMATICALLY a PRAKTIKUM course.
+        - Example: "lapres sister" -> matkul="Praktikum Sistem Terdistribusi", tipe_tugas="Laporan Resmi"
+        - Example: "lapen kjk" -> matkul="Praktikum Keamanan Jaringan dan Kriptografi", tipe_tugas="Laporan Pendahuluan"
+        - ALWAYS prefix "Praktikum " to the resolved course name for report-type tasks.
 
     MATKUL REFERENCE (Studi Kasus):
     - KJK: Keamanan Jaringan dan Kriptografi
