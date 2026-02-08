@@ -277,7 +277,7 @@ export function handleTaskCommand(bot, msg) {
     if (courses.length > 0) {
         const buttons = courses.slice(0, 12).map(name => {
             const shortName = name.length > 20 ? name.substring(0, 17) + '...' : name;
-            return { text: shortName, callback_data: `nlp_matkul_${name.substring(0, 30)}` }; // Reuse NLP callback format or define specific one
+            return { text: shortName, callback_data: `task_course_${name.substring(0, 30)}` }; // Use task-specific callback prefix
         });
         const keyboard = [];
         for (let i = 0; i < buttons.length; i += 2) {
@@ -298,6 +298,35 @@ export function handleTaskCallback(bot, query) {
     if (!session || session.command !== 'task') {
         bot.answerCallbackQuery(query.id, { text: 'Sesi habis, ulang lagi ya /task' });
         return;
+    }
+
+    // Step 1.5: Course selected via Button
+    if (data.startsWith('task_course_')) {
+        const courseName = data.replace('task_course_', '');
+
+        session.data.courseName = courseName;
+        // We don't have ID from this, just name. Consistent with text input.
+        session.data.courseId = null;
+
+        session.step = 'select_type';
+        setSession(userId, session);
+
+        // Show Types Menu
+        const types = ['Tugas', 'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'];
+        const keyboard = {
+            inline_keyboard: types.map(type => [{
+                text: type,
+                callback_data: `task_type_${type}`
+            }])
+        };
+
+        bot.editMessageText(`✅ *${courseName}*\n\n📝 *Jenis tugasnya apa?*`, {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: 'Markdown',
+            reply_markup: keyboard
+        });
+        bot.answerCallbackQuery(query.id);
     }
 
     // Step 2: Type selected
