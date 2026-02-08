@@ -273,6 +273,8 @@ router.post('/projects', [
 
         res.status(201).json({ success: true, data: newProject });
     } catch (error) {
+        console.error('[API] Create Project Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
@@ -443,6 +445,8 @@ router.post('/transactions', [
 
         res.status(201).json({ success: true, data: newTx, newBalance });
     } catch (error) {
+        console.error('[API] Create Transaction Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
@@ -501,6 +505,17 @@ router.delete('/transactions/:id', [
         // Ideally we revert the balance change.
 
         await db.delete(transactions).where(eq(transactions.id, id));
+
+        // Broadcast delete event
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
+
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'transaction.deleted',
+            payload: { id }
+        });
+
         res.json({ success: true, message: 'Transaction deleted' });
     } catch (error) {
         console.error('[API] Delete Transaction Error:', error);
