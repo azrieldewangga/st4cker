@@ -44,6 +44,8 @@ export const responses = {
                 if (intent === 'catat_progress') return 'Keterangannya apa? (Wajib)';
                 if (intent === 'buat_project') return 'Deskripsi projectnya? 📋';
                 return 'Ada note ga?';
+            case 'tipe_tugas':
+                return 'Tipe tugasnya apa? (cth: Laporan, Kuis)';
             case 'duration':
                 return 'Berapa lama kerjanya?';
             case 'persentase':
