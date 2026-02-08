@@ -240,16 +240,32 @@ router.post('/projects', [
         .withMessage('Status must be one of: active, completed, on_hold'),
     body('priority').optional().isIn(['low', 'medium', 'high'])
         .withMessage('Priority must be one of: low, medium, high'),
+    body('type').optional().isIn(['personal', 'course'])
+        .withMessage('Type must be one of: personal, course'),
+    body('courseName').optional().isString(),
     body('description').optional().isString(),
     body('deadline').optional().isISO8601(),
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { title, description, status, priority, deadline } = req.body;
+        const { title, description, status, priority, deadline, type, courseName } = req.body;
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
         const defaultUserId = usersList[0].telegramUserId;
+
+        // Normalize Course Name if provided
+        let normalizedCourseName = courseName || null;
+        if (courseName) {
+            const entityCache = getEntityCache();
+            if (entityCache && entityCache['matkul']) {
+                const resolved = entityCache['matkul'].get(courseName.toLowerCase());
+                if (resolved) {
+                    console.log(`[API] Resolved project course: "${courseName}" -> "${resolved}"`);
+                    normalizedCourseName = resolved;
+                }
+            }
+        }
 
         const newProject = {
             id: crypto.randomUUID(),
@@ -258,6 +274,8 @@ router.post('/projects', [
             description: description || '',
             status: status || 'active',
             priority: priority || 'medium',
+            type: type || 'personal',
+            courseName: normalizedCourseName,
             deadline: deadline ? new Date(deadline) : null,
             totalProgress: 0,
             createdAt: new Date(),
@@ -285,6 +303,9 @@ router.patch('/projects/:id', [
         .withMessage('Status must be one of: active, completed, on_hold, archived'),
     body('priority').optional().isIn(['low', 'medium', 'high'])
         .withMessage('Priority must be one of: low, medium, high'),
+    body('type').optional().isIn(['personal', 'course'])
+        .withMessage('Type must be one of: personal, course'),
+    body('courseName').optional().isString(),
     body('title').optional().isString(),
     body('description').optional().isString(),
     handleValidationErrors
