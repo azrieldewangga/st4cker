@@ -233,8 +233,13 @@ router.patch('/tasks/:id', [
 
     // POST /api/v1/projects
     router.post('/projects', [
-        body('title').notEmpty(),
-        body('status').optional().isIn(['active', 'completed', 'on_hold']),
+        body('title').notEmpty().withMessage('Title is required'),
+        body('status').optional().isIn(['active', 'completed', 'on_hold'])
+            .withMessage('Status must be one of: active, completed, on_hold'),
+        body('priority').optional().isIn(['low', 'medium', 'high'])
+            .withMessage('Priority must be one of: low, medium, high'),
+        body('description').optional().isString(),
+        body('deadline').optional().isISO8601(),
         handleValidationErrors
     ], async (req, res) => {
         try {
@@ -272,8 +277,12 @@ router.patch('/tasks/:id', [
     // PATCH /api/v1/projects/:id
     router.patch('/projects/:id', [
         param('id').isUUID(),
-        body('status').optional().isIn(['active', 'completed', 'on_hold', 'archived']),
+        body('status').optional().isIn(['active', 'completed', 'on_hold', 'archived'])
+            .withMessage('Status must be one of: active, completed, on_hold, archived'),
+        body('priority').optional().isIn(['low', 'medium', 'high'])
+            .withMessage('Priority must be one of: low, medium, high'),
         body('title').optional().isString(),
+        body('description').optional().isString(),
         handleValidationErrors
     ], async (req, res) => {
         try {
