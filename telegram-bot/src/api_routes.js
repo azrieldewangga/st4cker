@@ -85,6 +85,7 @@ router.post('/tasks', [
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
         const defaultUserId = usersList[0].telegramUserId;
+        const userSemester = usersList[0].semester || 4;
 
         // Get Entity Cache for normalization
         const entityCache = getEntityCache();
@@ -132,11 +133,17 @@ router.post('/tasks', [
 
         await db.insert(assignments).values(newTask);
 
-        // Broadcast Event
+        // Broadcast Event (payload mapped to Desktop App field names)
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'task.created',
-            payload: newTask
+            payload: {
+                courseName: newTask.course,
+                type: newTask.type,
+                dueDate: newTask.deadline instanceof Date ? newTask.deadline.toISOString() : newTask.deadline,
+                notes: newTask.note,
+                semester: `Semester ${userSemester}`
+            }
         });
 
         res.status(201).json({ success: true, data: newTask });
@@ -172,7 +179,14 @@ router.patch('/tasks/:id', [
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'task.updated',
-            payload: { id, ...updates }
+            payload: {
+                id,
+                status: updates.status,
+                title: updates.title,
+                type: updates.type,
+                course: updates.course,
+                note: updates.note
+            }
         });
 
         res.json({ success: true, message: 'Task updated' });
@@ -287,7 +301,15 @@ router.post('/projects', [
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'project.created',
-            payload: newProject
+            payload: {
+                title: newProject.title,
+                description: newProject.description,
+                deadline: newProject.deadline instanceof Date ? newProject.deadline.toISOString() : newProject.deadline,
+                priority: newProject.priority,
+                type: newProject.type,
+                courseId: null,
+                courseName: newProject.courseName
+            }
         });
 
         res.status(201).json({ success: true, data: newProject });
@@ -326,7 +348,16 @@ router.patch('/projects/:id', [
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'project.updated',
-            payload: { id, ...updates }
+            payload: {
+                id,
+                updates: {
+                    name: updates.title || undefined,
+                    deadline: updates.deadline || undefined,
+                    priority: updates.priority || undefined,
+                    status: updates.status || undefined,
+                    description: updates.description || undefined
+                }
+            }
         });
 
         res.json({ success: true, message: 'Project updated' });
@@ -359,8 +390,14 @@ router.post('/projects/:id/logs', [
 
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
-            eventType: 'project.updated', // Using project.updated for logs too for now
-            payload: { id, totalProgress: progress, message }
+            eventType: 'progress.logged',
+            payload: {
+                projectId: id,
+                progress: progress,
+                note: message,
+                duration: 0,
+                loggedAt: new Date().toISOString()
+            }
         });
 
         res.json({ success: true, message: 'Progress logged' });
@@ -459,7 +496,13 @@ router.post('/transactions', [
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'transaction.created',
-            payload: newTx
+            payload: {
+                amount: newTx.amount,
+                type: newTx.type,
+                category: newTx.category,
+                note: newTx.title,
+                date: newTx.date instanceof Date ? newTx.date.toISOString() : newTx.date
+            }
         });
 
         // Also broadcast balance update? Maybe separate event or include in payload
@@ -504,7 +547,13 @@ router.patch('/transactions/:id', [
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'transaction.updated',
-            payload: { id, ...updates }
+            payload: {
+                id,
+                updates: {
+                    amount: updates.amount,
+                    note: updates.title || updates.note
+                }
+            }
         });
 
         res.json({ success: true, message: 'Transaction updated' });
