@@ -121,7 +121,7 @@ const SortableRow = ({
             )}
         >
             {/* Drag Grip & Checkbox */}
-            <TableCell className="w-[50px] p-2">
+            <TableCell className="w-[50px] p-2 pl-4">
                 <div className="flex items-center gap-2">
                     <Checkbox
                         checked={isSelected}
@@ -130,7 +130,7 @@ const SortableRow = ({
                             onToggleSelect(assignment.id);
                         }}
                         onClick={(e: React.MouseEvent) => e.stopPropagation()} // Prevent row click
-                    // Removed translation for better alignment
+                        className="scale-90"
                     />
                     {!isFiltered && (
                         <div
@@ -540,233 +540,233 @@ const Assignments = () => {
 
     return (
         <ScrollArea className="h-[calc(100vh-3rem)]">
-        <div className="space-y-6 p-6 pr-4">
-            <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-2xl font-semibold tracking-tight">Assignments</h2>
-                        <p className="text-sm text-muted-foreground mt-1">Manage your tasks and deadlines.</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <AnimatedTabsList>
-                            <AnimatedTabsTrigger value="tasks" activeTab={activeTab} group="assignments">Tasks</AnimatedTabsTrigger>
-                            <AnimatedTabsTrigger value="projects" activeTab={activeTab} group="assignments">Projects</AnimatedTabsTrigger>
-                        </AnimatedTabsList>
+            <div className="space-y-6 p-6 pr-4 pl-8">
+                <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-2xl font-semibold tracking-tight">Assignments</h2>
+                            <p className="text-sm text-muted-foreground mt-1">Manage your tasks and deadlines.</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <AnimatedTabsList>
+                                <AnimatedTabsTrigger value="tasks" activeTab={activeTab} group="assignments">Tasks</AnimatedTabsTrigger>
+                                <AnimatedTabsTrigger value="projects" activeTab={activeTab} group="assignments">Projects</AnimatedTabsTrigger>
+                            </AnimatedTabsList>
 
-                        {activeTab === 'tasks' ? (
-                            <Button onClick={() => { setEditingId(null); setIsModalOpen(true); }}>
-                                <Plus className="mr-2 h-4 w-4" /> New Assignment
-                            </Button>
-                        ) : (
-                            <Button onClick={() => setIsProjectModalOpen(true)}>
-                                <Plus className="mr-2 h-4 w-4" /> New Project
-                            </Button>
-                        )}
-                    </div>
-                </div>
-
-                <TabsContent value="tasks" className="space-y-4">
-
-                    {/* Toolbar */}
-                    <div className="flex items-center justify-between space-x-2">
-                        <div className="flex flex-1 items-center space-x-2">
-                            <Input
-                                placeholder="Filter tasks..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="h-8 w-[150px] lg:w-[250px]"
-                            />
-
-                            {/* Course Filter */}
-                            <Select value={courseFilter} onValueChange={setCourseFilter}>
-                                <SelectTrigger className="h-8 w-[150px]">
-                                    <SelectValue placeholder="All Courses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Courses</SelectItem>
-                                    {courses.map(c => (
-                                        <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            {/* Status Filter */}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 border-dashed">
-                                        {statusFilter === 'all' ? 'Status' : statusFilter === 'to-do' ? 'To Do' : statusFilter === 'progress' ? 'In Progress' : 'Completed'}
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                    <DropdownMenuCheckboxItem checked={statusFilter === 'all'} onCheckedChange={() => setStatusFilter('all')}>All Status</DropdownMenuCheckboxItem>
-                                    <DropdownMenuCheckboxItem checked={statusFilter === 'to-do'} onCheckedChange={() => setStatusFilter('to-do')}>To Do</DropdownMenuCheckboxItem>
-                                    <DropdownMenuCheckboxItem checked={statusFilter === 'progress'} onCheckedChange={() => setStatusFilter('progress')}>In Progress</DropdownMenuCheckboxItem>
-                                    <DropdownMenuCheckboxItem checked={statusFilter === 'done'} onCheckedChange={() => setStatusFilter('done')}>Completed</DropdownMenuCheckboxItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-
-                            {/* Sort Toggle (Restored) */}
-                            <Button variant="outline" size="sm" className="h-8 ml-auto" onClick={() => setSortBy(sortBy === 'deadline' ? 'custom' : 'deadline')}>
-                                Sort: {sortBy === 'deadline' ? 'Deadline' : 'Manual'}
-                            </Button>
+                            {activeTab === 'tasks' ? (
+                                <Button onClick={() => { setEditingId(null); setIsModalOpen(true); }}>
+                                    <Plus className="mr-2 h-4 w-4" /> New Assignment
+                                </Button>
+                            ) : (
+                                <Button onClick={() => setIsProjectModalOpen(true)}>
+                                    <Plus className="mr-2 h-4 w-4" /> New Project
+                                </Button>
+                            )}
                         </div>
                     </div>
 
-                    {/* Active Filter Chips */}
-                    {(search || statusFilter !== 'all' || courseFilter !== 'all') && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            {search && (
-                                <FilterChip
-                                    label={`Search: "${search}"`}
-                                    onRemove={() => setSearch('')}
+                    <TabsContent value="tasks" className="space-y-4">
+
+                        {/* Toolbar */}
+                        <div className="flex items-center justify-between space-x-2">
+                            <div className="flex flex-1 items-center space-x-2">
+                                <Input
+                                    placeholder="Filter tasks..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="h-8 w-[150px] lg:w-[250px]"
                                 />
-                            )}
-                            {statusFilter !== 'all' && (
-                                <FilterChip
-                                    label={`Status: ${statusFilter === 'to-do' ? 'To Do' : statusFilter === 'progress' ? 'In Progress' : 'Completed'}`}
-                                    onRemove={() => setStatusFilter('all')}
-                                />
-                            )}
-                            {courseFilter !== 'all' && (
-                                <FilterChip
-                                    label={`Course: ${courseFilter}`}
-                                    onRemove={() => setCourseFilter('all')}
-                                />
-                            )}
-                            <button
-                                onClick={() => { setSearch(''); setStatusFilter('all'); setCourseFilter('all'); }}
-                                className="text-sm text-primary hover:underline ml-2"
-                            >
-                                Clear all
-                            </button>
+
+                                {/* Course Filter */}
+                                <Select value={courseFilter} onValueChange={setCourseFilter}>
+                                    <SelectTrigger className="h-8 w-[150px]">
+                                        <SelectValue placeholder="All Courses" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Courses</SelectItem>
+                                        {courses.map(c => (
+                                            <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                {/* Status Filter */}
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-8 border-dashed">
+                                            {statusFilter === 'all' ? 'Status' : statusFilter === 'to-do' ? 'To Do' : statusFilter === 'progress' ? 'In Progress' : 'Completed'}
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start">
+                                        <DropdownMenuCheckboxItem checked={statusFilter === 'all'} onCheckedChange={() => setStatusFilter('all')}>All Status</DropdownMenuCheckboxItem>
+                                        <DropdownMenuCheckboxItem checked={statusFilter === 'to-do'} onCheckedChange={() => setStatusFilter('to-do')}>To Do</DropdownMenuCheckboxItem>
+                                        <DropdownMenuCheckboxItem checked={statusFilter === 'progress'} onCheckedChange={() => setStatusFilter('progress')}>In Progress</DropdownMenuCheckboxItem>
+                                        <DropdownMenuCheckboxItem checked={statusFilter === 'done'} onCheckedChange={() => setStatusFilter('done')}>Completed</DropdownMenuCheckboxItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+
+                                {/* Sort Toggle (Restored) */}
+                                <Button variant="outline" size="sm" className="h-8 ml-auto" onClick={() => setSortBy(sortBy === 'deadline' ? 'custom' : 'deadline')}>
+                                    Sort: {sortBy === 'deadline' ? 'Deadline' : 'Manual'}
+                                </Button>
+                            </div>
                         </div>
-                    )}
 
-                    {/* Table */}
-                    <div className="rounded-md border bg-card">
-                        <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragEnd={handleDragEnd}
-                        >
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[50px]">
-                                            <Checkbox
-                                                checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
-                                                onCheckedChange={toggleSelectAll}
-                                                className="translate-y-[2px]"
-                                            />
-                                        </TableHead>
-                                        <TableHead>Deadline</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Course</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Note</TableHead>
-                                        <TableHead className="text-right"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <SortableContext
-                                        items={filteredAssignments.map(a => a.id)}
-                                        strategy={verticalListSortingStrategy}
-                                    >
-                                        {filteredAssignments.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={7}>
-                                                    <EmptyState
-                                                        icon={Plus}
-                                                        title="No assignments yet"
-                                                        description={isFiltered ? "No assignments match your filters. Try adjusting your search criteria." : "Get started by creating your first assignment. Click the button above to add one."}
-                                                        actionLabel={!isFiltered ? "New Assignment" : undefined}
-                                                        onAction={!isFiltered ? () => { setEditingId(null); setIsModalOpen(true); } : undefined}
-                                                    />
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            filteredAssignments.map((assignment, index) => (
-                                                <SortableRow
-                                                    key={assignment.id}
-                                                    assignment={assignment}
-                                                    index={index}
-                                                    updateAssignment={(id, data) => handleSingleStatusUpdate(id, data)}
-                                                    onEditClick={(id) => { setEditingId(id); setIsModalOpen(true); }}
-                                                    duplicateAssignment={duplicateAssignment}
-                                                    onDeleteClick={handleDeleteClick}
-                                                    isFiltered={isFiltered}
-                                                    isSelected={selectedIds.has(assignment.id)}
-                                                    onToggleSelect={toggleSelection}
-                                                />
-                                            ))
-                                        )}
-                                    </SortableContext>
-                                </TableBody>
-                            </Table>
-                        </DndContext>
-                    </div>
-
-                    {/* Bulk Action Toolbar */}
-                    {selectedIds.size > 0 && (
-                        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-popover border shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-bottom-5 z-50">
-                            <span className="text-sm font-medium mr-2">{selectedIds.size} selected</span>
-                            <div className="h-4 w-px bg-border mx-1" />
-                            <Button variant="ghost" size="sm" onClick={() => handleBulkStatus('done')} className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8">
-                                Mark Done
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleBulkStatus('to-do')} className="h-8">
-                                Mark To Do
-                            </Button>
-                            <div className="h-4 w-px bg-border mx-1" />
-                            <Button variant="ghost" size="sm" onClick={handleBulkDelete} className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-8">
-                                Delete
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setSelectedIds(new Set())} className="h-6 w-6 rounded-full ml-1">
-                                <span className="sr-only">Close</span>
-                                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-3 w-3"><path d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.1929 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.1929 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Alert Dialog for Delete */}
-                    <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    {isBulkDelete
-                                        ? `This will permanently delete ${selectedIds.size} selected assignments. This action cannot be undone.`
-                                        : "This action cannot be undone. This will permanently delete the assignment."
-                                    }
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                    className="bg-red-600 hover:bg-red-700 text-white border-0"
-                                    onClick={handleConfirmDelete}
+                        {/* Active Filter Chips */}
+                        {(search || statusFilter !== 'all' || courseFilter !== 'all') && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                {search && (
+                                    <FilterChip
+                                        label={`Search: "${search}"`}
+                                        onRemove={() => setSearch('')}
+                                    />
+                                )}
+                                {statusFilter !== 'all' && (
+                                    <FilterChip
+                                        label={`Status: ${statusFilter === 'to-do' ? 'To Do' : statusFilter === 'progress' ? 'In Progress' : 'Completed'}`}
+                                        onRemove={() => setStatusFilter('all')}
+                                    />
+                                )}
+                                {courseFilter !== 'all' && (
+                                    <FilterChip
+                                        label={`Course: ${courseFilter}`}
+                                        onRemove={() => setCourseFilter('all')}
+                                    />
+                                )}
+                                <button
+                                    onClick={() => { setSearch(''); setStatusFilter('all'); setCourseFilter('all'); }}
+                                    className="text-sm text-primary hover:underline ml-2"
                                 >
+                                    Clear all
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Table */}
+                        <div className="rounded-md border bg-card">
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
+                            >
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[50px]">
+                                                <Checkbox
+                                                    checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
+                                                    onCheckedChange={toggleSelectAll}
+                                                    className="translate-y-[2px]"
+                                                />
+                                            </TableHead>
+                                            <TableHead>Deadline</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Course</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Note</TableHead>
+                                            <TableHead className="text-right"></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        <SortableContext
+                                            items={filteredAssignments.map(a => a.id)}
+                                            strategy={verticalListSortingStrategy}
+                                        >
+                                            {filteredAssignments.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={7}>
+                                                        <EmptyState
+                                                            icon={Plus}
+                                                            title="No assignments yet"
+                                                            description={isFiltered ? "No assignments match your filters. Try adjusting your search criteria." : "Get started by creating your first assignment. Click the button above to add one."}
+                                                            actionLabel={!isFiltered ? "New Assignment" : undefined}
+                                                            onAction={!isFiltered ? () => { setEditingId(null); setIsModalOpen(true); } : undefined}
+                                                        />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                filteredAssignments.map((assignment, index) => (
+                                                    <SortableRow
+                                                        key={assignment.id}
+                                                        assignment={assignment}
+                                                        index={index}
+                                                        updateAssignment={(id, data) => handleSingleStatusUpdate(id, data)}
+                                                        onEditClick={(id) => { setEditingId(id); setIsModalOpen(true); }}
+                                                        duplicateAssignment={duplicateAssignment}
+                                                        onDeleteClick={handleDeleteClick}
+                                                        isFiltered={isFiltered}
+                                                        isSelected={selectedIds.has(assignment.id)}
+                                                        onToggleSelect={toggleSelection}
+                                                    />
+                                                ))
+                                            )}
+                                        </SortableContext>
+                                    </TableBody>
+                                </Table>
+                            </DndContext>
+                        </div>
+
+                        {/* Bulk Action Toolbar */}
+                        {selectedIds.size > 0 && (
+                            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-popover border shadow-lg rounded-full px-4 py-2 flex items-center gap-2 animate-in slide-in-from-bottom-5 z-50">
+                                <span className="text-sm font-medium mr-2">{selectedIds.size} selected</span>
+                                <div className="h-4 w-px bg-border mx-1" />
+                                <Button variant="ghost" size="sm" onClick={() => handleBulkStatus('done')} className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-8">
+                                    Mark Done
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleBulkStatus('to-do')} className="h-8">
+                                    Mark To Do
+                                </Button>
+                                <div className="h-4 w-px bg-border mx-1" />
+                                <Button variant="ghost" size="sm" onClick={handleBulkDelete} className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-8">
                                     Delete
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => setSelectedIds(new Set())} className="h-6 w-6 rounded-full ml-1">
+                                    <span className="sr-only">Close</span>
+                                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-3 w-3"><path d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.1929 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.1929 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+                                </Button>
+                            </div>
+                        )}
 
-                    <AssignmentModal
-                        isOpen={isModalOpen}
-                        onClose={() => { setIsModalOpen(false); setEditingId(null); }}
-                        editingId={editingId}
-                    />
-                </TabsContent>
+                        {/* Alert Dialog for Delete */}
+                        <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        {isBulkDelete
+                                            ? `This will permanently delete ${selectedIds.size} selected assignments. This action cannot be undone.`
+                                            : "This action cannot be undone. This will permanently delete the assignment."
+                                        }
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        className="bg-red-600 hover:bg-red-700 text-white border-0"
+                                        onClick={handleConfirmDelete}
+                                    >
+                                        Delete
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
 
-                <TabsContent value="projects">
-                    <ProjectsTab
-                        isModalOpen={isProjectModalOpen}
-                        setIsModalOpen={setIsProjectModalOpen}
-                    />
-                </TabsContent>
-            </Tabs>
-        </div>
+                        <AssignmentModal
+                            isOpen={isModalOpen}
+                            onClose={() => { setIsModalOpen(false); setEditingId(null); }}
+                            editingId={editingId}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="projects">
+                        <ProjectsTab
+                            isModalOpen={isProjectModalOpen}
+                            setIsModalOpen={setIsProjectModalOpen}
+                        />
+                    </TabsContent>
+                </Tabs>
+            </div>
         </ScrollArea>
     );
 };

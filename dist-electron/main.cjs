@@ -216,66 +216,73 @@ electron_1.app.on('ready', async () => {
     // Assignments
     electron_1.ipcMain.handle('assignments:list', () => assignments_cjs_1.assignments.getAll());
     electron_1.ipcMain.handle('assignments:create', (_, data) => {
+        const id = (0, crypto_1.randomUUID)();
         const newAssignment = assignments_cjs_1.assignments.create({
             ...data,
-            id: (0, crypto_1.randomUUID)(),
+            id,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
-        // Sync to Telegram
-        if (telegramStore && telegramStore.get('paired')) {
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(err => console.error('Auto-sync failed:', err));
-        }
+        // Queue VPS sync (works offline)
+        syncCRUD('task', 'create', id, {
+            title: data.title || data.type || 'Tugas',
+            course: data.course || '',
+            deadline: data.deadline || new Date().toISOString(),
+            type: data.type || 'Tugas',
+            note: data.note || ''
+        }).catch(console.error);
         return newAssignment;
     });
     electron_1.ipcMain.handle('assignments:update', (_, id, data) => {
         const result = assignments_cjs_1.assignments.update(id, data);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('task', 'update', id, {
+            status: data.status,
+            deadline: data.deadline
+        }).catch(console.error);
         return result;
     });
     electron_1.ipcMain.handle('assignments:updateStatus', (_, id, status) => {
         const result = assignments_cjs_1.assignments.updateStatus(id, status);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('task', 'update', id, { status }).catch(console.error);
         return result;
     });
     electron_1.ipcMain.handle('assignments:delete', (_, id) => {
         const result = assignments_cjs_1.assignments.delete(id);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('task', 'delete', id, {}).catch(console.error);
         return result;
     });
     // Transactions
     electron_1.ipcMain.handle('transactions:list', (_, params) => transactions_cjs_1.transactions.getAll(params));
     electron_1.ipcMain.handle('transactions:create', (_, data) => {
+        const id = (0, crypto_1.randomUUID)();
         const result = transactions_cjs_1.transactions.create({
             ...data,
-            id: (0, crypto_1.randomUUID)(),
+            id,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('transaction', 'create', id, {
+            amount: data.amount,
+            type: data.type,
+            category: data.category,
+            title: data.title || data.category,
+            date: data.date || new Date().toISOString()
+        }).catch(console.error);
         return result;
     });
     electron_1.ipcMain.handle('transactions:update', (_, id, data) => {
         const result = transactions_cjs_1.transactions.update(id, data);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('transaction', 'update', id, data).catch(console.error);
         return result;
     });
     electron_1.ipcMain.handle('transactions:delete', (_, id) => {
         const result = transactions_cjs_1.transactions.delete(id);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('transaction', 'delete', id, {}).catch(console.error);
         return result;
     });
     electron_1.ipcMain.handle('transactions:summary', (_, currency) => transactions_cjs_1.transactions.getSummary(currency));
     electron_1.ipcMain.handle('transactions:clear', () => {
         const result = transactions_cjs_1.transactions.clearAll();
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
         return result;
     });
     // Performance
@@ -334,26 +341,34 @@ electron_1.app.on('ready', async () => {
             updatedAt: new Date().toISOString()
         };
         projects_cjs_1.projects.create(newProject);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('project', 'create', newProject.id, {
+            title: data.title,
+            description: data.description || '',
+            deadline: data.deadline,
+            priority: data.priority || 'medium',
+            type: data.type || 'personal',
+            courseName: data.courseName || ''
+        }).catch(console.error);
         return newProject;
     });
     electron_1.ipcMain.handle('projects:update', (_, id, data) => {
         const result = projects_cjs_1.projects.update(id, data);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('project', 'update', id, {
+            title: data.title,
+            status: data.status,
+            priority: data.priority,
+            description: data.description
+        }).catch(console.error);
         return result;
     });
     electron_1.ipcMain.handle('projects:updateProgress', (_, id, progress) => {
         const result = projects_cjs_1.projects.updateProgress(id, progress);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('project', 'update', id, { totalProgress: progress }).catch(console.error);
         return result;
     });
     electron_1.ipcMain.handle('projects:delete', (_, id) => {
         const result = projects_cjs_1.projects.delete(id);
-        if (telegramStore && telegramStore.get('paired'))
-            (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(console.error);
+        syncCRUD('project', 'delete', id, {}).catch(console.error);
         return result;
     });
     // Project Sessions
@@ -470,6 +485,141 @@ electron_1.app.on('ready', async () => {
     let telegramSocket = null;
     let initTelegramWebSocket; // Defined outer scope
     const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
+    const API_KEY = process.env.AGENT_API_KEY || 'st4cker-agent-secret';
+    // ========================================
+    // VPS Sync Helpers (Offline-First)
+    // ========================================
+    async function syncToVPS(method, apiPath, body) {
+        try {
+            const res = await fetch(`${WEBSOCKET_URL}/api/v1${apiPath}`, {
+                method,
+                headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'x-source': 'desktop' },
+                body: body ? JSON.stringify(body) : undefined
+            });
+            if (!res.ok)
+                console.error(`[VPS Sync] ${method} ${apiPath} failed:`, res.status);
+            return res.ok;
+        }
+        catch (e) {
+            console.log(`[VPS Sync] Offline or error: ${e.message}`);
+            return false;
+        }
+    }
+    function queueSync(entityType, action, entityId, payload) {
+        try {
+            const db = (0, index_cjs_1.getDB)();
+            db.prepare(`INSERT OR REPLACE INTO sync_queue (id, entity_type, action, entity_id, payload, created_at, synced) VALUES (?, ?, ?, ?, ?, ?, 0)`)
+                .run((0, crypto_1.randomUUID)(), entityType, action, entityId, JSON.stringify(payload), new Date().toISOString());
+            console.log(`[Sync Queue] Queued ${action} ${entityType} ${entityId}`);
+        }
+        catch (e) {
+            console.error('[Sync Queue] Error:', e);
+        }
+    }
+    async function processQueue() {
+        const db = (0, index_cjs_1.getDB)();
+        const pending = db.prepare('SELECT * FROM sync_queue WHERE synced = 0 ORDER BY created_at').all();
+        if (pending.length === 0)
+            return;
+        console.log(`[Sync Queue] Processing ${pending.length} pending items...`);
+        for (const item of pending) {
+            const payload = JSON.parse(item.payload || '{}');
+            let success = false;
+            if (item.action === 'create') {
+                success = await syncToVPS('POST', `/${item.entity_type}s`, { id: item.entity_id, ...payload });
+            }
+            else if (item.action === 'update') {
+                success = await syncToVPS('PATCH', `/${item.entity_type}s/${item.entity_id}`, payload);
+            }
+            else if (item.action === 'delete') {
+                success = await syncToVPS('DELETE', `/${item.entity_type}s/${item.entity_id}`);
+            }
+            if (success) {
+                db.prepare('UPDATE sync_queue SET synced = 1 WHERE id = ?').run(item.id);
+                console.log(`[Sync Queue] ✅ Synced ${item.action} ${item.entity_type} ${item.entity_id}`);
+            }
+            else {
+                console.log(`[Sync Queue] ⏳ Will retry ${item.action} ${item.entity_type} ${item.entity_id}`);
+                break; // Stop on first failure, retry later
+            }
+        }
+        // Cleanup old synced items (keep last 100)
+        db.prepare('DELETE FROM sync_queue WHERE synced = 1 AND id NOT IN (SELECT id FROM sync_queue WHERE synced = 1 ORDER BY created_at DESC LIMIT 100)').run();
+    }
+    async function pullFromVPS() {
+        try {
+            const headers = { 'x-api-key': API_KEY };
+            const [tasksRes, projectsRes, txRes] = await Promise.all([
+                fetch(`${WEBSOCKET_URL}/api/v1/tasks`, { headers }),
+                fetch(`${WEBSOCKET_URL}/api/v1/projects`, { headers }),
+                fetch(`${WEBSOCKET_URL}/api/v1/transactions`, { headers })
+            ]);
+            const db = (0, index_cjs_1.getDB)();
+            if (tasksRes.ok) {
+                const { data: vpsTasks } = await tasksRes.json();
+                if (vpsTasks && Array.isArray(vpsTasks)) {
+                    for (const t of vpsTasks) {
+                        const deadline = t.deadline ? new Date(t.deadline).toISOString() : null;
+                        db.prepare(`INSERT OR REPLACE INTO assignments (id, title, course, type, status, deadline, note, semester, createdAt, updatedAt)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                            .run(t.id, t.title, t.course, t.type, t.status, deadline, t.note || '', t.semester || 4, t.createdAt || new Date().toISOString(), t.updatedAt || new Date().toISOString());
+                    }
+                    console.log(`[VPS Pull] ✅ Synced ${vpsTasks.length} tasks`);
+                }
+            }
+            if (projectsRes.ok) {
+                const { data: vpsProjects } = await projectsRes.json();
+                if (vpsProjects && Array.isArray(vpsProjects)) {
+                    for (const p of vpsProjects) {
+                        const deadline = p.deadline ? new Date(p.deadline).toISOString() : new Date().toISOString();
+                        db.prepare(`INSERT OR REPLACE INTO projects (id, title, courseId, description, startDate, deadline, totalProgress, status, priority, semester, createdAt, updatedAt)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                            .run(p.id, p.title, p.courseId || null, p.description || '', p.createdAt || new Date().toISOString(), deadline, p.totalProgress || 0, p.status || 'active', p.priority || 'medium', p.semester || 4, p.createdAt || new Date().toISOString(), p.updatedAt || new Date().toISOString());
+                    }
+                    console.log(`[VPS Pull] ✅ Synced ${vpsProjects.length} projects`);
+                }
+            }
+            if (txRes.ok) {
+                const { data: vpsTx } = await txRes.json();
+                if (vpsTx && Array.isArray(vpsTx)) {
+                    for (const tx of vpsTx) {
+                        const date = tx.date ? new Date(tx.date).toISOString() : new Date().toISOString();
+                        db.prepare(`INSERT OR REPLACE INTO transactions (id, title, category, amount, currency, date, type, createdAt, updatedAt)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                            .run(tx.id, tx.title || tx.note || '', tx.category || 'Other', tx.amount, 'IDR', date, tx.type, tx.createdAt || new Date().toISOString(), tx.updatedAt || new Date().toISOString());
+                    }
+                    console.log(`[VPS Pull] ✅ Synced ${vpsTx.length} transactions`);
+                }
+            }
+            // Refresh UI
+            electron_1.BrowserWindow.getAllWindows().forEach(win => {
+                if (!win.isDestroyed())
+                    win.webContents.send('refresh-data');
+            });
+        }
+        catch (e) {
+            console.error('[VPS Pull] Error:', e);
+        }
+    }
+    // Helper: attempt immediate sync, queue if offline
+    async function syncCRUD(entityType, action, entityId, payload) {
+        queueSync(entityType, action, entityId, payload);
+        // Try immediate sync
+        let success = false;
+        if (action === 'create') {
+            success = await syncToVPS('POST', `/${entityType}s`, { id: entityId, ...payload });
+        }
+        else if (action === 'update') {
+            success = await syncToVPS('PATCH', `/${entityType}s/${entityId}`, payload);
+        }
+        else if (action === 'delete') {
+            success = await syncToVPS('DELETE', `/${entityType}s/${entityId}`);
+        }
+        if (success) {
+            const db = (0, index_cjs_1.getDB)();
+            db.prepare('UPDATE sync_queue SET synced = 1 WHERE entity_id = ? AND action = ? AND synced = 0').run(entityId, action);
+        }
+    }
     // Initialize Telegram modules async
     async function initTelegramModules() {
         try {
@@ -518,8 +668,20 @@ electron_1.app.on('ready', async () => {
                     }, 5000);
                     // Auto-sync whenever we connect/reconnect
                     console.log('[Telegram] Connected! Triggering auto-sync...');
-                    (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket).catch(err => {
-                        console.error('[Telegram] Auto-sync failed:', err);
+                    (async () => {
+                        try {
+                            await processQueue(); // Push pending local changes
+                            await pullFromVPS(); // Pull latest from VPS
+                            // Legacy sync (keep for safety/other data)
+                            if (telegramStore && telegramStore.get('paired')) {
+                                await (0, telegram_sync_cjs_1.syncUserDataToBackend)(telegramStore, telegramSocket);
+                            }
+                        }
+                        catch (e) {
+                            console.error('[Telegram] Auto-sync sequence failed:', e);
+                        }
+                    })().catch(err => {
+                        console.error('[Telegram] Auto-sync wrapper failed:', err);
                     });
                 });
                 telegramSocket.on('disconnect', () => {

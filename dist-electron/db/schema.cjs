@@ -147,6 +147,18 @@ const initSchema = (db) => {
     CREATE INDEX IF NOT EXISTS idx_applied_at ON applied_events(applied_at);
     CREATE INDEX IF NOT EXISTS idx_event_type ON applied_events(event_type);
 
+    CREATE TABLE IF NOT EXISTS sync_queue (
+        id TEXT PRIMARY KEY,
+        entity_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        payload TEXT,
+        created_at TEXT NOT NULL,
+        synced INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_synced ON sync_queue(synced);
+
+
     `;
     db.exec(schema);
     // Migration: Add semester column to assignments if it doesn't exist

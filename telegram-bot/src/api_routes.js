@@ -92,7 +92,7 @@ router.post('/tasks', [
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { title, course, deadline, note, type, priority } = req.body;
+        const { id: clientId, title, course, deadline, note, type, priority } = req.body;
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
@@ -131,7 +131,7 @@ router.post('/tasks', [
         }
 
         const newTask = {
-            id: crypto.randomUUID(),
+            id: clientId || crypto.randomUUID(),
             userId: defaultUserId,
             title,
             course: normalizedCourse,
@@ -145,18 +145,20 @@ router.post('/tasks', [
 
         await db.insert(assignments).values(newTask);
 
-        // Broadcast Event (payload mapped to Desktop App field names)
-        await broadcastEvent(defaultUserId, {
-            eventId: crypto.randomUUID(),
-            eventType: 'task.created',
-            payload: {
-                courseName: newTask.course,
-                type: newTask.type,
-                dueDate: newTask.deadline instanceof Date ? newTask.deadline.toISOString() : newTask.deadline,
-                notes: newTask.note,
-                semester: `Semester ${userSemester} `
-            }
-        });
+        // Broadcast Event (skip if from Desktop to prevent echo loop)
+        if (req.header('x-source') !== 'desktop') {
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'task.created',
+                payload: {
+                    courseName: newTask.course,
+                    type: newTask.type,
+                    dueDate: newTask.deadline instanceof Date ? newTask.deadline.toISOString() : newTask.deadline,
+                    notes: newTask.note,
+                    semester: `Semester ${userSemester}`
+                }
+            });
+        }
 
         res.status(201).json({ success: true, data: newTask });
     } catch (error) {
@@ -275,7 +277,7 @@ router.post('/projects', [
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { title, description, status, priority, deadline, type, courseName } = req.body;
+        const { id: clientId, title, description, status, priority, deadline, type, courseName } = req.body;
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
@@ -295,7 +297,7 @@ router.post('/projects', [
         }
 
         const newProject = {
-            id: crypto.randomUUID(),
+            id: clientId || crypto.randomUUID(),
             userId: defaultUserId,
             title,
             description: description || '',
@@ -310,19 +312,21 @@ router.post('/projects', [
         };
 
         await db.insert(projects).values(newProject);
-        await broadcastEvent(defaultUserId, {
-            eventId: crypto.randomUUID(),
-            eventType: 'project.created',
-            payload: {
-                title: newProject.title,
-                description: newProject.description,
-                deadline: newProject.deadline instanceof Date ? newProject.deadline.toISOString() : newProject.deadline,
-                priority: newProject.priority,
-                type: newProject.type,
-                courseId: null,
-                courseName: newProject.courseName
-            }
-        });
+        if (req.header('x-source') !== 'desktop') {
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'project.created',
+                payload: {
+                    title: newProject.title,
+                    description: newProject.description,
+                    deadline: newProject.deadline instanceof Date ? newProject.deadline.toISOString() : newProject.deadline,
+                    priority: newProject.priority,
+                    type: newProject.type,
+                    courseId: null,
+                    courseName: newProject.courseName
+                }
+            });
+        }
 
         res.status(201).json({ success: true, data: newProject });
     } catch (error) {
@@ -475,14 +479,14 @@ router.post('/transactions', [
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { amount, type, category, title, date } = req.body;
+        const { id: clientId, amount, type, category, title, date } = req.body;
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
         const defaultUserId = usersList[0].telegramUserId;
 
         const newTx = {
-            id: crypto.randomUUID(),
+            id: clientId || crypto.randomUUID(),
             userId: defaultUserId,
             amount: parseFloat(amount),
             type,
@@ -505,17 +509,19 @@ router.post('/transactions', [
             .set({ currentBalance: newBalance, updatedAt: new Date() })
             .where(eq(users.telegramUserId, defaultUserId));
 
-        await broadcastEvent(defaultUserId, {
-            eventId: crypto.randomUUID(),
-            eventType: 'transaction.created',
-            payload: {
-                amount: newTx.amount,
-                type: newTx.type,
-                category: newTx.category,
-                note: newTx.title,
-                date: newTx.date instanceof Date ? newTx.date.toISOString() : newTx.date
-            }
-        });
+        if (req.header('x-source') !== 'desktop') {
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'transaction.created',
+                payload: {
+                    amount: newTx.amount,
+                    type: newTx.type,
+                    category: newTx.category,
+                    note: newTx.title,
+                    date: newTx.date instanceof Date ? newTx.date.toISOString() : newTx.date
+                }
+            });
+        }
 
         // Also broadcast balance update? Maybe separate event or include in payload
         // For now, transaction lists usually trigger re-fetch of user data
