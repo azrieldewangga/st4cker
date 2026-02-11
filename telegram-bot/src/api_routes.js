@@ -5,6 +5,18 @@ import { assignments, projects, transactions, users } from './db/schema.js';
 import { eq, and, desc, like } from 'drizzle-orm';
 import crypto from 'crypto';
 import { broadcastEvent } from './server.js';
+
+// Helper: Force date to end-of-day WIB (23:59:59 WIB = 16:59:59 UTC)
+// Prevents +1 day shift when storing dates without explicit time
+function toWIBEndOfDay(dateInput) {
+    const d = new Date(dateInput);
+    // If time is midnight UTC (just a date string like '2026-02-12'), 
+    // set to 23:59:59 WIB to keep it on the correct calendar day
+    if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
+        d.setUTCHours(16, 59, 59, 0); // 23:59:59 WIB
+    }
+    return d;
+}
 import { getEntityCache } from './commands/task.js';
 
 const router = express.Router();
@@ -57,7 +69,7 @@ router.get('/tasks', [
         conditions.push(eq(assignments.userId, defaultUserId));
 
         if (status) conditions.push(eq(assignments.status, status));
-        if (course) conditions.push(like(assignments.course, `%${course}%`));
+        if (course) conditions.push(like(assignments.course, `% ${course}% `));
 
         const tasks = await db.select().from(assignments)
             .where(and(...conditions))
@@ -114,7 +126,7 @@ router.post('/tasks', [
         if (normalizedType.toLowerCase().includes('laporan')) {
             if (!normalizedCourse.toLowerCase().startsWith('praktikum')) {
                 normalizedCourse = 'Praktikum ' + normalizedCourse;
-                console.log(`[API] Auto-prefixed Praktikum: "${normalizedCourse}"`);
+                console.log(`[API] Auto - prefixed Praktikum: "${normalizedCourse}"`);
             }
         }
 
@@ -123,7 +135,7 @@ router.post('/tasks', [
             userId: defaultUserId,
             title,
             course: normalizedCourse,
-            deadline: new Date(deadline),
+            deadline: toWIBEndOfDay(deadline),
             status: 'pending',
             type: normalizedType,
             note: note || '',
@@ -142,7 +154,7 @@ router.post('/tasks', [
                 type: newTask.type,
                 dueDate: newTask.deadline instanceof Date ? newTask.deadline.toISOString() : newTask.deadline,
                 notes: newTask.note,
-                semester: `Semester ${userSemester}`
+                semester: `Semester ${userSemester} `
             }
         });
 
@@ -164,7 +176,7 @@ router.patch('/tasks/:id', [
         const { id } = req.params;
         const updates = req.body;
         updates.updatedAt = new Date();
-        if (updates.deadline) updates.deadline = new Date(updates.deadline);
+        if (updates.deadline) updates.deadline = toWIBEndOfDay(updates.deadline);
 
         await db.update(assignments)
             .set(updates)
@@ -291,7 +303,7 @@ router.post('/projects', [
             priority: priority || 'medium',
             type: type || 'personal',
             courseName: normalizedCourseName,
-            deadline: deadline ? new Date(deadline) : null,
+            deadline: deadline ? toWIBEndOfDay(deadline) : null,
             totalProgress: 0,
             createdAt: new Date(),
             updatedAt: new Date()
