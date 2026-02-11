@@ -75,7 +75,8 @@ router.post('/tasks', [
     body('title').notEmpty().withMessage('Title is required'),
     body('course').notEmpty().withMessage('Course is required'),
     body('deadline').isISO8601().withMessage('Valid ISO Date required'),
-    body('type').optional().isIn(['Tugas', 'Ujian', 'Kuis', 'Proyek']),
+    body('type').optional().isIn(['Tugas', 'Ujian', 'Kuis', 'Proyek', 'Laporan Pendahuluan', 'Laporan Sementara', 'Laporan Resmi'])
+        .withMessage('Type must be one of: Tugas, Ujian, Kuis, Proyek, Laporan Pendahuluan, Laporan Sementara, Laporan Resmi'),
     handleValidationErrors
 ], async (req, res) => {
     try {
