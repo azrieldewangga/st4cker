@@ -639,10 +639,7 @@ electron_1.app.on('ready', async () => {
             const { io: ioClient } = await import('socket.io-client');
             telegramStore = new Store({
                 name: 'telegram-sync',
-                encryptionKey: process.env.TELEGRAM_ENCRYPTION_KEY || (() => {
-                    console.warn('[Telegram] WARNING: TELEGRAM_ENCRYPTION_KEY not set, using default. Set this env var for production.');
-                    return 'st4cker-default-enc-key';
-                })()
+                encryptionKey: process.env.TELEGRAM_ENCRYPTION_KEY || 'st4cker-telegram-encryption-key'
             });
             // Initialize WebSocket connection
             initTelegramWebSocket = (token) => {

@@ -530,7 +530,7 @@ app.on('ready', async () => {
     let telegramStore: any = null;
     let telegramSocket: any = null;
     let initTelegramWebSocket: (token: string) => void; // Defined outer scope
-    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://100.93.206.95:3000';
+    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
     const API_KEY = process.env.AGENT_API_KEY;
     if (!API_KEY) {
         console.warn('[Telegram] WARNING: AGENT_API_KEY env var is not set. VPS sync will fail.');

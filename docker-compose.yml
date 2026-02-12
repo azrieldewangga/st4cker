@@ -37,7 +37,7 @@ services:
     container_name: st4cker-bot
     restart: always
     ports:
-      - "100.93.206.95:3000:3000" # Only accessible via Tailscale network
+      - "3000:3000" # Public — secured by rate limiting + auth (Wave 1)
     environment:
       - NODE_ENV=production
       - TZ=Asia/Jakarta
