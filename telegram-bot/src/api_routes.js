@@ -48,6 +48,81 @@ const handleValidationErrors = (req, res, next) => {
 };
 
 // ==========================================
+// USER / BALANCE ENDPOINTS
+// ==========================================
+
+// GET /api/v1/balance
+router.get('/balance', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const user = usersList[0];
+
+        res.json({
+            success: true,
+            data: {
+                currentBalance: user.currentBalance || 0,
+                formattedBalance: `Rp${(user.currentBalance || 0).toLocaleString('id-ID')}`,
+                semester: user.semester
+            }
+        });
+    } catch (error) {
+        console.error('[API] Get Balance Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/summary
+router.get('/summary', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const user = usersList[0];
+        const userId = user.telegramUserId;
+
+        const allTasks = await db.select().from(assignments)
+            .where(eq(assignments.userId, userId));
+        const allProjects = await db.select().from(projects)
+            .where(eq(projects.userId, userId));
+        const recentTx = await db.select().from(transactions)
+            .where(eq(transactions.userId, userId))
+            .orderBy(desc(transactions.date))
+            .limit(5);
+
+        const pendingTasks = allTasks.filter(t => t.status === 'pending');
+        const upcomingDeadlines = pendingTasks
+            .filter(t => t.deadline)
+            .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+            .slice(0, 5)
+            .map(t => ({ id: t.id, title: t.title, course: t.course, deadline: t.deadline }));
+
+        res.json({
+            success: true,
+            data: {
+                balance: {
+                    current: user.currentBalance || 0,
+                    formatted: `Rp${(user.currentBalance || 0).toLocaleString('id-ID')}`
+                },
+                tasks: {
+                    total: allTasks.length,
+                    pending: pendingTasks.length,
+                    completed: allTasks.filter(t => t.status === 'completed').length
+                },
+                projects: {
+                    total: allProjects.length,
+                    active: allProjects.filter(p => p.status === 'active').length
+                },
+                upcomingDeadlines,
+                recentTransactions: recentTx
+            }
+        });
+    } catch (error) {
+        console.error('[API] Get Summary Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// ==========================================
 // TASKS (ASSIGNMENTS) ENDPOINTS
 // ==========================================
 
@@ -81,6 +156,21 @@ router.get('/tasks', [
         res.json({ success: true, count: tasks.length, data: tasks });
     } catch (error) {
         console.error('[API] Get Tasks Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/tasks/:id
+router.get('/tasks/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const task = await db.select().from(assignments).where(eq(assignments.id, req.params.id)).limit(1);
+        if (task.length === 0) return res.status(404).json({ error: 'Task not found' });
+        res.json({ success: true, data: task[0] });
+    } catch (error) {
+        console.error('[API] Get Task Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -261,6 +351,21 @@ router.get('/projects', [
         res.json({ success: true, count: data.length, data });
     } catch (error) {
         console.error('[API] Get Projects Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/projects/:id
+router.get('/projects/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const project = await db.select().from(projects).where(eq(projects.id, req.params.id)).limit(1);
+        if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
+        res.json({ success: true, data: project[0] });
+    } catch (error) {
+        console.error('[API] Get Project Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -469,6 +574,21 @@ router.get('/transactions', async (req, res) => {
         res.json({ success: true, count: data.length, data });
     } catch (error) {
         console.error('[API] Get Transactions Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/transactions/:id
+router.get('/transactions/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const tx = await db.select().from(transactions).where(eq(transactions.id, req.params.id)).limit(1);
+        if (tx.length === 0) return res.status(404).json({ error: 'Transaction not found' });
+        res.json({ success: true, data: tx[0] });
+    } catch (error) {
+        console.error('[API] Get Transaction Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

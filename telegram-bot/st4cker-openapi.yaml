@@ -2,10 +2,10 @@ openapi: 3.0.0
 info:
   title: St4cker Agent API
   description: API for AI Agents (OpenClaw) to control St4cker (Tasks, Projects, Transactions).
-  version: 1.0.0
+  version: 1.1.0
 servers:
-  - url: http://localhost:3000/api/v1
-    description: Local Development Server
+  - url: http://103.127.134.173:3000/api/v1
+    description: Production Server (VPS)
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -16,6 +16,22 @@ security:
   - ApiKeyAuth: []
 
 paths:
+  /balance:
+    get:
+      summary: Get current balance
+      description: Returns the user's current balance instantly (no calculation needed).
+      responses:
+        '200':
+          description: Balance info with formatted Rupiah string
+
+  /summary:
+    get:
+      summary: Get dashboard summary
+      description: Returns balance, task/project counts, upcoming deadlines, and recent transactions in one call.
+      responses:
+        '200':
+          description: Full dashboard summary
+
   /tasks:
     get:
       summary: List tasks
@@ -29,11 +45,6 @@ paths:
           name: course
           schema:
             type: string
-        - in: query
-          name: priority
-          schema:
-            type: string
-            enum: [low, medium, high]
       responses:
         '200':
           description: List of tasks
@@ -61,12 +72,26 @@ paths:
                   type: string
                 type:
                   type: string
-                  enum: [Tugas, Ujian, Kuis, Proyek]
+                  enum: [Tugas, Ujian, Kuis, Proyek, Laporan Pendahuluan, Laporan Sementara, Laporan Resmi]
       responses:
         '201':
           description: Task created
 
   /tasks/{id}:
+    get:
+      summary: Get a single task by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task details
+        '404':
+          description: Task not found
     patch:
       summary: Update a task
       parameters:
@@ -88,9 +113,25 @@ paths:
                 deadline:
                   type: string
                   format: date-time
+                title:
+                  type: string
+                note:
+                  type: string
       responses:
         '200':
           description: Task updated
+    delete:
+      summary: Delete a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task deleted
 
   /projects:
     get:
@@ -121,7 +162,14 @@ paths:
                   type: string
                 status:
                   type: string
+                  enum: [active, completed, on_hold]
                 priority:
+                  type: string
+                  enum: [low, medium, high]
+                type:
+                  type: string
+                  enum: [personal, course]
+                courseName:
                   type: string
                 deadline:
                   type: string
@@ -130,9 +178,95 @@ paths:
         '201':
           description: Project created
 
+  /projects/{id}:
+    get:
+      summary: Get a single project by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Project details
+        '404':
+          description: Project not found
+    patch:
+      summary: Update a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, completed, on_hold, archived]
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Project updated
+    delete:
+      summary: Delete a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Project deleted
+
+  /projects/{id}/logs:
+    post:
+      summary: Log progress on a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - progress
+                - message
+              properties:
+                progress:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                message:
+                  type: string
+      responses:
+        '200':
+          description: Progress logged
+
   /transactions:
     get:
-      summary: List recent transactions
+      summary: List recent transactions (last 50)
       responses:
         '200':
           description: List of transactions
@@ -156,8 +290,65 @@ paths:
                   enum: [income, expense]
                 category:
                   type: string
+                  enum: [Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other]
+                title:
+                  type: string
+                date:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Transaction created with updated balance
+
+  /transactions/{id}:
+    get:
+      summary: Get a single transaction by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transaction details
+        '404':
+          description: Transaction not found
+    patch:
+      summary: Update a transaction
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                category:
+                  type: string
+                  enum: [Food, Transport, Shopping, Bills, Subscription, Transfer, Salary, Other]
                 title:
                   type: string
       responses:
-        '201':
-          description: Transaction created
+        '200':
+          description: Transaction updated
+    delete:
+      summary: Delete a transaction
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transaction deleted
