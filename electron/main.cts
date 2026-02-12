@@ -1,9 +1,24 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import { app, BrowserWindow, ipcMain } from 'electron';
-console.log('--- STARTING MAIN PROCESS V2 (FRESH BUILD) ---');
 import { pathToFileURL } from 'url';
 import path from 'path';
+import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
+
+// Load .env from the correct path (dev vs production)
+const envPaths = [
+    path.join(process.cwd(), '.env'),                          // Dev: project root
+    path.join(__dirname, '..', '.env'),                        // Production: next to asar
+    path.join(app?.getPath?.('userData') || '', '.env'),       // Production: userData folder
+];
+for (const envPath of envPaths) {
+    if (existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+        console.log(`[Main] Loaded .env from: ${envPath}`);
+        break;
+    }
+}
+console.log('--- STARTING MAIN PROCESS V2 (FRESH BUILD) ---');
 
 // --- DB Modules ---
 import { getDB } from './db/index.cjs';
@@ -515,10 +530,7 @@ app.on('ready', async () => {
     let telegramStore: any = null;
     let telegramSocket: any = null;
     let initTelegramWebSocket: (token: string) => void; // Defined outer scope
-    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL;
-    if (!WEBSOCKET_URL) {
-        console.error('[Telegram] FATAL: TELEGRAM_WEBSOCKET_URL env var is not set. Sync will not work.');
-    }
+    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://100.93.206.95:3000';
     const API_KEY = process.env.AGENT_API_KEY;
     if (!API_KEY) {
         console.warn('[Telegram] WARNING: AGENT_API_KEY env var is not set. VPS sync will fail.');
