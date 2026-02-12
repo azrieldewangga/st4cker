@@ -113,6 +113,11 @@ export function TelegramTab() {
                                         maxLength={6}
                                         value={pairingCode}
                                         onChange={(val) => setPairingCode(val.toUpperCase())}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && pairingCode.length === 6) {
+                                                handlePair();
+                                            }
+                                        }}
                                         disabled={isVerifying}
                                     >
                                         <InputOTPGroup>

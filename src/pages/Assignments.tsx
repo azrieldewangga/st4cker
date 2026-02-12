@@ -130,7 +130,7 @@ const SortableRow = ({
                             onToggleSelect(assignment.id);
                         }}
                         onClick={(e: React.MouseEvent) => e.stopPropagation()} // Prevent row click
-                        className="scale-90"
+                        className="scale-75"
                     />
                     {!isFiltered && (
                         <div
@@ -656,7 +656,7 @@ const Assignments = () => {
                                                 <Checkbox
                                                     checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
                                                     onCheckedChange={toggleSelectAll}
-                                                    className="translate-y-[2px]"
+                                                    className="scale-75 translate-y-[2px]"
                                                 />
                                             </TableHead>
                                             <TableHead>Deadline</TableHead>

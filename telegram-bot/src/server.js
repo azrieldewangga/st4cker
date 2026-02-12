@@ -4,6 +4,7 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 
 // Drizzle Imports
 import { db } from './db/index.js';
@@ -36,7 +37,30 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+
+// Rate Limiting
+const generalLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' }
+});
+
+const pairingLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: { error: 'Too many pairing attempts, please try again later.' }
+});
+
+const syncLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: { error: 'Too many sync requests, please try again later.' }
+});
+
+app.use('/api/', generalLimiter);
 
 // API Routes (Agentic)
 import apiRoutes from './api_routes.js';
@@ -56,7 +80,7 @@ app.get('/health', (req, res) => {
 });
 
 // Pairing API Endpoints
-app.post('/api/generate-pairing', async (req, res) => {
+app.post('/api/generate-pairing', pairingLimiter, async (req, res) => {
     try {
         const { telegramUserId } = req.body;
         if (!telegramUserId) return res.status(400).json({ error: 'telegramUserId required' });
@@ -69,7 +93,7 @@ app.post('/api/generate-pairing', async (req, res) => {
     }
 });
 
-app.post('/api/verify-pairing', async (req, res) => {
+app.post('/api/verify-pairing', pairingLimiter, async (req, res) => {
     try {
         const { code } = req.body;
         console.log('[API] Verify pairing request:', { code });
@@ -189,7 +213,7 @@ app.post('/api/register-device', async (req, res) => {
 
 // User Data Sync Endpoints
 // NOTE: This is temporarily mostly READ-ONLY until Phase 3.
-app.post('/api/sync-user-data', async (req, res) => {
+app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
     try {
         const { sessionToken, data } = req.body;
         if (!sessionToken) return res.status(400).json({ error: 'sessionToken required' });
@@ -271,57 +295,15 @@ app.post('/api/sync-user-data', async (req, res) => {
             console.log(`[API] Synced ${projOps.length} projects`);
         }
 
-        // 6. Sync Assignments (Tasks) - Full Sync with Intelligent Upsert
-        // This will DELETE assignments in Bot DB that are NOT in App's payload
+        // 6. Sync Assignments (Tasks) - Batched Upsert
         const incomingAssignments = data.activeAssignments || [];
-        const incomingIds = new Set(incomingAssignments.map(a => a.id));
-
-        // Get all current assignments in Bot DB for this user
-        const currentAssignments = await db.select().from(assignments)
-            .where(eq(assignments.userId, telegramUserId));
-
-        // Delete assignments not in incoming payload (orphaned)
-        // Delete assignments not in incoming payload (orphaned)
-        // DISABLED: Server should be Master. Don't let Desktop delete server-side tasks just because Desktop doesn't have them yet.
-        /*
-        let deletedCount = 0;
-        for (const existing of currentAssignments) {
-            if (!incomingIds.has(existing.id)) {
-                await db.delete(assignments).where(eq(assignments.id, existing.id));
-                deletedCount++;
-            }
-        }
-        if (deletedCount > 0) console.log(`[API] Deleted ${deletedCount} orphaned orphaned assignments`);
-        */
         console.log(`[API] Sync: Preserving server-side tasks (deletion disabled)`);
 
-        // Upsert incoming assignments
+        // Batched upsert using transaction
         if (incomingAssignments.length > 0) {
-            let syncedCount = 0;
-            for (const t of incomingAssignments) {
-                // Check for existing task with same content (userId, course, title, deadline)
-                const existing = await db.select().from(assignments).where(
-                    and(
-                        eq(assignments.userId, telegramUserId),
-                        eq(assignments.course, t.course),
-                        eq(assignments.title, t.title),
-                        eq(assignments.deadline, t.deadline)
-                    )
-                ).limit(1);
-
-                if (existing.length > 0) {
-                    // Update existing record with new data (keep existing DB ID)
-                    await db.update(assignments)
-                        .set({
-                            status: t.status || existing[0].status,
-                            note: t.note || existing[0].note,
-                            type: t.type,
-                            updatedAt: new Date()
-                        })
-                        .where(eq(assignments.id, existing[0].id));
-                } else {
-                    // Check by ID next (standard upsert)
-                    await db.insert(assignments).values({
+            await db.transaction(async (tx) => {
+                for (const t of incomingAssignments) {
+                    await tx.insert(assignments).values({
                         id: t.id,
                         userId: telegramUserId,
                         title: t.title,
@@ -338,16 +320,17 @@ app.post('/api/sync-user-data', async (req, res) => {
                         set: {
                             status: t.status,
                             title: t.title,
+                            course: t.course,
                             note: t.note,
+                            type: t.type,
                             updatedAt: new Date()
                         }
                     });
                 }
-                syncedCount++;
-            }
-            console.log(`[API] Synced ${syncedCount} assignments (Full Sync)`);
+            });
+            console.log(`[API] Synced ${incomingAssignments.length} assignments (Batched)`);
         } else {
-            console.log(`[API] Synced 0 assignments (Full Sync)`);
+            console.log(`[API] Synced 0 assignments`);
         }
 
         res.json({
@@ -368,6 +351,21 @@ app.get('/api/user-data/:telegramUserId', async (req, res) => {
     try {
         const { telegramUserId } = req.params;
         if (!telegramUserId) return res.status(400).json({ error: 'telegramUserId required' });
+
+        // Auth: Require valid session token
+        const sessionToken = req.query.sessionToken || req.header('x-session-token');
+        if (!sessionToken) return res.status(401).json({ error: 'Authentication required: sessionToken missing' });
+
+        const sessionCheck = await db.select().from(sessions)
+            .where(and(eq(sessions.sessionToken, sessionToken), gt(sessions.expiresAt, new Date())))
+            .limit(1);
+
+        if (sessionCheck.length === 0) return res.status(401).json({ error: 'Invalid or expired session' });
+
+        // Ensure user can only access their own data
+        if (sessionCheck[0].telegramUserId !== telegramUserId) {
+            return res.status(403).json({ error: 'Forbidden: session does not match requested user' });
+        }
 
         // Construct JSON from Postgres table to maintain compatibility with Desktop App
         const user = await DbService.getUser(telegramUserId);
@@ -490,6 +488,19 @@ export async function broadcastEvent(telegramUserId, event) {
 
     return { success: true, online };
 }
+
+// Cleanup: Delete stale pending events older than 30 days (runs daily)
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+setInterval(async () => {
+    try {
+        const cutoff = new Date(Date.now() - THIRTY_DAYS_MS);
+        const deleted = await db.delete(pendingEvents)
+            .where(sql`${pendingEvents.createdAt} < ${cutoff}`);
+        console.log(`[Cleanup] Pending events cleanup completed`);
+    } catch (e) {
+        console.error('[Cleanup] Error:', e);
+    }
+}, 24 * 60 * 60 * 1000); // Every 24 hours
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {

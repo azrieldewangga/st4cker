@@ -21,12 +21,15 @@ import { getEntityCache } from './commands/task.js';
 
 const router = express.Router();
 
-// Middleware: Simple API Key Auth
+// Middleware: API Key Auth
 const authenticateApiKey = (req, res, next) => {
-    const apiKey = req.header('x-api-key');
-    // TODO: Move to .env or DB
-    const VALID_API_KEY = process.env.AGENT_API_KEY || 'st4cker-agent-secret';
+    const VALID_API_KEY = process.env.AGENT_API_KEY;
+    if (!VALID_API_KEY) {
+        console.error('[AUTH] FATAL: AGENT_API_KEY env var is not set. Rejecting all API requests.');
+        return res.status(503).json({ error: 'Server misconfigured: API key not set' });
+    }
 
+    const apiKey = req.header('x-api-key');
     if (!apiKey || apiKey !== VALID_API_KEY) {
         return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
     }

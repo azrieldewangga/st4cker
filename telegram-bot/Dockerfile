@@ -1,14 +1,11 @@
-FROM node:18-bullseye
-
-# Install build dependencies for better-sqlite3 and other native modules
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+FROM node:20-alpine
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies including native builds
+# Install dependencies (no native build deps needed — better-sqlite3 removed)
 RUN npm install --omit=dev
 
 # Copy app source
@@ -16,6 +13,10 @@ COPY . .
 
 # Set environment
 ENV NODE_ENV=production
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:3000/health || exit 1
 
 # Start the bot
 CMD ["npm", "run", "start"]

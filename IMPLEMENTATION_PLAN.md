@@ -1,87 +1,45 @@
-﻿# St4cker UI Redesign Implementation Plan
+﻿# Fix Pairing UX, Restore Shortcuts & Polish UI
 
-**Goal**: Redesign `st4cker` application using the UI source code from `project-dashboard-main` while preserving all existing functionality.
+## Goal Description
+1.  **Fix Pairing UX**: Allow the user to press `Enter` in the "Pair Telegram Bot" modal to trigger the "Pair Device" action.
+2.  **Restore Shortcuts**: Make assignments (`Ctrl+N`), transactions (`Ctrl+T`), and other shortcuts working globally from any page.
+3.  **UI Polish (Checkboxes)**: Fix the checkbox size in the Assignments table (both header and rows are too big).
 
-## 0. Prerequisite Analysis & Setup
-- [ ] **Dependency Check**:
-    - Add `@phosphor-icons/react` (used in reference).
-    - Add `vaul` (drawer) if needed.
-    - Check `date-fns` version compatibility.
-    - Ensure Tailwind 4 configuration matches.
-- [ ] **Asset Migration**:
-    - Copy fonts (Geist/Fira Code) configuration.
-    - Copy `globals.css` color variables (OKLCH system) to `index.css`.
+## User Review Required
+> [!IMPORTANT]
+> **Keyboard Shortcuts Confirmation**:
+> I am proceeding with making `Ctrl+N` (New Task) and `Ctrl+T` (New Transaction) global.
+>
+> **UI Polish**:
+> I will reduce the checkbox size significantly (e.g., `scale-75` or specific dimensions) to match the provided reference image.
 
-## 1. Design System Migration
-- [ ] **Theme Configuration**:
-    - Update `index.css` with the new OKLCH color palette from reference.
-    - Update `layer base` styles for consistent typography and interactions.
-- [ ] **Base Components (shadcn/ui)**:
-    - The reference project has its own flavor of shadcn components.
-    - **Strategy**: Backup current `src/components/ui` -> `src/components/ui-legacy`.
-    - Copy `components/ui` from reference to `src/components/ui`.
-    - Fix imports (remove `next/` specific imports, replace with standard React/Vite equivalents).
+## Proposed Changes
 
-## 2. Layout & Navigation Restructuring (The "Sidebar" Shift)
-- [ ] **Component: `AppSidebar`**:
-    - Port `components/app-sidebar.tsx` to `st4cker`.
-    - Replace `next/link` with `react-router-dom` `Link`.
-    - Replace `usePathname` with `useLocation`.
-    - Adapt "Active Projects" section to use real data from `useStore`.
-- [ ] **Component: `SidebarLayout`**:
-    - Create new layout replacing `MainLayout.tsx`.
-    - Integrate `AppSidebar`.
-    - Ensure window controls (minimize/close) are properly placed (likely top-right of main content area, since top header is gone).
-    - Add "Window Drag Region" support to the new header area.
+### 1. Fix "Enter" Key in Pairing Modal
+**File:** [TelegramTab.tsx](file:///d:/Project/st4cker/src/pages/Settings/TelegramTab.tsx)
+- Add `onKeyDown={(e) => e.key === 'Enter' && handlePair()}` to the `InputOTP` component.
 
-## 3. Core Feature Migration (Page by Page)
+### 2. Implement Global "New Task" Shortcut & Modal Lifting
+**File:** [SidebarLayout.tsx](file:///d:/Project/st4cker/src/components/layout/SidebarLayout.tsx)
+- [NEW] Import `AssignmentModal` and use it inside `SidebarLayout` so it's always available.
+- Add a global `keydown` listener for `Ctrl + N`.
+- Manage the modal's open state (`isQuickAddOpen`) in `SidebarLayout`.
 
-### 3.1 Dashboard (`/`)
-- [ ] **Metric Cards**:
-    - Adapt reference `StatCard` or similar.
-    - Feed data: Balance, Expenses, Tasks Due.
-- [ ] **Active Projects List**:
-    - Use the reference's Sidebar "Active Projects" logic.
-- [ ] **Recent Activity / Tasks**:
-    - adapt `project-dashboard-main`'s list/board views for the dashboard widget.
+**File:** [Assignments.tsx](file:///d:/Project/st4cker/src/pages/Assignments.tsx)
+- [MODIFY] Remove the conflicting local `Ctrl+N` listener using `AssignmentModal`.
 
-### 3.2 Projects & Assignments (Unified View)
-- The reference combines these well. `st4cker` currently has separate tabs.
-- [ ] **Project Board**:
-    - Port `project-board-view.tsx` and `project-card.tsx`.
-    - Connect to `st4cker` project store.
-    - Implement Drag & Drop using existing `dnd-kit` logic but with new UI.
-- [ ] **Task List**:
-    - Port `tasks-view.tsx` (or equivalent list component).
-    - Apply existing "Assignments" logic (CRUD, filters).
+### 3. UI Polish: Fix Checkbox Size
+**File:** [Assignments.tsx](file:///d:/Project/st4cker/src/pages/Assignments.tsx)
+- [MODIFY] **Row Checkbox**: Change `className="scale-90"` to `className="scale-75"` (or `w-4 h-4`).
+- [MODIFY] **Header Checkbox**: Locate the `TableHeader` checkbox and apply the same `scale-75` and padding fix.
 
-### 3.3 Tasks Page
-- [ ] **Task Table/List**:
-    - Use reference's clean table/list style.
-    - Implement the "Filter Chips" pattern from reference.
+## Verification Plan
 
-### 3.4 Settings
-- [ ] **Settings Dialog**:
-    - Port `settings/SettingsDialog.tsx`.
-    - Integrate existing `Settings.tsx` logic into this modal/dialog structure.
-    - This might replace the dedicated `/settings` page, or the page becomes a wrapper for this view.
-
-## 4. Technical Refactoring
-- [ ] **Routing**:
-    - Update `App.tsx` router to use the new `SidebarLayout`.
-- [ ] **Electron Integration**:
-    - Ensure IPC calls still work within new components.
-    - Verify `window.electronAPI` availability.
-
-## 5. Timeline / Execution Order
-1.  **Dependencies & global CSS** (Switch to OKLCH)
-2.  **Base UI Components** (Swap `ui` folder)
-3.  **Sidebar & Layout** (Get the shell working)
-4.  **Dashboard Page** (First feature page)
-5.  **Projects/Tasks Pages** (Core functionality)
-6.  **Other Pages** (Cashflow, Performance, Schedule)
-
-## 6. Verification
-- Verify Light/Dark mode switching works with new OKLCH variables.
-- Verify Electron standard window controls (drag, min, max, close).
-- Verify all data CRUD operations still function.
+### Manual Verification
+1.  **Pairing Modal**:
+    - Settings -> Telegram -> Pair -> Type Code -> Press Enter -> Verify action triggers.
+2.  **Global Shortcuts**:
+    - Go to **Dashboard** -> Press `Ctrl + N` -> Verify "New Assignment" modal opens.
+3.  **Checkbox UI**:
+    - Go to **Assignments** tab.
+    - Visually verify the checkboxes are smaller and aligned properly in both the Header and the Rows.

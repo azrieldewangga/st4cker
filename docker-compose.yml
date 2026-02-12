@@ -9,17 +9,18 @@ services:
     container_name: st4cker-db
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-st4cker_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeMeSecurely123!}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ${POSTGRES_DB:-st4cker_db}
       TZ: Asia/Jakarta
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      # Exposed for Desktop App Direct Access or Debugging
-      - "5432:5432"
+      # Only accessible locally (internal Docker network handles bot<->db)
+      # Tailscale access for debugging: change to "100.93.206.95:5432:5432" if needed
+      - "127.0.0.1:5432:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U st4cker_admin -d st4cker_db" ]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB:-st4cker_db}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,18 +37,28 @@ services:
     container_name: st4cker-bot
     restart: always
     ports:
-      - "3000:3000" # Main Entrypoint for OpenClaw & Desktop App (if using API)
+      - "100.93.206.95:3000:3000" # Only accessible via Tailscale network
     environment:
       - NODE_ENV=production
       - TZ=Asia/Jakarta
       # Connect to LOCAL DB service (service name: "postgres", port: 5432)
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-st4cker_admin}:${POSTGRES_PASSWORD:-ChangeMeSecurely123!}@postgres:5432/${POSTGRES_DB:-st4cker_db}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-st4cker_db}
       # Load other secrets (Telegram, Gemini, etc.)
     env_file:
       - telegram-bot/.env # Assuming .env is inside telegram-bot folder
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     networks:
       - st4cker-net
 

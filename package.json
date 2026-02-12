@@ -36,14 +36,14 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "installerSidebar": "d:/Project/st4cker/build/installerSidebar.png",
-      "uninstallerSidebar": "d:/Project/st4cker/build/installerSidebar.png",
-      "installerHeader": "d:/Project/st4cker/build/installerHeader.png",
+      "installerSidebar": "build/installerSidebar.png",
+      "uninstallerSidebar": "build/installerSidebar.png",
+      "installerHeader": "build/installerHeader.png",
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
       "deleteAppDataOnUninstall": true,
       "runAfterFinish": true,
-      "include": "d:/Project/st4cker/build/installer.nsh"
+      "include": "build/installer.nsh"
     }
   },
   "type": "module",

@@ -59,7 +59,7 @@ const createSplashWindow = () => {
         center: true,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false, // For simple splash logic
+            contextIsolation: false, // Required: splash.html uses require('electron').ipcRenderer directly
         }
     });
     const splashPath = electron_1.app.isPackaged
@@ -183,14 +183,7 @@ electron_1.app.on('ready', async () => {
         // 3. Verify Content (Temporary Debug)
         splashWindow?.webContents.send('splash-progress', { message: 'Verifying data...', percent: 70 });
         const db = (0, index_cjs_1.getDB)();
-        const dbPath = process.env.VITE_DEV_SERVER_URL ? path_1.default.join(process.cwd(), 'st4cker.db') : path_1.default.join(electron_1.app.getPath('userData'), 'st4cker.db');
-        console.log('--------------------------------------------------');
-        console.log('[DEBUG-CRITICAL] DB PATH DETECTED:', dbPath);
-        const meta = db.prepare('SELECT * FROM meta').all();
-        console.log('[DEBUG-CRITICAL] META TABLE RAW CONTENT:', JSON.stringify(meta, null, 2));
-        const userCheck = userProfile_cjs_1.userProfile.get();
-        console.log('[DEBUG-CRITICAL] userProfile.get() RESULT:', JSON.stringify(userCheck, null, 2));
-        console.log('--------------------------------------------------');
+        console.log('[Main] Database initialized and verified');
         try {
             // Only try reading if table exists (it should)
             const courses = db.prepare('SELECT * FROM performance_courses LIMIT 3').all();
@@ -484,12 +477,20 @@ electron_1.app.on('ready', async () => {
     let telegramStore = null;
     let telegramSocket = null;
     let initTelegramWebSocket; // Defined outer scope
-    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
-    const API_KEY = process.env.AGENT_API_KEY || 'st4cker-agent-secret';
+    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL;
+    if (!WEBSOCKET_URL) {
+        console.error('[Telegram] FATAL: TELEGRAM_WEBSOCKET_URL env var is not set. Sync will not work.');
+    }
+    const API_KEY = process.env.AGENT_API_KEY;
+    if (!API_KEY) {
+        console.warn('[Telegram] WARNING: AGENT_API_KEY env var is not set. VPS sync will fail.');
+    }
     // ========================================
     // VPS Sync Helpers (Offline-First)
     // ========================================
     async function syncToVPS(method, apiPath, body) {
+        if (!WEBSOCKET_URL || !API_KEY)
+            return false; // Can't sync without config
         try {
             const res = await fetch(`${WEBSOCKET_URL}/api/v1${apiPath}`, {
                 method,
@@ -627,7 +628,10 @@ electron_1.app.on('ready', async () => {
             const { io: ioClient } = await import('socket.io-client');
             telegramStore = new Store({
                 name: 'telegram-sync',
-                encryptionKey: 'st4cker-telegram-encryption-key'
+                encryptionKey: process.env.TELEGRAM_ENCRYPTION_KEY || (() => {
+                    console.warn('[Telegram] WARNING: TELEGRAM_ENCRYPTION_KEY not set, using default. Set this env var for production.');
+                    return 'st4cker-default-enc-key';
+                })()
             });
             // Initialize WebSocket connection
             initTelegramWebSocket = (token) => {
