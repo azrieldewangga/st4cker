@@ -3,12 +3,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
+const dotenv_1 = __importDefault(require("dotenv"));
 const electron_1 = require("electron");
-console.log('--- STARTING MAIN PROCESS V2 (FRESH BUILD) ---');
 const url_1 = require("url");
 const path_1 = __importDefault(require("path"));
+const fs_1 = require("fs");
 const crypto_1 = require("crypto");
+// Load .env from the correct path (dev vs production)
+const envPaths = [
+    path_1.default.join(process.cwd(), '.env'), // Dev: project root
+    path_1.default.join(__dirname, '..', '.env'), // Production: next to asar
+    path_1.default.join(electron_1.app?.getPath?.('userData') || '', '.env'), // Production: userData folder
+];
+for (const envPath of envPaths) {
+    if ((0, fs_1.existsSync)(envPath)) {
+        dotenv_1.default.config({ path: envPath });
+        console.log(`[Main] Loaded .env from: ${envPath}`);
+        break;
+    }
+}
+console.log('--- STARTING MAIN PROCESS V2 (FRESH BUILD) ---');
 // --- DB Modules ---
 const index_cjs_1 = require("./db/index.cjs");
 const migration_cjs_1 = require("./db/migration.cjs");
@@ -477,10 +491,7 @@ electron_1.app.on('ready', async () => {
     let telegramStore = null;
     let telegramSocket = null;
     let initTelegramWebSocket; // Defined outer scope
-    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL;
-    if (!WEBSOCKET_URL) {
-        console.error('[Telegram] FATAL: TELEGRAM_WEBSOCKET_URL env var is not set. Sync will not work.');
-    }
+    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://100.93.206.95:3000';
     const API_KEY = process.env.AGENT_API_KEY;
     if (!API_KEY) {
         console.warn('[Telegram] WARNING: AGENT_API_KEY env var is not set. VPS sync will fail.');
