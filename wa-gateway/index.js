@@ -6,11 +6,12 @@ const makeWASocket = baileys.default;
 const useMultiFileAuthState = baileys.useMultiFileAuthState;
 const DisconnectReason = baileys.DisconnectReason;
 const makeCacheableSignalKeyStore = baileys.makeCacheableSignalKeyStore;
+const { delay } = baileys;
 
 import express from 'express';
 import pino from 'pino';
 
-const logger = pino({ level: 'warn' });
+const logger = pino({ level: 'trace' }); // Increased logging for debugging
 const app = express();
 app.use(express.json());
 
@@ -23,90 +24,83 @@ const PAIRING_PHONE = process.env.PAIRING_PHONE || '6285190447727';
 let sock = null;
 let isConnected = false;
 let retryCount = 0;
-const MAX_RETRIES = 10;
 
 // ───────────────────────────────────────────
-// Baileys WhatsApp Connection (Pairing Code)
+// Baileys WhatsApp Connection
 // ───────────────────────────────────────────
 async function connectToWhatsApp() {
-    if (retryCount >= MAX_RETRIES) {
-        console.log(`[WA] Max retries reached. Waiting 60s...`);
-        retryCount = 0;
-        setTimeout(() => connectToWhatsApp(), 60000);
-        return;
-    }
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
-    try {
-        const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+    console.log(`[WA] Connecting... (attempt ${retryCount + 1})`);
 
-        console.log(`[WA] Connecting... (attempt ${retryCount + 1})`);
+    sock = makeWASocket({
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, logger)
+        },
+        logger,
+        printQRInTerminal: false, // Must be false for pairing code
+        // Custom browser string often helps with "Couldn't link device"
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        generateHighQualityLinkPreview: false,
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        keepAliveIntervalMs: 30000,
+        connectTimeoutMs: 60000,
+    });
 
-        sock = makeWASocket({
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, logger)
-            },
-            logger,
-            generateHighQualityLinkPreview: false,
-            syncFullHistory: false
-        });
+    sock.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('creds.update', saveCreds);
+    // Request pairing code if not registered
+    if (!state.creds.registered) {
+        // Wait for connection to be 'open' (conceptually) or at least socket init
+        setTimeout(async () => {
+            try {
+                // Ensure we don't request if already connected (race condition)
+                if (isConnected) return;
 
-        // Request pairing code if not registered
-        if (!state.creds.registered) {
-            // Small delay to let socket initialize
-            setTimeout(async () => {
-                try {
-                    const code = await sock.requestPairingCode(PAIRING_PHONE);
-                    console.log('\n╔══════════════════════════════════════════════════╗');
-                    console.log('║              PAIRING CODE                        ║');
-                    console.log(`║                                                  ║`);
-                    console.log(`║       📱  ${code}                            ║`);
-                    console.log(`║                                                  ║`);
-                    console.log('║  Buka WA di HP (6285190447727):                  ║');
-                    console.log('║  Settings > Linked Devices > Link a Device       ║');
-                    console.log('║  > Link with Phone Number > Masukkan kode ini    ║');
-                    console.log('╚══════════════════════════════════════════════════╝\n');
-                } catch (e) {
-                    console.error('[WA] Failed to request pairing code:', e.message);
-                }
-            }, 3000);
-        }
-
-        sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
-
-            if (connection === 'close') {
-                isConnected = false;
-                const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-                console.log(`[WA] Disconnected. Status: ${statusCode}. Reconnect: ${shouldReconnect}`);
-
-                if (shouldReconnect) {
-                    retryCount++;
-                    const delay = Math.min(retryCount * 3000, 30000);
-                    console.log(`[WA] Retry in ${delay / 1000}s...`);
-                    setTimeout(() => connectToWhatsApp(), delay);
-                } else {
-                    console.log('[WA] Logged out! Clear auth and restart:');
-                    console.log('[WA]   docker compose down wa-gateway');
-                    console.log('[WA]   docker volume rm st4cker_wa_auth');
-                    console.log('[WA]   docker compose up -d wa-gateway');
-                }
-            } else if (connection === 'open') {
-                isConnected = true;
-                retryCount = 0;
-                console.log('[WA] ✅ Connected to WhatsApp!');
-                console.log(`[WA] Logged in as: ${sock.user?.id || 'unknown'}`);
+                console.log(`[WA] Requesting Pairing Code for ${PAIRING_PHONE}...`);
+                const code = await sock.requestPairingCode(PAIRING_PHONE);
+                console.log('\n╔══════════════════════════════════════════════════╗');
+                console.log('║              PAIRING CODE                        ║');
+                console.log(`║                                                  ║`);
+                console.log(`║       📱  ${code}                            ║`);
+                console.log(`║                                                  ║`);
+                console.log('║  Buka WA di HP > Link Device > Phone Number      ║');
+                console.log('╚══════════════════════════════════════════════════╝\n');
+            } catch (e) {
+                console.error('[WA] Failed to request pairing code:', e.message);
             }
-        });
-    } catch (error) {
-        console.error('[WA] Fatal error:', error.message);
-        retryCount++;
-        setTimeout(() => connectToWhatsApp(), 10000);
+        }, 6000); // 6s delay to ensure socket is ready
     }
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+
+        if (connection === 'close') {
+            isConnected = false;
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+            console.log(`[WA] Disconnected. Status: ${statusCode}. Reconnect: ${shouldReconnect}`);
+
+            if (shouldReconnect) {
+                if (statusCode === 405) {
+                    // 405 in loop often means temp ban or bad config. Wait longer.
+                    console.log('[WA] Hit 405 error. Waiting 5s before retry...');
+                    await delay(5000);
+                }
+                connectToWhatsApp();
+            } else {
+                console.log('[WA] Logged out! Access token invalid.');
+                console.log('[WA] Run: docker volume rm st4cker_wa_auth && docker compose restart wa-gateway');
+            }
+        } else if (connection === 'open') {
+            isConnected = true;
+            retryCount = 0;
+            console.log('[WA] ✅ Connected to WhatsApp!');
+        }
+    });
 }
 
 // ───────────────────────────────────────────
@@ -122,23 +116,13 @@ app.get('/health', (req, res) => {
 app.post('/send', async (req, res) => {
     try {
         const { to, message } = req.body;
-
-        if (!to || !message) {
-            return res.status(400).json({ error: '"to" and "message" are required' });
-        }
-
-        if (!isConnected || !sock) {
-            return res.status(503).json({ error: 'WhatsApp not connected. Check: docker logs wa-gateway' });
-        }
+        if (!isConnected || !sock) return res.status(503).json({ error: 'Not connected' });
 
         let jid = to.toString().replace(/[^0-9]/g, '') + '@s.whatsapp.net';
-
         await sock.sendMessage(jid, { text: message });
-        console.log(`[WA] ✅ Message sent to ${to}`);
 
-        res.json({ success: true, to, timestamp: new Date().toISOString() });
+        res.json({ success: true });
     } catch (error) {
-        console.error(`[WA] ❌ Failed to send:`, error.message);
         res.status(500).json({ error: error.message });
     }
 });
