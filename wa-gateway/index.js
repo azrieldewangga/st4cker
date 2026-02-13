@@ -6,11 +6,9 @@ const makeWASocket = baileys.default;
 const useMultiFileAuthState = baileys.useMultiFileAuthState;
 const DisconnectReason = baileys.DisconnectReason;
 const makeCacheableSignalKeyStore = baileys.makeCacheableSignalKeyStore;
-const Browsers = baileys.Browsers;
 
 import express from 'express';
 import pino from 'pino';
-import qrcode from 'qrcode-terminal';
 
 const logger = pino({ level: 'warn' });
 const app = express();
@@ -19,17 +17,20 @@ app.use(express.json());
 const PORT = process.env.PORT || 4000;
 const AUTH_DIR = process.env.AUTH_DIR || './auth_state';
 
+// Phone number to pair with (WA Bisnis / OpenClaw)
+const PAIRING_PHONE = process.env.PAIRING_PHONE || '6285190447727';
+
 let sock = null;
 let isConnected = false;
 let retryCount = 0;
 const MAX_RETRIES = 10;
 
 // ───────────────────────────────────────────
-// Baileys WhatsApp Connection
+// Baileys WhatsApp Connection (Pairing Code)
 // ───────────────────────────────────────────
 async function connectToWhatsApp() {
     if (retryCount >= MAX_RETRIES) {
-        console.log(`[WA] Max retries (${MAX_RETRIES}) reached. Restarting in 60s...`);
+        console.log(`[WA] Max retries reached. Waiting 60s...`);
         retryCount = 0;
         setTimeout(() => connectToWhatsApp(), 60000);
         return;
@@ -46,25 +47,35 @@ async function connectToWhatsApp() {
                 keys: makeCacheableSignalKeyStore(state.keys, logger)
             },
             logger,
-            browser: Browsers.ubuntu('Chrome'),
             generateHighQualityLinkPreview: false,
             syncFullHistory: false
         });
 
         sock.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
+        // Request pairing code if not registered
+        if (!state.creds.registered) {
+            // Small delay to let socket initialize
+            setTimeout(async () => {
+                try {
+                    const code = await sock.requestPairingCode(PAIRING_PHONE);
+                    console.log('\n╔══════════════════════════════════════════════════╗');
+                    console.log('║              PAIRING CODE                        ║');
+                    console.log(`║                                                  ║`);
+                    console.log(`║       📱  ${code}                            ║`);
+                    console.log(`║                                                  ║`);
+                    console.log('║  Buka WA di HP (6285190447727):                  ║');
+                    console.log('║  Settings > Linked Devices > Link a Device       ║');
+                    console.log('║  > Link with Phone Number > Masukkan kode ini    ║');
+                    console.log('╚══════════════════════════════════════════════════╝\n');
+                } catch (e) {
+                    console.error('[WA] Failed to request pairing code:', e.message);
+                }
+            }, 3000);
+        }
 
-            if (qr) {
-                retryCount = 0; // Reset on successful QR generation
-                console.log('\n╔══════════════════════════════════════════════╗');
-                console.log('║  SCAN QR CODE INI DENGAN HP BISNIS KAMU!     ║');
-                console.log('║  WhatsApp > Settings > Linked Devices > Link ║');
-                console.log('╚══════════════════════════════════════════════╝\n');
-                qrcode.generate(qr, { small: true });
-                console.log('\n⏳ Menunggu scan... (QR expires in ~20 detik)\n');
-            }
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect } = update;
 
             if (connection === 'close') {
                 isConnected = false;
@@ -75,11 +86,11 @@ async function connectToWhatsApp() {
 
                 if (shouldReconnect) {
                     retryCount++;
-                    const delay = Math.min(retryCount * 3000, 30000); // Backoff: 3s, 6s, 9s... max 30s
+                    const delay = Math.min(retryCount * 3000, 30000);
                     console.log(`[WA] Retry in ${delay / 1000}s...`);
                     setTimeout(() => connectToWhatsApp(), delay);
                 } else {
-                    console.log('[WA] Logged out! To re-pair, restart container:');
+                    console.log('[WA] Logged out! Clear auth and restart:');
                     console.log('[WA]   docker compose down wa-gateway');
                     console.log('[WA]   docker volume rm st4cker_wa_auth');
                     console.log('[WA]   docker compose up -d wa-gateway');
@@ -117,7 +128,7 @@ app.post('/send', async (req, res) => {
         }
 
         if (!isConnected || !sock) {
-            return res.status(503).json({ error: 'WhatsApp not connected. Scan QR: docker logs wa-gateway' });
+            return res.status(503).json({ error: 'WhatsApp not connected. Check: docker logs wa-gateway' });
         }
 
         let jid = to.toString().replace(/[^0-9]/g, '') + '@s.whatsapp.net';
@@ -135,6 +146,5 @@ app.post('/send', async (req, res) => {
 // ───────────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`[WA Gateway] Running on port ${PORT}`);
-    console.log(`[WA Gateway] POST /send { to: "628xxx", message: "hello" }`);
     connectToWhatsApp();
 });
