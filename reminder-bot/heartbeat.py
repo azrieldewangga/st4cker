@@ -62,19 +62,29 @@ def send_whatsapp_message(message):
         logger.error(f"Gagal kirim WA: {e}")
         return False
 
-def check_user_confirmed():
-    """Cek apakah user sudah konfirmasi hari ini"""
+def check_user_response():
+    """
+    Cek response user - return:
+    - 'confirmed' = user mengiyakan (ok, gas, otw, etc)
+    - 'declined' = user menolak/menunda (tidak, nanti, skip, etc)
+    - 'none' = belum ada response
+    """
     try:
+        # Ambil timestamp last message dari user
+        # Ini simplified - sebenarnya perlu cek konten pesan
         response = requests.get(f"{WA_CONFIRMATION_URL}/{TARGET_PHONE}", timeout=5)
         if response.status_code == 200:
             data = response.json()
-            return data.get('confirmed', False)
+            if data.get('confirmed', False):
+                return 'confirmed'
+            # Kalau ada data tapi tidak confirmed, cek apakah ada message lain
+            # Untuk sekarang, anggap 'none' kalau tidak confirmed
     except Exception as e:
-        logger.warning(f"Gagal cek konfirmasi: {e}")
-    return False
+        logger.warning(f"Gagal cek response: {e}")
+    return 'none'
 
 def get_active_override(today_date, user_id):
-    """Cek ada override aktif untuk hari ini"""
+    """Cek ada override aktif untuk tanggal tertentu"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -109,7 +119,8 @@ def log_reminder_sent(schedule_id, user_id, reminder_type, message_content, remi
         conn = get_db_connection()
         cur = conn.cursor()
         
-        log_id = str(__import__('uuid').uuid4())
+        import uuid
+        log_id = str(uuid.uuid4())
         cur.execute("""
             INSERT INTO reminder_logs (id, schedule_id, user_id, type, message_content, reminder_date)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -125,45 +136,6 @@ def log_reminder_sent(schedule_id, user_id, reminder_type, message_content, remi
         logger.error(f"Error logging reminder: {e}")
         return None
 
-def update_confirmation_status(schedule_id, user_id, confirmed_message):
-    """Update log kalau user confirmed"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        cur.execute("""
-            UPDATE reminder_logs
-            SET user_confirmed = true, confirmed_at = NOW(), confirmed_message = %s
-            WHERE schedule_id = %s AND user_id = %s AND user_confirmed = false
-        """, (confirmed_message, schedule_id, user_id))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error updating confirmation: {e}")
-
-def get_todays_logs(user_id, reminder_date):
-    """Ambil log reminder hari ini"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT schedule_id, type, user_confirmed
-            FROM reminder_logs
-            WHERE user_id = %s AND reminder_date = %s
-        """, (user_id, reminder_date))
-        
-        results = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        return {r[0]: {'type': r[1], 'confirmed': r[2]} for r in results}
-    except Exception as e:
-        logger.error(f"Error getting logs: {e}")
-        return {}
-
 def parse_time(time_str):
     """Parse time string HH:MM"""
     try:
@@ -178,6 +150,10 @@ def time_to_minutes(time_str):
         return h * 60 + m
     except:
         return 0
+
+# Keywords
+CONFIRM_KEYWORDS = ['ok', 'oke', 'okee', 'gas', 'otw', 'iya', 'ya', 'yoi', 'siap', 'siapp', 'yuk', 'ayo', 'lanjut', 'gaskeun', 'let\'s go', 'lets go']
+DECLINE_KEYWORDS = ['tidak', 'ga', 'gak', 'nggak', 'skip', 'nanti', 'belum', 'tunda', 'cancel', 'batal', 'no', 'nope']
 
 def check_reminders():
     """Logic reminder utama dengan window 10 menit"""
@@ -207,10 +183,8 @@ def check_reminders():
             if override['action'] == 'skip_all':
                 logger.info(f"Auto-reminder di-skip karena override: {override['reason']}")
                 return
-            elif override['action'] == 'custom_time' and override['custom_time']:
-                logger.info(f"Using custom reminder time: {override['custom_time']}")
         
-        # Ambil semua jadwal hari ini
+        # Ambil semua jadwal hari ini, urutkan by jam mulai
         cur.execute("""
             SELECT id, course_name, start_time, end_time, room, lecturer, day_of_week
             FROM schedules 
@@ -226,11 +200,28 @@ def check_reminders():
         
         logger.info(f"Ada {len(schedules)} matkul hari ini")
         
-        # Cek konfirmasi user
-        user_confirmed = check_user_confirmed()
+        # Cek response user (confirmed/declined/none)
+        user_response = check_user_response()
         
-        # Ambil log hari ini
-        todays_logs = get_todays_logs(user_id, today)
+        # Load state untuk tracking
+        load_state()
+        if today not in reminder_state:
+            reminder_state[today] = {
+                'reminders_sent': {},
+                'user_confirmed': False,
+                'user_declined': False,
+                'response_time': None
+            }
+        
+        today_state = reminder_state[today]
+        
+        # Update state berdasarkan response
+        if user_response == 'confirmed':
+            today_state['user_confirmed'] = True
+            today_state['response_time'] = current_time
+            save_state()
+            logger.info("User confirmed/reminder acknowledged")
+        # Note: decline detection lebih kompleks, perlu cek pesan langsung
         
         # Proses setiap jadwal
         for idx, schedule in enumerate(schedules):
@@ -249,24 +240,28 @@ def check_reminders():
             lecturer_info = f"\n👨‍🏫 Dosen: {lecturer}" if lecturer else ""
             
             # Cek sudah ada log untuk schedule ini
-            existing_log = todays_logs.get(sched_id)
-            if existing_log:
-                # Sudah pernah kirim reminder untuk schedule ini
-                continue
+            cur.execute("""
+                SELECT id FROM reminder_logs 
+                WHERE schedule_id = %s AND reminder_date = %s
+            """, (sched_id, today))
+            existing_log = cur.fetchone()
             
-            if not user_confirmed:
-                # Mode: Belum konfirmasi
+            if existing_log:
+                continue  # Sudah pernah kirim reminder
+            
+            if not today_state['user_confirmed']:
+                # Mode: Belum konfirmasi (atau menolak/tunda)
                 is_first_class = (idx == 0)
                 
                 if is_first_class:
                     # Matkul pertama
                     if start_hour == 8:
-                        # SPECIAL: Matkul jam 8:xx - exact jam 6:00
-                        if current_hour == 6 and current_minute == 0:
+                        # SPECIAL: Matkul jam 8:xx - reminder EXACT jam 05:45
+                        if current_hour == 5 and current_minute == 45:
                             message = f"⏰ PENGINGAT PAGI:\n\nMatkul pertama hari ini:\n📚 {course_name}\n🕐 Jam: {start_time}{room_info}{lecturer_info}\n\nJangan lupa berangkat 1 jam 30 menit lebih awal ya!\n\nReply 'ok' atau 'gas' kalau sudah otw."
                             if send_whatsapp_message(message):
-                                log_reminder_sent(sched_id, user_id, 'first_6am', message, today)
-                                logger.info(f"Reminder jam 6:00 (exact) dikirim untuk {course_name}")
+                                log_reminder_sent(sched_id, user_id, 'first_545am', message, today)
+                                logger.info(f"Reminder jam 05:45 (exact) dikirim untuk {course_name}")
                     else:
                         # Window 10 menit untuk 1.5 jam sebelum
                         reminder_start = start_total_minutes - 90
@@ -278,12 +273,32 @@ def check_reminders():
                                 log_reminder_sent(sched_id, user_id, 'first_90min', message, today)
                                 logger.info(f"Reminder 90 menit (window) dikirim untuk {course_name}")
                     
-                    # Remind ulang kalau 10 menit setelah reminder pertama belum konfirmasi
-                    # (Ini tetap pakai state file karena butuh tracking sementara)
-                    # ... logic retry tetap sama
+                    # Remind ulang kalau 10 menit setelah reminder pertama belum ada response positif
+                    reminder_key = f"{sched_id}_sent"
+                    if reminder_key in today_state.get('first_reminder_sent', {}):
+                        sent_time = today_state['first_reminder_sent'][reminder_key]
+                        sent_minutes = time_to_minutes(sent_time)
+                        retry_time = sent_minutes + 10
+                        
+                        if current_total_minutes == retry_time and not today_state['user_confirmed']:
+                            retry_key = f"{sched_id}_retry"
+                            if retry_key not in today_state.get('retries_sent', {}):
+                                message = f"⏰ REMINDER ULANG:\n\nJangan lupa matkul {course_name} jam {start_time}!\n\nReply 'ok' atau 'gas' kalau sudah otw ya!\n\n(Kalau tidak bisa berangkat, reply 'skip' atau 'nanti')"
+                                if send_whatsapp_message(message):
+                                    if 'retries_sent' not in today_state:
+                                        today_state['retries_sent'] = {}
+                                    today_state['retries_sent'][retry_key] = current_time
+                                    save_state()
+                                    logger.info(f"Reminder ulang dikirim untuk {course_name}")
+                    else:
+                        # Catat waktu reminder pertama dikirim
+                        if 'first_reminder_sent' not in today_state:
+                            today_state['first_reminder_sent'] = {}
+                        today_state['first_reminder_sent'][reminder_key] = current_time
+                        save_state()
             else:
                 # Mode: Sudah konfirmasi
-                if idx > 0:  # Skip matkul pertama
+                if idx > 0:  # Skip matkul pertama karena user udah otw
                     reminder_start = start_total_minutes - 15
                     reminder_end = reminder_start + 10
                     
@@ -304,7 +319,8 @@ if __name__ == "__main__":
     logger.info("ReminderBot Aktif - Smart Reminder System")
     logger.info("Target: 1.5 jam sebelum matkul pertama (window 10 menit)")
     logger.info("        15 menit sebelum matkul berikutnya (window 10 menit)")
-    logger.info("        Jam 8:xx = exact jam 6:00")
+    logger.info("        Jam 8:xx = exact jam 05:45")
+    logger.info("        Konfirmasi: ok/gas/otw/etc = lanjut, selain itu = tunda")
     logger.info("Override & Logging: ENABLED")
     logger.info("="*50)
     
