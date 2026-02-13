@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Baileys needs git for some dependencies
 RUN apk add --no-cache git
