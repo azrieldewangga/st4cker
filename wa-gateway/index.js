@@ -4,6 +4,34 @@ const require = createRequire(import.meta.url);
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+
+// Clean up Chrome lock files to prevent "profile in use" errors
+const AUTH_PATH = '/app/auth_state';
+function cleanupLockFiles() {
+    try {
+        if (fs.existsSync(AUTH_PATH)) {
+            const files = fs.readdirSync(AUTH_PATH);
+            for (const file of files) {
+                if (file.includes('SingletonLock') || file.includes('SingletonCookie') || file.includes('SingletonSocket')) {
+                    const lockPath = path.join(AUTH_PATH, file);
+                    try {
+                        fs.unlinkSync(lockPath);
+                        console.log(`[WA] Cleaned up lock file: ${file}`);
+                    } catch (e) {
+                        // Ignore errors
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        // Ignore errors
+    }
+}
+
+// Run cleanup on startup
+cleanupLockFiles();
 
 const app = express();
 app.use(express.json());
