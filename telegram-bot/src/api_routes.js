@@ -19,6 +19,20 @@ function toWIBEndOfDay(dateInput) {
 }
 import { getEntityCache } from './commands/task.js';
 
+// Helper: Resolve course name from synonym/abbreviation
+function resolveCourseName(input) {
+    if (!input) return input;
+    const entityCache = getEntityCache();
+    if (entityCache && entityCache['matkul']) {
+        const resolved = entityCache['matkul'].get(input.toLowerCase());
+        if (resolved) {
+            console.log(`[API] Resolved course: "${input}" -> "${resolved}"`);
+            return resolved;
+        }
+    }
+    return input;
+}
+
 const router = express.Router();
 
 // Middleware: API Key Auth
@@ -823,7 +837,7 @@ router.post('/schedules', [
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { courseName, courseCode, dayOfWeek, startTime, endTime, room, lecturer, semester } = req.body;
+        let { courseName, courseCode, dayOfWeek, startTime, endTime, room, lecturer, semester } = req.body;
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
@@ -832,6 +846,9 @@ router.post('/schedules', [
 
         const dayNum = parseDay(dayOfWeek);
         if (!dayNum) return res.status(400).json({ error: 'Hari tidak valid. Gunakan: Senin, Selasa, Rabu, Kamis, Jumat, Sabtu, atau Minggu' });
+
+        // Resolve singkatan matkul (komber → Komputasi Bergerak)
+        courseName = resolveCourseName(courseName);
 
         const newSchedule = {
             id: crypto.randomUUID(),
@@ -883,6 +900,11 @@ router.patch('/schedules/:id', [
         // Convert day name to number if provided
         if (updates.dayOfWeek) {
             updates.dayOfWeek = parseDay(updates.dayOfWeek);
+        }
+
+        // Resolve singkatan matkul jika courseName diupdate
+        if (updates.courseName) {
+            updates.courseName = resolveCourseName(updates.courseName);
         }
 
         await db.update(schedules)
