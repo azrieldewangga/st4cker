@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
 import { db } from './db/index.js';
-import { assignments, projects, transactions, users } from './db/schema.js';
+import { assignments, projects, transactions, users, schedules } from './db/schema.js';
 import { eq, and, desc, like } from 'drizzle-orm';
 import crypto from 'crypto';
 import { broadcastEvent } from './server.js';
@@ -731,6 +731,205 @@ router.delete('/transactions/:id', [
         res.json({ success: true, message: 'Transaction deleted' });
     } catch (error) {
         console.error('[API] Delete Transaction Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// ==========================================
+// SCHEDULES (JADWAL KULIAH) ENDPOINTS
+// ==========================================
+
+// Helper: Day name to number
+const DAY_MAP = {
+    'senin': 1, 'selasa': 2, 'rabu': 3, 'kamis': 4, 'jumat': 5, 'sabtu': 6, 'minggu': 7,
+    'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7
+};
+
+function parseDay(dayInput) {
+    if (typeof dayInput === 'number') return dayInput;
+    const normalized = dayInput.toString().toLowerCase().trim();
+    return DAY_MAP[normalized] || null;
+}
+
+// GET /api/v1/schedules
+router.get('/schedules', [
+    query('day').optional().isString(),
+    query('active').optional().isBoolean(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { day, active } = req.query;
+        
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+
+        let conditions = [eq(schedules.userId, defaultUserId)];
+        
+        if (day) {
+            const dayNum = parseDay(day);
+            if (dayNum) conditions.push(eq(schedules.dayOfWeek, dayNum));
+        }
+        if (active !== undefined) {
+            conditions.push(eq(schedules.isActive, active === 'true'));
+        }
+
+        const data = await db.select().from(schedules)
+            .where(and(...conditions))
+            .orderBy(schedules.dayOfWeek, schedules.startTime);
+
+        // Format response dengan nama hari
+        const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        const formatted = data.map(s => ({
+            ...s,
+            dayName: dayNames[s.dayOfWeek],
+        }));
+
+        res.json({ success: true, count: data.length, data: formatted });
+    } catch (error) {
+        console.error('[API] Get Schedules Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/schedules/:id
+router.get('/schedules/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const data = await db.select().from(schedules)
+            .where(eq(schedules.id, req.params.id))
+            .limit(1);
+        if (data.length === 0) return res.status(404).json({ error: 'Schedule not found' });
+        
+        const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        res.json({ 
+            success: true, 
+            data: { ...data[0], dayName: dayNames[data[0].dayOfWeek] } 
+        });
+    } catch (error) {
+        console.error('[API] Get Schedule Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// POST /api/v1/schedules - Tambah matkul baru
+router.post('/schedules', [
+    body('courseName').notEmpty().withMessage('Nama matkul wajib diisi'),
+    body('dayOfWeek').notEmpty().withMessage('Hari wajib diisi (1-7 atau nama hari)'),
+    body('startTime').matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Format jam HH:MM (contoh: 08:00)'),
+    body('endTime').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Format jam HH:MM'),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { courseName, courseCode, dayOfWeek, startTime, endTime, room, lecturer, semester } = req.body;
+
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+        const userSemester = usersList[0].semester || 4;
+
+        const dayNum = parseDay(dayOfWeek);
+        if (!dayNum) return res.status(400).json({ error: 'Hari tidak valid. Gunakan: Senin, Selasa, Rabu, Kamis, Jumat, Sabtu, atau Minggu' });
+
+        const newSchedule = {
+            id: crypto.randomUUID(),
+            userId: defaultUserId,
+            courseName,
+            courseCode: courseCode || null,
+            dayOfWeek: dayNum,
+            startTime,
+            endTime: endTime || null,
+            room: room || null,
+            lecturer: lecturer || null,
+            semester: semester || userSemester,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        await db.insert(schedules).values(newSchedule);
+
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'schedule.created',
+            payload: newSchedule
+        });
+
+        res.status(201).json({ success: true, data: newSchedule });
+    } catch (error) {
+        console.error('[API] Create Schedule Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// PATCH /api/v1/schedules/:id - Update jadwal (pindah hari/jam, ganti ruang/dosen)
+router.patch('/schedules/:id', [
+    param('id').isUUID(),
+    body('dayOfWeek').optional().custom((value) => {
+        if (parseDay(value)) return true;
+        throw new Error('Hari tidak valid');
+    }),
+    body('startTime').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
+    body('endTime').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        updates.updatedAt = new Date();
+
+        // Convert day name to number if provided
+        if (updates.dayOfWeek) {
+            updates.dayOfWeek = parseDay(updates.dayOfWeek);
+        }
+
+        await db.update(schedules)
+            .set(updates)
+            .where(eq(schedules.id, id));
+
+        // Fetch updated record
+        const updated = await db.select().from(schedules).where(eq(schedules.id, id)).limit(1);
+        
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
+
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'schedule.updated',
+            payload: updated[0]
+        });
+
+        res.json({ success: true, message: 'Jadwal berhasil diupdate', data: updated[0] });
+    } catch (error) {
+        console.error('[API] Update Schedule Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// DELETE /api/v1/schedules/:id - Hapus matkul
+router.delete('/schedules/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await db.delete(schedules).where(eq(schedules.id, id));
+        
+        const usersList = await db.select().from(users).limit(1);
+        const defaultUserId = usersList[0].telegramUserId;
+
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'schedule.deleted',
+            payload: { id, courseName: 'deleted' }
+        });
+
+        res.json({ success: true, message: 'Matkul berhasil dihapus' });
+    } catch (error) {
+        console.error('[API] Delete Schedule Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

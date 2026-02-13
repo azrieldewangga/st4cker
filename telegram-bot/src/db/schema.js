@@ -144,3 +144,25 @@ export const pairingCodes = pgTable('pairing_codes', {
         pairingExpiresIdx: index('idx_pairing_expires').on(table.expiresAt),
     };
 });
+
+// --- SCHEDULES / JADWAL KULIAH ---
+export const schedules = pgTable('schedules', {
+    id: text('id').primaryKey(), // UUID
+    userId: text('user_id').notNull().references(() => users.telegramUserId, { onDelete: 'cascade' }),
+    courseName: text('course_name').notNull(), // Nama matkul
+    courseCode: text('course_code'), // Kode matkul (opsional)
+    dayOfWeek: integer('day_of_week').notNull(), // 1=Senin, 2=Selasa, ..., 7=Minggu
+    startTime: text('start_time').notNull(), // Format HH:MM (WIB)
+    endTime: text('end_time'), // Format HH:MM (WIB), opsional
+    room: text('room'), // Ruangan kelas
+    lecturer: text('lecturer'), // Nama dosen
+    isActive: boolean('is_active').default(true), // Aktif/tidak
+    semester: integer('semester').default(4),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+    return {
+        schedUserIdx: index('idx_schedules_user').on(table.userId),
+        schedDayIdx: index('idx_schedules_day').on(table.dayOfWeek),
+    };
+});
