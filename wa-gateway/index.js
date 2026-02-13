@@ -13,7 +13,7 @@ import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 
-const logger = pino({ level: 'error' }); // Minimal logs
+const logger = pino({ level: 'error' });
 const app = express();
 app.use(express.json());
 
@@ -24,7 +24,7 @@ let sock = null;
 let isConnected = false;
 
 // ───────────────────────────────────────────
-// Baileys WhatsApp Connection (QR Code)
+// Baileys WhatsApp Connection
 // ───────────────────────────────────────────
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -37,8 +37,8 @@ async function connectToWhatsApp() {
             keys: makeCacheableSignalKeyStore(state.keys, logger)
         },
         logger,
-        printQRInTerminal: false, // Manual handling
-        browser: Browsers.baileys('Desktop'), // Default Baileys browser
+        printQRInTerminal: false,
+        browser: Browsers.baileys('Desktop'),
         generateHighQualityLinkPreview: false,
         syncFullHistory: false,
         connectTimeoutMs: 60000,
@@ -54,7 +54,6 @@ async function connectToWhatsApp() {
             console.log('║  SCAN QR CODE INI (HP BISNIS)                ║');
             console.log('╚══════════════════════════════════════════════╝\n');
             qrcode.generate(qr, { small: true });
-            console.log('\n⏳ Menunggu scan...');
         }
 
         if (connection === 'close') {
@@ -64,19 +63,16 @@ async function connectToWhatsApp() {
 
             console.log(`[WA] Closed. Status: ${statusCode}`);
 
-            // 405 / 403 / 401 Critical errors -> Clear Auth & Restart
-            if (statusCode === 405 || statusCode === 403 || statusCode === 401) {
-                console.log('[WA] Critical session error. Clearing auth and restarting...');
-                try {
-                    sock.end();
-                    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-                    console.log('[WA] Auth cleared. Rebooting...');
-                    process.exit(1); // Docker will restart it fresh
-                } catch (e) {
-                    console.error('[WA] Failed to clear auth:', e);
-                }
+            // 405 Method Not Allowed / 403 Forbidden -> Fatal Auth Error
+            if (statusCode === 405 || statusCode === 403) {
+                console.log(`[WA] Fatal error ${statusCode}. Exiting container to reset...`);
+                // Jangan paksa hapus file disini kalau EBUSY.
+                // Biarkan container mati, dan kita andalkan manual reset volume
+                // atau exit clean biar docker restart.
+                process.exit(1);
             } else if (shouldReconnect) {
-                connectToWhatsApp();
+                // Retry
+                setTimeout(() => connectToWhatsApp(), 2000);
             } else {
                 console.log('[WA] Logged out manually.');
             }
@@ -84,11 +80,6 @@ async function connectToWhatsApp() {
             isConnected = true;
             console.log('[WA] ✅ Connected as ' + sock.user?.id);
         }
-    });
-
-    // Handle initial errors
-    sock.ev.on('connection.error', (err) => {
-        console.error('[WA] Connection error:', err);
     });
 }
 
