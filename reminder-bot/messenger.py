@@ -16,27 +16,28 @@ DB_CONFIG = {
     "password": os.environ.get("DB_PASS", "Parkit234")
 }
 
-# Telegram bridge endpoint (st4cker-bot container)
-SEND_API_URL = os.environ.get("SEND_API_URL", "http://st4cker-bot:3000/send-message")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1168825716")
-REMINDER_SECRET = os.environ.get("REMINDER_SECRET", "")
+# WhatsApp Gateway endpoint
+WA_API_URL = os.environ.get("WA_API_URL", "http://wa-gateway:4000/send")
+TARGET_PHONE = os.environ.get("TARGET_PHONE", "6281311417727")
 
-def send_to_telegram(message):
+def send_to_whatsapp(message):
     try:
-        payload = {"chatId": TELEGRAM_CHAT_ID, "message": message}
-        headers = {"Content-Type": "application/json"}
-        if REMINDER_SECRET:
-            headers["x-reminder-secret"] = REMINDER_SECRET
-        
-        response = requests.post(SEND_API_URL, json=payload, headers=headers, timeout=15)
+        payload = {"to": TARGET_PHONE, "message": message}
+        response = requests.post(WA_API_URL, json=payload, timeout=15)
         
         if response.status_code == 200:
             return True
-        else:
-            logger.error(f"API responded {response.status_code}: {response.text}")
+        elif response.status_code == 503:
+            logger.warning("WhatsApp belum connected. Cek QR code: docker logs wa-gateway")
             return False
+        else:
+            logger.error(f"WA Gateway responded {response.status_code}: {response.text}")
+            return False
+    except requests.exceptions.ConnectionError:
+        logger.warning("WA Gateway belum ready, coba lagi nanti...")
+        return False
     except Exception as e:
-        logger.error(f"Gagal kirim Telegram: {e}")
+        logger.error(f"Gagal kirim WA: {e}")
         return False
 
 def poll_outbox():
@@ -49,9 +50,9 @@ def poll_outbox():
         
         for task_id, msg in tasks:
             logger.info(f"Mengirim pesan ID {task_id}...")
-            if send_to_telegram(msg):
+            if send_to_whatsapp(msg):
                 cur.execute("UPDATE outbox SET status = 'sent', sent_at = NOW() WHERE id = %s", (task_id,))
-                logger.info(f"✅ Pesan {task_id} sukses terkirim via Telegram!")
+                logger.info(f"✅ Pesan {task_id} terkirim via WhatsApp!")
             else:
                 logger.warning(f"❌ Gagal mengirim pesan {task_id}, akan dicoba lagi nanti.")
         
@@ -63,8 +64,8 @@ def poll_outbox():
 
 if __name__ == "__main__":
     logger.info("Messenger Aktif - Menunggu antrean outbox...")
-    logger.info(f"Target: Telegram Chat ID {TELEGRAM_CHAT_ID}")
-    logger.info(f"API: {SEND_API_URL}")
+    logger.info(f"Target WA: {TARGET_PHONE}")
+    logger.info(f"Gateway: {WA_API_URL}")
     while True:
         poll_outbox()
-        time.sleep(60)  # Cek tiap 1 menit (was 5 menit)
+        time.sleep(60)  # Cek tiap 1 menit
