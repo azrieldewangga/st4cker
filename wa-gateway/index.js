@@ -1,7 +1,6 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-// Baileys is CJS — use require for reliable imports
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -11,6 +10,7 @@ const {
 
 import express from 'express';
 import pino from 'pino';
+import qrcode from 'qrcode-terminal';
 
 const logger = pino({ level: 'warn' });
 const app = express();
@@ -33,7 +33,7 @@ async function connectToWhatsApp() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger)
         },
-        printQRInTerminal: true,
+        // printQRInTerminal removed — deprecated in v6.7+
         logger,
         browser: ['St4cker Reminder', 'Chrome', '1.0.0'],
         generateHighQualityLinkPreview: false
@@ -44,11 +44,14 @@ async function connectToWhatsApp() {
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
+        // Manual QR display (replaces deprecated printQRInTerminal)
         if (qr) {
-            console.log('\n╔══════════════════════════════════════════╗');
-            console.log('║   SCAN QR CODE INI DENGAN HP BISNIS!     ║');
-            console.log('║   WA > Linked Devices > Link a Device    ║');
-            console.log('╚══════════════════════════════════════════╝\n');
+            console.log('\n╔══════════════════════════════════════════════╗');
+            console.log('║  SCAN QR CODE INI DENGAN HP BISNIS KAMU!     ║');
+            console.log('║  WhatsApp > Settings > Linked Devices > Link ║');
+            console.log('╚══════════════════════════════════════════════╝\n');
+            qrcode.generate(qr, { small: true });
+            console.log('\n⏳ Menunggu scan...\n');
         }
 
         if (connection === 'close') {
