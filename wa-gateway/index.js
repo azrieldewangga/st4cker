@@ -1,86 +1,90 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const baileys = require('@whiskeysockets/baileys');
-const makeWASocket = baileys.default;
-const useMultiFileAuthState = baileys.useMultiFileAuthState;
-const DisconnectReason = baileys.DisconnectReason;
-const makeCacheableSignalKeyStore = baileys.makeCacheableSignalKeyStore;
-const { delay, Browsers } = baileys;
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const express = require('express');
 
-import express from 'express';
-import pino from 'pino';
-import qrcode from 'qrcode-terminal';
-import fs from 'fs';
-
-const logger = pino({ level: 'error' });
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 4000;
-const AUTH_DIR = process.env.AUTH_DIR || './auth_state';
 
-let sock = null;
+let client = null;
 let isConnected = false;
+let isReady = false;
 
 // ───────────────────────────────────────────
-// Baileys WhatsApp Connection
+// WhatsApp Client with Puppeteer
 // ───────────────────────────────────────────
-async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+async function initWhatsApp() {
+    console.log('[WA] Initializing WhatsApp client...');
 
-    console.log('[WA] Starting connection...');
-
-    sock = makeWASocket({
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, logger)
-        },
-        logger,
-        printQRInTerminal: false,
-        browser: Browsers.baileys('Desktop'),
-        generateHighQualityLinkPreview: false,
-        syncFullHistory: false,
-        connectTimeoutMs: 60000,
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-            console.log('\n╔══════════════════════════════════════════════╗');
-            console.log('║  SCAN QR CODE INI (HP BISNIS)                ║');
-            console.log('╚══════════════════════════════════════════════╝\n');
-            qrcode.generate(qr, { small: true });
-        }
-
-        if (connection === 'close') {
-            isConnected = false;
-            const statusCode = lastDisconnect?.error?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-            console.log(`[WA] Closed. Status: ${statusCode}`);
-
-            // 405 Method Not Allowed / 403 Forbidden -> Fatal Auth Error
-            if (statusCode === 405 || statusCode === 403) {
-                console.log(`[WA] Fatal error ${statusCode}. Exiting container to reset...`);
-                // Jangan paksa hapus file disini kalau EBUSY.
-                // Biarkan container mati, dan kita andalkan manual reset volume
-                // atau exit clean biar docker restart.
-                process.exit(1);
-            } else if (shouldReconnect) {
-                // Retry
-                setTimeout(() => connectToWhatsApp(), 2000);
-            } else {
-                console.log('[WA] Logged out manually.');
-            }
-        } else if (connection === 'open') {
-            isConnected = true;
-            console.log('[WA] ✅ Connected as ' + sock.user?.id);
+    client = new Client({
+        authStrategy: new LocalAuth({
+            dataPath: '/app/auth_state'
+        }),
+        puppeteer: {
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu'
+            ]
         }
     });
+
+    // QR Code event
+    client.on('qr', (qr) => {
+        console.log('\n╔══════════════════════════════════════════════╗');
+        console.log('║  SCAN QR CODE INI (HP BISNIS)                ║');
+        console.log('╚══════════════════════════════════════════════╝\n');
+        qrcode.generate(qr, { small: true });
+        isConnected = false;
+        isReady = false;
+    });
+
+    // Loading screen
+    client.on('loading_screen', (percent, message) => {
+        console.log(`[WA] Loading: ${percent}% - ${message}`);
+    });
+
+    // Authenticated
+    client.on('authenticated', () => {
+        console.log('[WA] ✅ Authenticated!');
+        isConnected = true;
+    });
+
+    // Auth failure
+    client.on('auth_failure', (msg) => {
+        console.error('[WA] ❌ Auth failure:', msg);
+        isConnected = false;
+        isReady = false;
+    });
+
+    // Ready to use
+    client.on('ready', () => {
+        console.log('[WA] ✅ Client is ready!');
+        isConnected = true;
+        isReady = true;
+    });
+
+    // Disconnected
+    client.on('disconnected', (reason) => {
+        console.log('[WA] ❌ Disconnected:', reason);
+        isConnected = false;
+        isReady = false;
+        // Re-initialize after disconnect
+        setTimeout(() => initWhatsApp(), 5000);
+    });
+
+    // Initialize
+    await client.initialize();
 }
 
 // ───────────────────────────────────────────
@@ -88,7 +92,7 @@ async function connectToWhatsApp() {
 // ───────────────────────────────────────────
 app.get('/health', (req, res) => {
     res.json({
-        status: isConnected ? 'connected' : 'disconnected',
+        status: isReady ? 'connected' : (isConnected ? 'authenticating' : 'disconnected'),
         service: 'wa-gateway'
     });
 });
@@ -96,13 +100,28 @@ app.get('/health', (req, res) => {
 app.post('/send', async (req, res) => {
     try {
         const { to, message } = req.body;
-        if (!isConnected || !sock) return res.status(503).json({ error: 'Not connected' });
 
-        let jid = to.toString().replace(/[^0-9]/g, '') + '@s.whatsapp.net';
-        await sock.sendMessage(jid, { text: message });
+        if (!isReady || !client) {
+            return res.status(503).json({ error: 'WhatsApp not ready' });
+        }
 
-        res.json({ success: true });
+        if (!to || !message) {
+            return res.status(400).json({ error: 'Missing "to" or "message" field' });
+        }
+
+        // Format number: remove non-digits and add @c.us suffix
+        const number = to.toString().replace(/[^0-9]/g, '');
+        const chatId = number + '@c.us';
+
+        const response = await client.sendMessage(chatId, message);
+        
+        res.json({ 
+            success: true, 
+            messageId: response.id.id,
+            timestamp: response.timestamp
+        });
     } catch (error) {
+        console.error('[WA] Send error:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -110,5 +129,5 @@ app.post('/send', async (req, res) => {
 // ───────────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`[WA Gateway] Running on port ${PORT}`);
-    connectToWhatsApp();
+    initWhatsApp();
 });
