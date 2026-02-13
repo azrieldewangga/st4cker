@@ -43,6 +43,7 @@ services:
       - TZ=Asia/Jakarta
       # Connect to LOCAL DB service (service name: "postgres", port: 5432)
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-st4cker_db}
+      - REMINDER_SECRET=${REMINDER_SECRET:-r3m1nd3r_s3cr3t}
       # Load other secrets (Telegram, Gemini, etc.)
     env_file:
       - telegram-bot/.env # Assuming .env is inside telegram-bot folder
@@ -70,10 +71,15 @@ services:
     restart: always
     environment:
       - TZ=Asia/Jakarta
+      - TELEGRAM_CHAT_ID=1168825716
+      - REMINDER_SECRET=${REMINDER_SECRET:-r3m1nd3r_s3cr3t}
+      - SEND_API_URL=http://st4cker-bot:3000/send-message
     networks:
       - st4cker-net
     depends_on:
       postgres:
+        condition: service_healthy
+      st4cker-bot:
         condition: service_healthy
 
 volumes:

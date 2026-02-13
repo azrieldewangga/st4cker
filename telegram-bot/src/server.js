@@ -79,6 +79,36 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'st4cker-telegram-bot-pg' });
 });
 
+// ---------------------------------------------------------------
+// Reminder Bot → Telegram Bridge
+// Called by reminder-bot container to send schedule reminders
+// ---------------------------------------------------------------
+app.post('/send-message', async (req, res) => {
+    try {
+        // Auth check (shared secret between containers)
+        const secret = req.headers['x-reminder-secret'] || req.body.secret;
+        if (process.env.REMINDER_SECRET && secret !== process.env.REMINDER_SECRET) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { chatId, message } = req.body;
+        if (!chatId || !message) {
+            return res.status(400).json({ error: 'chatId and message are required' });
+        }
+
+        // Lazy import to avoid circular dependency (bot.js imports server.js)
+        const botModule = await import('./bot.js');
+        const bot = botModule.default;
+
+        await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        console.log(`[Reminder] Message sent to ${chatId}`);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[Reminder] Failed to send message:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Pairing API Endpoints
 app.post('/api/generate-pairing', pairingLimiter, async (req, res) => {
     try {
