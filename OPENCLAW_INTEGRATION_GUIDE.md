@@ -94,11 +94,11 @@ If you need to paste a JSON schema for the tools, use this:
 ```json
 {
   "name": "add_schedule",
-  "description": "Menambahkan jadwal kuliah baru ke database.",
+  "description": "Menambahkan jadwal kuliah baru ke database. Bisa pakai singkatan matkul (komber, kjk, ppl, sister, dll).",
   "parameters": {
     "type": "object",
     "properties": {
-      "courseName": { "type": "string", "description": "Nama matkul (contoh: Pemrograman Web)" },
+      "courseName": { "type": "string", "description": "Nama matkul atau singkatan (contoh: Pemrograman Web, komber, kjk, ppl, sister, pemjar)" },
       "courseCode": { "type": "string", "description": "Kode matkul (opsional, contoh: PWEB-123)" },
       "dayOfWeek": { "type": "string", "description": "Hari (Senin, Selasa, Rabu, Kamis, Jumat, Sabtu, Minggu)" },
       "startTime": { "type": "string", "description": "Jam mulai format HH:MM (contoh: 08:00)" },
@@ -111,6 +111,15 @@ If you need to paste a JSON schema for the tools, use this:
 }
 ```
 *(API Route: `POST /api/v1/schedules`)*
+
+**Singkatan yang didukung:**
+- `komber` / `kb` → Komputasi Bergerak
+- `kjk` → Keamanan Jaringan dan Kriptografi  
+- `ppl` → Pengembangan Perangkat Lunak
+- `sister` → Sistem Terdistribusi
+- `pemjar` / `pj` → Pemrograman Jaringan
+- `wspk` → Workshop Sistem Pendukung Keputusan
+- Tambahkan `prak` di depan untuk praktikum (contoh: `prak komber`)
 
 #### Tool: `update_schedule`
 *Description: Update/pindahkan jadwal matkul.*
