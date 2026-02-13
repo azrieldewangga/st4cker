@@ -166,3 +166,40 @@ export const schedules = pgTable('schedules', {
         schedDayIdx: index('idx_schedules_day').on(table.dayOfWeek),
     };
 });
+
+// --- REMINDER LOGS ---
+export const reminderLogs = pgTable('reminder_logs', {
+    id: text('id').primaryKey(),
+    scheduleId: text('schedule_id').notNull().references(() => schedules.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull().references(() => users.telegramUserId, { onDelete: 'cascade' }),
+    sentAt: timestamp('sent_at').defaultNow(),
+    type: text('type').notNull(), // 'first_6am', 'first_90min', '15min', 'retry', 'manual'
+    messageContent: text('message_content'),
+    userConfirmed: boolean('user_confirmed').default(false),
+    confirmedAt: timestamp('confirmed_at'),
+    confirmedMessage: text('confirmed_message'),
+    reminderDate: text('reminder_date').notNull(), // YYYY-MM-DD
+}, (table) => {
+    return {
+        logUserIdx: index('idx_reminder_logs_user').on(table.userId),
+        logDateIdx: index('idx_reminder_logs_date').on(table.reminderDate),
+        logScheduleIdx: index('idx_reminder_logs_schedule').on(table.scheduleId),
+    };
+});
+
+// --- REMINDER OVERRIDES ---
+export const reminderOverrides = pgTable('reminder_overrides', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.telegramUserId, { onDelete: 'cascade' }),
+    overrideDate: text('override_date').notNull(), // YYYY-MM-DD
+    action: text('action').notNull(), // 'skip_all', 'custom_time'
+    reason: text('reason'),
+    customTime: text('custom_time'), // Kalau action = custom_time
+    createdAt: timestamp('created_at').defaultNow(),
+    isActive: boolean('is_active').default(true),
+}, (table) => {
+    return {
+        overrideUserIdx: index('idx_reminder_overrides_user').on(table.userId),
+        overrideDateIdx: index('idx_reminder_overrides_date').on(table.overrideDate),
+    };
+});

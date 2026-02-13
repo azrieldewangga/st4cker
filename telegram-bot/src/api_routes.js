@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
 import { db } from './db/index.js';
-import { assignments, projects, transactions, users, schedules } from './db/schema.js';
+import { assignments, projects, transactions, users, schedules, reminderLogs, reminderOverrides } from './db/schema.js';
 import { eq, and, desc, like } from 'drizzle-orm';
 import crypto from 'crypto';
 import { broadcastEvent } from './server.js';
@@ -952,6 +952,235 @@ router.delete('/schedules/:id', [
         res.json({ success: true, message: 'Matkul berhasil dihapus' });
     } catch (error) {
         console.error('[API] Delete Schedule Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// ==========================================
+// REMINDER ENDPOINTS (OpenClaw Integration)
+// ==========================================
+
+// GET /api/v1/reminders/today - Status reminder hari ini
+router.get('/reminders/today', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        const today = new Date().toISOString().split('T')[0];
+        const dayOfWeek = new Date().getDay() || 7; // 1=Senin, 7=Minggu
+        
+        // Ambil jadwal hari ini
+        const todaysSchedules = await db.select().from(schedules)
+            .where(and(
+                eq(schedules.userId, defaultUserId),
+                eq(schedules.dayOfWeek, dayOfWeek),
+                eq(schedules.isActive, true)
+            ))
+            .orderBy(schedules.startTime);
+        
+        // Ambil log reminder hari ini
+        const todayLogs = await db.select().from(reminderLogs)
+            .where(and(
+                eq(reminderLogs.userId, defaultUserId),
+                eq(reminderLogs.reminderDate, today)
+            ));
+        
+        // Ambil active override hari ini
+        const todayOverride = await db.select().from(reminderOverrides)
+            .where(and(
+                eq(reminderOverrides.userId, defaultUserId),
+                eq(reminderOverrides.overrideDate, today),
+                eq(reminderOverrides.isActive, true)
+            ))
+            .limit(1);
+        
+        // Format response
+        const scheduleStatus = todaysSchedules.map(sched => {
+            const log = todayLogs.find(l => l.scheduleId === sched.id);
+            return {
+                id: sched.id,
+                courseName: sched.courseName,
+                startTime: sched.startTime,
+                room: sched.room,
+                lecturer: sched.lecturer,
+                reminderSent: !!log,
+                sentAt: log?.sentAt || null,
+                reminderType: log?.type || null,
+                userConfirmed: log?.userConfirmed || false,
+                confirmedAt: log?.confirmedAt || null
+            };
+        });
+        
+        const confirmedCount = scheduleStatus.filter(s => s.userConfirmed).length;
+        const pendingCount = scheduleStatus.length - confirmedCount;
+        const allConfirmed = scheduleStatus.length > 0 && confirmedCount === scheduleStatus.length;
+        
+        res.json({
+            success: true,
+            date: today,
+            dayOfWeek,
+            overrideActive: todayOverride.length > 0,
+            override: todayOverride[0] || null,
+            totalSchedules: todaysSchedules.length,
+            confirmedCount,
+            pendingCount,
+            allConfirmed,
+            schedules: scheduleStatus
+        });
+    } catch (error) {
+        console.error('[API] Get Today Reminders Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/reminders/history - History 7 hari terakhir
+router.get('/reminders/history', [
+    query('days').optional().isInt({ min: 1, max: 30 }),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 7;
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        // Hitung tanggal dari X hari yang lalu
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - days);
+        const fromDateStr = fromDate.toISOString().split('T')[0];
+        
+        const logs = await db.select().from(reminderLogs)
+            .where(and(
+                eq(reminderLogs.userId, defaultUserId),
+                sql`${reminderLogs.reminderDate} >= ${fromDateStr}`
+            ))
+            .orderBy(sql`${reminderLogs.reminderDate} DESC`);
+        
+        // Group by date
+        const grouped = {};
+        logs.forEach(log => {
+            if (!grouped[log.reminderDate]) {
+                grouped[log.reminderDate] = {
+                    date: log.reminderDate,
+                    totalReminders: 0,
+                    userConfirmed: false,
+                    confirmationTime: null,
+                    courses: []
+                };
+            }
+            grouped[log.reminderDate].totalReminders++;
+            grouped[log.reminderDate].courses.push(log.messageContent?.split('\n')[0] || 'Unknown');
+            if (log.userConfirmed) {
+                grouped[log.reminderDate].userConfirmed = true;
+                grouped[log.reminderDate].confirmationTime = log.confirmedAt;
+            }
+        });
+        
+        res.json({
+            success: true,
+            days,
+            history: Object.values(grouped)
+        });
+    } catch (error) {
+        console.error('[API] Get Reminder History Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// POST /api/v1/reminders/override - Skip/pause reminder
+router.post('/reminders/override', [
+    body('date').isISO8601().withMessage('Format tanggal YYYY-MM-DD'),
+    body('action').isIn(['skip_all', 'custom_time']).withMessage('Action: skip_all atau custom_time'),
+    body('reason').optional().isString(),
+    body('customTime').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { date, action, reason, customTime } = req.body;
+        
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        // Nonaktifkan override lama untuk tanggal yang sama
+        await db.update(reminderOverrides)
+            .set({ isActive: false })
+            .where(and(
+                eq(reminderOverrides.userId, defaultUserId),
+                eq(reminderOverrides.overrideDate, date)
+            ));
+        
+        // Buat override baru
+        const newOverride = {
+            id: crypto.randomUUID(),
+            userId: defaultUserId,
+            overrideDate: date,
+            action,
+            reason: reason || null,
+            customTime: customTime || null,
+            isActive: true,
+            createdAt: new Date()
+        };
+        
+        await db.insert(reminderOverrides).values(newOverride);
+        
+        res.json({
+            success: true,
+            message: action === 'skip_all' 
+                ? `Reminder untuk ${date} akan di-skip`
+                : `Reminder untuk ${date} di-set ke jam ${customTime}`,
+            override: newOverride
+        });
+    } catch (error) {
+        console.error('[API] Create Override Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/reminders/overrides - List active overrides
+router.get('/reminders/overrides', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        const today = new Date().toISOString().split('T')[0];
+        
+        const overrides = await db.select().from(reminderOverrides)
+            .where(and(
+                eq(reminderOverrides.userId, defaultUserId),
+                eq(reminderOverrides.isActive, true),
+                sql`${reminderOverrides.overrideDate} >= ${today}`
+            ))
+            .orderBy(reminderOverrides.overrideDate);
+        
+        res.json({
+            success: true,
+            count: overrides.length,
+            overrides
+        });
+    } catch (error) {
+        console.error('[API] Get Overrides Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// DELETE /api/v1/reminders/overrides/:id - Cancel override
+router.delete('/reminders/overrides/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await db.update(reminderOverrides)
+            .set({ isActive: false })
+            .where(eq(reminderOverrides.id, id));
+        
+        res.json({ success: true, message: 'Override dibatalkan' });
+    } catch (error) {
+        console.error('[API] Cancel Override Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

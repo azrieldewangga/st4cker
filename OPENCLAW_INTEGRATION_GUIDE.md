@@ -162,6 +162,69 @@ If you need to paste a JSON schema for the tools, use this:
 ```
 *(API Route: `DELETE /api/v1/schedules/:id`)*
 
+#### Tool: `get_reminder_status`
+*Description: Cek status reminder hari ini.*
+```json
+{
+  "name": "get_reminder_status",
+  "description": "Melihat status reminder hari ini - sudah dikirim atau belum, user sudah konfirmasi atau belum, dan informasi matkul hari ini.",
+  "parameters": {
+    "type": "object",
+    "properties": {}
+  }
+}
+```
+*(API Route: `GET /api/v1/reminders/today`)*
+
+#### Tool: `get_reminder_history`
+*Description: Lihat history reminder.*
+```json
+{
+  "name": "get_reminder_history",
+  "description": "Melihat history reminder beberapa hari terakhir (berapa kali reminder dikirim, apakah user konfirmasi, dll).",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "days": { "type": "integer", "description": "Jumlah hari ke belakang (default: 7, max: 30)" }
+    }
+  }
+}
+```
+*(API Route: `GET /api/v1/reminders/history`)*
+
+#### Tool: `skip_today_reminders`
+*Description: Skip/pause reminder hari ini.*
+```json
+{
+  "name": "skip_today_reminders",
+  "description": "Menonaktifkan auto-reminder untuk hari ini (misal: cuti, libur, tidak masuk).",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "date": { "type": "string", "description": "Tanggal yang mau di-skip (YYYY-MM-DD). Kosongkan untuk hari ini." },
+      "reason": { "type": "string", "description": "Alasan skip (opsional, contoh: 'Cuti', 'Sakit', 'Libur')" }
+    }
+  }
+}
+```
+*(API Route: `POST /api/v1/reminders/override`)*
+
+#### Tool: `cancel_skip_reminders`
+*Description: Batalkan skip reminder.*
+```json
+{
+  "name": "cancel_skip_reminders",
+  "description": "Membatalkan override/skip reminder yang aktif.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "overrideId": { "type": "string", "description": "ID override yang mau dibatalkan (dari get_reminder_status)" }
+    }
+  }
+}
+```
+*(API Route: `DELETE /api/v1/reminders/overrides/:id`)*
+
 ---
 
 ## 3. Example Workflow (What to tell OpenClaw)
@@ -182,4 +245,15 @@ Once connected, you can give OpenClaw instructions like:
 
 > "Tampilkan semua jadwal hari Senin."
 
-This works because OpenClaw now has the **Tools** (`get_tasks`, `get_schedules`, `add_schedule`, `update_schedule`, `delete_schedule`) to manage your data and the **medium** (WhatsApp) to talk to you.
+### C. Reminder Tracking
+> "Udah ada reminder belum hari ini?"
+
+> "Aku sudah konfirmasi reminder belum?"
+
+> "Jangan kirim reminder hari ini, aku cuti."
+
+> "Minggu ini aku rajin konfirmasi reminder ga?"
+
+> "Cancel skip reminder, aku jadi masuk hari ini."
+
+This works because OpenClaw now has the **Tools** (`get_tasks`, `get_schedules`, `add_schedule`, `update_schedule`, `delete_schedule`, `get_reminder_status`, `get_reminder_history`, `skip_today_reminders`, `cancel_skip_reminders`) to manage your data and the **medium** (WhatsApp) to talk to you.
