@@ -25,12 +25,13 @@ def check_reminders():
         day_now = now.isoweekday() 
 
         # Logika Pengingat 1.5 jam sebelum matkul
+        # Konversi current_time ke WIB (UTC+7) untuk perbandingan
         cur.execute("""
             SELECT id, course_name, start_time 
             FROM schedules 
             WHERE day_of_week = %s 
             AND is_active = true 
-            AND CURRENT_TIME BETWEEN (start_time - INTERVAL '90 minutes') AND start_time
+            AND (CURRENT_TIME + INTERVAL '7 hours')::time BETWEEN (start_time::time - INTERVAL '90 minutes') AND start_time::time
         """, (day_now,))
         
         results = cur.fetchall()
