@@ -152,8 +152,32 @@ def time_to_minutes(time_str):
         return 0
 
 # Keywords
-CONFIRM_KEYWORDS = ['ok', 'oke', 'okee', 'gas', 'otw', 'iya', 'ya', 'yoi', 'siap', 'siapp', 'yuk', 'ayo', 'lanjut', 'gaskeun', 'let\'s go', 'lets go']
+CONFIRM_KEYWORDS = ['ok', 'oke', 'okee', 'gas', 'otw', 'iya', 'ya', 'yoi', 'siap', 'siapp', 'yuk', 'ayo', 'lanjut', 'gaskeun', 'let\'s go', 'lets go', 'baik', 'mantap']
 DECLINE_KEYWORDS = ['tidak', 'ga', 'gak', 'nggak', 'skip', 'nanti', 'belum', 'tunda', 'cancel', 'batal', 'no', 'nope']
+
+def is_schedule_cancelled(schedule_id, cancel_date, user_id):
+    """Cek apakah matkul ini di-cancel untuk tanggal tertentu"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT id FROM schedule_cancellations
+            WHERE schedule_id = %s
+            AND cancel_date = %s
+            AND user_id = %s
+            AND is_active = true
+            LIMIT 1
+        """, (schedule_id, cancel_date, user_id))
+        
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        return result is not None
+    except Exception as e:
+        logger.error(f"Error checking cancellation: {e}")
+        return False
 
 def check_reminders():
     """Logic reminder utama dengan window 10 menit"""
@@ -248,6 +272,11 @@ def check_reminders():
             
             if existing_log:
                 continue  # Sudah pernah kirim reminder
+            
+            # Cek apakah matkul ini di-cancel untuk tanggal ini
+            if is_schedule_cancelled(sched_id, today, user_id):
+                logger.info(f"Skipping {course_name} - cancelled for {today}")
+                continue
             
             if not today_state['user_confirmed']:
                 # Mode: Belum konfirmasi (atau menolak/tunda)

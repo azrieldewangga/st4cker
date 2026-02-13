@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
 import { db } from './db/index.js';
-import { assignments, projects, transactions, users, schedules, reminderLogs, reminderOverrides } from './db/schema.js';
+import { assignments, projects, transactions, users, schedules, reminderLogs, reminderOverrides, scheduleCancellations } from './db/schema.js';
 import { eq, and, desc, like } from 'drizzle-orm';
 import crypto from 'crypto';
 import { broadcastEvent } from './server.js';
@@ -1181,6 +1181,128 @@ router.delete('/reminders/overrides/:id', [
         res.json({ success: true, message: 'Override dibatalkan' });
     } catch (error) {
         console.error('[API] Cancel Override Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// ==========================================
+// SCHEDULE CANCELLATIONS (Matkul kosong di tanggal tertentu)
+// ==========================================
+
+// POST /api/v1/schedules/:id/cancel - Cancel matkul di tanggal tertentu
+router.post('/schedules/:id/cancel', [
+    param('id').isUUID(),
+    body('cancelDate').isISO8601().withMessage('Format tanggal YYYY-MM-DD'),
+    body('reason').optional().isString(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { cancelDate, reason } = req.body;
+        
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        // Cek apakah schedule ada
+        const schedule = await db.select().from(schedules)
+            .where(and(eq(schedules.id, id), eq(schedules.userId, defaultUserId)))
+            .limit(1);
+        
+        if (schedule.length === 0) {
+            return res.status(404).json({ error: 'Schedule not found' });
+        }
+        
+        // Cek apakah sudah ada cancellation aktif untuk tanggal ini
+        const existing = await db.select().from(scheduleCancellations)
+            .where(and(
+                eq(scheduleCancellations.scheduleId, id),
+                eq(scheduleCancellations.cancelDate, cancelDate),
+                eq(scheduleCancellations.isActive, true)
+            ))
+            .limit(1);
+        
+        if (existing.length > 0) {
+            return res.json({ 
+                success: true, 
+                message: 'Matkul sudah di-cancel untuk tanggal ini',
+                cancellation: existing[0]
+            });
+        }
+        
+        // Buat cancellation baru
+        const newCancellation = {
+            id: crypto.randomUUID(),
+            scheduleId: id,
+            userId: defaultUserId,
+            cancelDate,
+            reason: reason || null,
+            isActive: true,
+            createdAt: new Date()
+        };
+        
+        await db.insert(scheduleCancellations).values(newCancellation);
+        
+        res.json({
+            success: true,
+            message: `Reminder ${schedule[0].courseName} untuk ${cancelDate} di-cancel`,
+            cancellation: newCancellation
+        });
+    } catch (error) {
+        console.error('[API] Create Cancellation Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/schedules/:id/cancellations - Lihat cancellations untuk matkul ini
+router.get('/schedules/:id/cancellations', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        const today = new Date().toISOString().split('T')[0];
+        
+        const cancellations = await db.select().from(scheduleCancellations)
+            .where(and(
+                eq(scheduleCancellations.scheduleId, id),
+                eq(scheduleCancellations.userId, defaultUserId),
+                eq(scheduleCancellations.isActive, true),
+                sql`${scheduleCancellations.cancelDate} >= ${today}`
+            ))
+            .orderBy(scheduleCancellations.cancelDate);
+        
+        res.json({
+            success: true,
+            count: cancellations.length,
+            cancellations
+        });
+    } catch (error) {
+        console.error('[API] Get Cancellations Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// DELETE /api/v1/schedules/cancellations/:id - Batalkan cancellation
+router.delete('/schedules/cancellations/:id', [
+    param('id').isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        await db.update(scheduleCancellations)
+            .set({ isActive: false })
+            .where(eq(scheduleCancellations.id, id));
+        
+        res.json({ success: true, message: 'Cancellation dibatalkan' });
+    } catch (error) {
+        console.error('[API] Cancel Schedule Cancellation Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

@@ -203,3 +203,20 @@ export const reminderOverrides = pgTable('reminder_overrides', {
         overrideDateIdx: index('idx_reminder_overrides_date').on(table.overrideDate),
     };
 });
+
+// --- SCHEDULE CANCELLATIONS (Matkul kosong di tanggal tertentu) ---
+export const scheduleCancellations = pgTable('schedule_cancellations', {
+    id: text('id').primaryKey(),
+    scheduleId: text('schedule_id').notNull().references(() => schedules.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull().references(() => users.telegramUserId, { onDelete: 'cascade' }),
+    cancelDate: text('cancel_date').notNull(), // YYYY-MM-DD
+    reason: text('reason'), // Misal: "Pak X dinas"
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return {
+        cancelUserIdx: index('idx_schedule_cancellations_user').on(table.userId),
+        cancelScheduleIdx: index('idx_schedule_cancellations_schedule').on(table.scheduleId),
+        cancelDateIdx: index('idx_schedule_cancellations_date').on(table.cancelDate),
+    };
+});
