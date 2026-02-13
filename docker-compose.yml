@@ -69,6 +69,8 @@ services:
     build: ./wa-gateway
     container_name: wa-gateway
     restart: always
+    ports:
+      - "127.0.0.1:4000:4000"  # Local access only for security
     environment:
       - TZ=Asia/Jakarta
     volumes:
