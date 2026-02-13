@@ -76,8 +76,16 @@ def parse_time(time_str):
     except:
         return None
 
+def time_to_minutes(time_str):
+    """Convert HH:MM to total minutes"""
+    try:
+        h, m = map(int, time_str.split(':'))
+        return h * 60 + m
+    except:
+        return 0
+
 def check_reminders():
-    """Logic reminder utama"""
+    """Logic reminder utama dengan window 10 menit"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
@@ -88,6 +96,7 @@ def check_reminders():
         current_time = now.strftime('%H:%M')
         current_hour = now.hour
         current_minute = now.minute
+        current_total_minutes = current_hour * 60 + current_minute
         
         # Load state
         load_state()
@@ -133,10 +142,9 @@ def check_reminders():
             if not start_dt:
                 continue
             
-            # Hitung waktu reminder
-            is_first_class = (idx == 0)
             start_hour = start_dt.hour
             start_minute = start_dt.minute
+            start_total_minutes = start_hour * 60 + start_minute
             
             # Format info ruangan dan dosen
             room_info = f"\n📍 Ruang: {room}" if room else ""
@@ -147,11 +155,12 @@ def check_reminders():
             
             if not user_confirmed:
                 # Mode: Belum konfirmasi
-                # Cek apakah ini matkul pertama
+                is_first_class = (idx == 0)
+                
                 if is_first_class:
                     # Matkul pertama - cek waktu reminder
                     if start_hour == 8:
-                        # Matkul jam 8:xx - reminder jam 6:00
+                        # SPECIAL CASE: Matkul jam 8:xx - reminder EXACT jam 6:00
                         if current_hour == 6 and current_minute == 0:
                             if reminder_key not in today_state['reminders_sent']:
                                 message = f"⏰ PENGINGAT PAGI:\n\nMatkul pertama hari ini:\n📚 {course_name}\n🕐 Jam: {start_time}{room_info}{lecturer_info}\n\nJangan lupa berangkat 1 jam 30 menit lebih awal ya!\n\nReply 'ok' atau 'gas' kalau sudah otw."
@@ -162,11 +171,14 @@ def check_reminders():
                                         'course': course_name
                                     }
                                     save_state()
-                                    logger.info(f"Reminder jam 6:00 dikirim untuk {course_name}")
+                                    logger.info(f"Reminder jam 6:00 (exact) dikirim untuk {course_name}")
                     else:
-                        # Matkul pertama tapi bukan jam 8 - 1.5 jam sebelum
-                        reminder_time = start_dt - timedelta(minutes=90)
-                        if current_hour == reminder_time.hour and current_minute == reminder_time.minute:
+                        # Matkul pertama jam lain - window 10 menit, kirim di menit 10
+                        reminder_start = start_total_minutes - 90  # 1.5 jam sebelum
+                        reminder_end = reminder_start + 10  # window 10 menit
+                        
+                        # Kirim di menit ke-10 dari window (akhir window)
+                        if reminder_start < current_total_minutes <= reminder_end:
                             if reminder_key not in today_state['reminders_sent']:
                                 message = f"⏰ PENGINGAT:\n\nMatkul pertama hari ini:\n📚 {course_name}\n🕐 Jam: {start_time}{room_info}{lecturer_info}\n\nJangan lupa berangkat 1 jam 30 menit lebih awal ya!\n\nReply 'ok' atau 'gas' kalau sudah otw."
                                 if send_whatsapp_message(message):
@@ -176,32 +188,35 @@ def check_reminders():
                                         'course': course_name
                                     }
                                     save_state()
-                                    logger.info(f"Reminder 90 menit dikirim untuk {course_name}")
+                                    logger.info(f"Reminder 90 menit (window) dikirim untuk {course_name}")
                     
-                    # Remind ulang kalau 10 menit belum konfirmasi
+                    # Remind ulang kalau 10 menit setelah reminder pertama belum konfirmasi
                     if reminder_key in today_state['reminders_sent']:
                         sent_info = today_state['reminders_sent'][reminder_key]
-                        sent_at = parse_time(sent_info['sent_at'])
-                        if sent_at:
-                            remind_again_time = sent_at + timedelta(minutes=10)
-                            if current_hour == remind_again_time.hour and current_minute == remind_again_time.minute:
-                                retry_key = f"{sched_id}_retry"
-                                if retry_key not in today_state['reminders_sent']:
-                                    message = f"⏰ REMINDER ULANG:\n\nJangan lupa matkul {course_name} jam {start_time}!\n\nReply 'ok' atau 'gas' kalau sudah otw ya!"
-                                    if send_whatsapp_message(message):
-                                        today_state['reminders_sent'][retry_key] = {
-                                            'sent_at': current_time,
-                                            'type': 'retry',
-                                            'course': course_name
-                                        }
-                                        save_state()
-                                        logger.info(f"Reminder ulang dikirim untuk {course_name}")
+                        sent_at_minutes = time_to_minutes(sent_info['sent_at'])
+                        retry_time = sent_at_minutes + 10
+                        
+                        if current_total_minutes == retry_time:
+                            retry_key = f"{sched_id}_retry"
+                            if retry_key not in today_state['reminders_sent']:
+                                message = f"⏰ REMINDER ULANG:\n\nJangan lupa matkul {course_name} jam {start_time}!\n\nReply 'ok' atau 'gas' kalau sudah otw ya!"
+                                if send_whatsapp_message(message):
+                                    today_state['reminders_sent'][retry_key] = {
+                                        'sent_at': current_time,
+                                        'type': 'retry',
+                                        'course': course_name
+                                    }
+                                    save_state()
+                                    logger.info(f"Reminder ulang dikirim untuk {course_name}")
             else:
                 # Mode: Sudah konfirmasi
                 # Reminder 15 menit sebelum matkul (mulai dari matkul kedua)
                 if idx > 0:  # Skip matkul pertama karena user udah otw
-                    reminder_time = start_dt - timedelta(minutes=15)
-                    if current_hour == reminder_time.hour and current_minute == reminder_time.minute:
+                    reminder_start = start_total_minutes - 15  # 15 menit sebelum
+                    reminder_end = reminder_start + 10  # window 10 menit
+                    
+                    # Kirim di dalam window (akhir window)
+                    if reminder_start < current_total_minutes <= reminder_end:
                         if reminder_key not in today_state['reminders_sent']:
                             message = f"⏰ 15 MENIT LAGI:\n\n📚 {course_name}\n🕐 Jam: {start_time}{room_info}{lecturer_info}\n\nSiap-siap ya!"
                             if send_whatsapp_message(message):
@@ -211,7 +226,7 @@ def check_reminders():
                                     'course': course_name
                                 }
                                 save_state()
-                                logger.info(f"Reminder 15 menit dikirim untuk {course_name}")
+                                logger.info(f"Reminder 15 menit (window) dikirim untuk {course_name}")
         
         cur.close()
         conn.close()
@@ -222,8 +237,9 @@ def check_reminders():
 if __name__ == "__main__":
     logger.info("="*50)
     logger.info("ReminderBot Aktif - Smart Reminder System")
-    logger.info("Target: 1.5 jam sebelum matkul pertama")
-    logger.info("        15 menit sebelum matkul berikutnya (setelah konfirmasi)")
+    logger.info("Target: 1.5 jam sebelum matkul pertama (window 10 menit)")
+    logger.info("        15 menit sebelum matkul berikutnya (window 10 menit)")
+    logger.info("        Jam 8:xx = exact jam 6:00")
     logger.info("="*50)
     
     # Check tiap 1 menit
