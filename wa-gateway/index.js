@@ -270,6 +270,44 @@ app.post('/reset-confirmation', (req, res) => {
     res.json({ success: true, message: 'Confirmation reset' });
 });
 
+// Test reminder (manual trigger for testing)
+app.post('/test-reminder', async (req, res) => {
+    try {
+        const { to, courseName, startTime, room, lecturer, type } = req.body;
+        const target = to || TARGET_PHONE;
+        
+        const roomInfo = room ? `\n📍 Ruang: ${room}` : '';
+        const lecturerInfo = lecturer ? `\n👨‍🏫 Dosen: ${lecturer}` : '';
+        
+        let message;
+        if (type === 'first') {
+            message = `⏰ TEST REMINDER (Matkul Pertama):\n\n📚 ${courseName || 'Test Matkul'}\n🕐 Jam: ${startTime || '08:00'}${roomInfo}${lecturerInfo}\n\nJangan lupa berangkat 1 jam 30 menit lebih awal ya!\n\nReply 'ok' atau 'gas' kalau sudah otw.`;
+        } else if (type === '15min') {
+            message = `⏰ TEST REMINDER (15 Menit Lagi):\n\n📚 ${courseName || 'Test Matkul'}\n🕐 Jam: ${startTime || '10:00'}${roomInfo}${lecturerInfo}\n\nSiap-siap ya!`;
+        } else {
+            message = `🧪 TEST PESAN from St4cker Bot!\n\nIni cuma test. Sistem reminder sudah aktif! 🚀`;
+        }
+        
+        if (!isReady || !client) {
+            return res.status(503).json({ error: 'WhatsApp not ready' });
+        }
+        
+        const number = target.toString().replace(/[^0-9]/g, '');
+        const chatId = number + '@c.us';
+        const response = await client.sendMessage(chatId, message);
+        
+        res.json({ 
+            success: true, 
+            message: 'Test reminder sent',
+            messageId: response.id.id,
+            sentTo: target
+        });
+    } catch (error) {
+        console.error('[WA] Test reminder error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ───────────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`[WA Gateway] Running on port ${PORT}`);
