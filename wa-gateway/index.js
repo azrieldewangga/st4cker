@@ -1,13 +1,19 @@
-import makeWASocket, {
-    useMultiFileAuthState,
-    DisconnectReason,
-    makeCacheableSignalKeyStore
-} from '@whiskeysockets/baileys';
+import baileys from '@whiskeysockets/baileys';
 import express from 'express';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 
-const logger = pino({ level: 'warn' }); // Suppress Baileys verbose logs
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    makeCacheableSignalKeyStore
+} = baileys;
+
+// Fallback if default is the function itself
+const createSocket = typeof makeWASocket === 'function' ? makeWASocket : baileys;
+
+const logger = pino({ level: 'warn' });
 const app = express();
 app.use(express.json());
 
@@ -23,12 +29,12 @@ let isConnected = false;
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
-    sock = makeWASocket({
+    sock = createSocket({
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger)
         },
-        printQRInTerminal: true,  // Print QR in docker logs
+        printQRInTerminal: true,
         logger,
         browser: ['St4cker Reminder', 'Chrome', '1.0.0'],
         generateHighQualityLinkPreview: false
@@ -57,7 +63,6 @@ async function connectToWhatsApp() {
             console.log(`[WA] Connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`);
 
             if (shouldReconnect) {
-                // Wait before reconnecting
                 setTimeout(() => connectToWhatsApp(), 5000);
             } else {
                 console.log('[WA] Logged out. Delete auth_state folder and restart to re-pair.');
@@ -71,10 +76,8 @@ async function connectToWhatsApp() {
 }
 
 // ───────────────────────────────────────────
-// REST API Endpoints
+// REST API
 // ───────────────────────────────────────────
-
-// Health check
 app.get('/health', (req, res) => {
     res.json({
         status: isConnected ? 'connected' : 'disconnected',
@@ -82,20 +85,18 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Send message
 app.post('/send', async (req, res) => {
     try {
         const { to, message } = req.body;
 
         if (!to || !message) {
-            return res.status(400).json({ error: '"to" (phone number) and "message" are required' });
+            return res.status(400).json({ error: '"to" and "message" are required' });
         }
 
         if (!isConnected || !sock) {
-            return res.status(503).json({ error: 'WhatsApp not connected. Check QR code in logs.' });
+            return res.status(503).json({ error: 'WhatsApp not connected. Scan QR: docker logs wa-gateway' });
         }
 
-        // Format phone number: ensure it ends with @s.whatsapp.net
         let jid = to.toString().replace(/[^0-9]/g, '');
         if (!jid.endsWith('@s.whatsapp.net')) {
             jid = jid + '@s.whatsapp.net';
@@ -112,10 +113,7 @@ app.post('/send', async (req, res) => {
 });
 
 // ───────────────────────────────────────────
-// Start
-// ───────────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`[WA Gateway] API running on port ${PORT}`);
-    console.log(`[WA Gateway] POST /send  { to: "628xxx", message: "hello" }`);
     connectToWhatsApp();
 });
