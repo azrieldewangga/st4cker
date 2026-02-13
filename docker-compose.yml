@@ -61,6 +61,20 @@ services:
           memory: 512M
     networks:
       - st4cker-net
+  # --------------------------------------------------------------------------------
+  # 3. REMINDER AGENT (The Scheduler)
+  # --------------------------------------------------------------------------------
+  reminder-bot:
+    build: ./reminder-bot
+    container_name: reminder-bot
+    restart: always
+    environment:
+      - TZ=Asia/Jakarta
+    networks:
+      - st4cker-net
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
