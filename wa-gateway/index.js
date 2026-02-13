@@ -1,17 +1,16 @@
-import baileys from '@whiskeysockets/baileys';
-import express from 'express';
-import pino from 'pino';
-import qrcode from 'qrcode-terminal';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
+// Baileys is CJS — use require for reliable imports
 const {
     default: makeWASocket,
     useMultiFileAuthState,
     DisconnectReason,
     makeCacheableSignalKeyStore
-} = baileys;
+} = require('@whiskeysockets/baileys');
 
-// Fallback if default is the function itself
-const createSocket = typeof makeWASocket === 'function' ? makeWASocket : baileys;
+import express from 'express';
+import pino from 'pino';
 
 const logger = pino({ level: 'warn' });
 const app = express();
@@ -29,7 +28,7 @@ let isConnected = false;
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
-    sock = createSocket({
+    sock = makeWASocket({
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger)
@@ -40,19 +39,16 @@ async function connectToWhatsApp() {
         generateHighQualityLinkPreview: false
     });
 
-    // Save credentials on update
     sock.ev.on('creds.update', saveCreds);
 
-    // Connection status handler
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
             console.log('\n╔══════════════════════════════════════════╗');
-            console.log('║   SCAN QR CODE INI DENGAN HP KAMU!       ║');
-            console.log('║   Buka WhatsApp > Linked Devices > Link  ║');
+            console.log('║   SCAN QR CODE INI DENGAN HP BISNIS!     ║');
+            console.log('║   WA > Linked Devices > Link a Device    ║');
             console.log('╚══════════════════════════════════════════╝\n');
-            qrcode.generate(qr, { small: true });
         }
 
         if (connection === 'close') {
@@ -65,7 +61,7 @@ async function connectToWhatsApp() {
             if (shouldReconnect) {
                 setTimeout(() => connectToWhatsApp(), 5000);
             } else {
-                console.log('[WA] Logged out. Delete auth_state folder and restart to re-pair.');
+                console.log('[WA] Logged out. Delete auth_state and restart to re-pair.');
             }
         } else if (connection === 'open') {
             isConnected = true;
@@ -97,10 +93,7 @@ app.post('/send', async (req, res) => {
             return res.status(503).json({ error: 'WhatsApp not connected. Scan QR: docker logs wa-gateway' });
         }
 
-        let jid = to.toString().replace(/[^0-9]/g, '');
-        if (!jid.endsWith('@s.whatsapp.net')) {
-            jid = jid + '@s.whatsapp.net';
-        }
+        let jid = to.toString().replace(/[^0-9]/g, '') + '@s.whatsapp.net';
 
         await sock.sendMessage(jid, { text: message });
         console.log(`[WA] ✅ Message sent to ${to}`);
@@ -114,6 +107,6 @@ app.post('/send', async (req, res) => {
 
 // ───────────────────────────────────────────
 app.listen(PORT, () => {
-    console.log(`[WA Gateway] API running on port ${PORT}`);
+    console.log(`[WA Gateway] Running on port ${PORT}`);
     connectToWhatsApp();
 });
