@@ -7,42 +7,58 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
-// Clean up Chrome lock files to prevent "profile in use" errors
-const AUTH_PATH = '/app/auth_state';
-function cleanupLockFiles() {
-    try {
-        if (fs.existsSync(AUTH_PATH)) {
-            const files = fs.readdirSync(AUTH_PATH);
-            for (const file of files) {
-                if (file.includes('SingletonLock') || file.includes('SingletonCookie') || file.includes('SingletonSocket')) {
-                    const lockPath = path.join(AUTH_PATH, file);
-                    try {
-                        fs.unlinkSync(lockPath);
-                        console.log(`[WA] Cleaned up lock file: ${file}`);
-                    } catch (e) {
-                        // Ignore errors
-                    }
-                }
-            }
-        }
-    } catch (e) {
-        // Ignore errors
-    }
-}
-
-// Run cleanup on startup
-cleanupLockFiles();
-
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 4000;
+const DATA_DIR = '/app/data';
+const USER_STATE_FILE = path.join(DATA_DIR, 'user_state.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// User confirmation state
+let userConfirmations = {};
+
+// Load confirmations from file
+function loadConfirmations() {
+    try {
+        if (fs.existsSync(USER_STATE_FILE)) {
+            const data = fs.readFileSync(USER_STATE_FILE, 'utf8');
+            userConfirmations = JSON.parse(data);
+            console.log('[WA] Loaded user confirmations:', Object.keys(userConfirmations).length, 'entries');
+        }
+    } catch (e) {
+        console.error('[WA] Error loading confirmations:', e.message);
+        userConfirmations = {};
+    }
+}
+
+// Save confirmations to file
+function saveConfirmations() {
+    try {
+        fs.writeFileSync(USER_STATE_FILE, JSON.stringify(userConfirmations, null, 2));
+    } catch (e) {
+        console.error('[WA] Error saving confirmations:', e.message);
+    }
+}
+
+// Load on startup
+loadConfirmations();
 
 let client = null;
 let isConnected = false;
 let isReady = false;
 let initAttempts = 0;
 const MAX_RETRIES = 5;
+
+// Target phone from env
+const TARGET_PHONE = process.env.TARGET_PHONE || '6281311417727';
+
+// Keywords for confirmation
+const CONFIRM_KEYWORDS = ['iya', 'yes', 'ok', 'oke', 'okee', 'gas', 'otw', 'let\'s go', 'yoi', 'siap', 'siapp', 'y', 'ya', 'yuk', 'ayo', 'lanjut', 'lanjutkan'];
 
 // ───────────────────────────────────────────
 // WhatsApp Client with Puppeteer
@@ -105,7 +121,7 @@ async function initWhatsApp() {
         client.on('authenticated', () => {
             console.log('[WA] ✅ Authenticated!');
             isConnected = true;
-            initAttempts = 0; // Reset counter on success
+            initAttempts = 0;
         });
 
         // Auth failure
@@ -120,7 +136,7 @@ async function initWhatsApp() {
             console.log('[WA] ✅ Client is ready!');
             isConnected = true;
             isReady = true;
-            initAttempts = 0; // Reset counter on success
+            initAttempts = 0;
         });
 
         // Disconnected
@@ -130,17 +146,44 @@ async function initWhatsApp() {
             isReady = false;
             client = null;
             
-            // Retry dengan delay
             if (initAttempts < MAX_RETRIES) {
                 const delay = Math.min(initAttempts * 5000, 30000);
                 console.log(`[WA] Retrying in ${delay/1000}s...`);
                 setTimeout(() => initWhatsApp(), delay);
-            } else {
-                console.error('[WA] Max retries reached. Please check VPS resources (RAM/swap).');
             }
         });
 
-        // Initialize dengan error handling
+        // Listen for incoming messages
+        client.on('message_create', async (msg) => {
+            // Only process messages from target phone and not from ourselves
+            if (!msg.fromMe && msg.from.includes(TARGET_PHONE)) {
+                const text = msg.body.toLowerCase().trim();
+                console.log(`[WA] Received message: "${msg.body}"`);
+                
+                // Check if it's a confirmation keyword
+                const isConfirmed = CONFIRM_KEYWORDS.some(keyword => text.includes(keyword));
+                
+                if (isConfirmed) {
+                    console.log(`[WA] User confirmed: ${msg.body}`);
+                    
+                    // Mark user as confirmed for today
+                    const today = new Date().toISOString().split('T')[0];
+                    if (!userConfirmations[today]) {
+                        userConfirmations[today] = {};
+                    }
+                    userConfirmations[today][TARGET_PHONE] = {
+                        confirmed: true,
+                        confirmedAt: new Date().toISOString(),
+                        message: msg.body
+                    };
+                    saveConfirmations();
+                    
+                    // Send acknowledgment
+                    await client.sendMessage(msg.from, '✅ Oke! Siap berangkat. Nanti aku ingetin lagi 15 menit sebelum matkul berikutnya ya!');
+                }
+            }
+        });
+
         await client.initialize();
         
     } catch (error) {
@@ -149,16 +192,12 @@ async function initWhatsApp() {
         isReady = false;
         client = null;
         
-        // Retry dengan delay
         if (initAttempts < MAX_RETRIES) {
             const delay = Math.min(initAttempts * 5000, 30000);
             console.log(`[WA] Retrying in ${delay/1000}s...`);
             setTimeout(() => initWhatsApp(), delay);
         } else {
-            console.error('[WA] Max retries reached. Please check:');
-            console.error('  1. RAM (minimal 1GB, rekomendasi 2GB)');
-            console.error('  2. Swap space (minimal 1GB)');
-            console.error('  3. Run: free -h  # untuk cek memory');
+            console.error('[WA] Max retries reached.');
         }
     }
 }
@@ -166,6 +205,8 @@ async function initWhatsApp() {
 // ───────────────────────────────────────────
 // REST API
 // ───────────────────────────────────────────
+
+// Health check
 app.get('/health', (req, res) => {
     res.json({
         status: isReady ? 'connected' : (isConnected ? 'authenticating' : 'disconnected'),
@@ -174,6 +215,7 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Send message
 app.post('/send', async (req, res) => {
     try {
         const { to, message } = req.body;
@@ -189,7 +231,6 @@ app.post('/send', async (req, res) => {
             return res.status(400).json({ error: 'Missing "to" or "message" field' });
         }
 
-        // Format number: remove non-digits and add @c.us suffix
         const number = to.toString().replace(/[^0-9]/g, '');
         const chatId = number + '@c.us';
 
@@ -204,6 +245,29 @@ app.post('/send', async (req, res) => {
         console.error('[WA] Send error:', error.message);
         res.status(500).json({ error: error.message });
     }
+});
+
+// Check user confirmation status
+app.get('/confirmation/:phone', (req, res) => {
+    const { phone } = req.params;
+    const today = new Date().toISOString().split('T')[0];
+    
+    const confirmation = userConfirmations[today]?.[phone];
+    res.json({
+        confirmed: confirmation?.confirmed || false,
+        confirmedAt: confirmation?.confirmedAt || null,
+        today: today
+    });
+});
+
+// Reset confirmation (for testing)
+app.post('/reset-confirmation', (req, res) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (userConfirmations[today]) {
+        delete userConfirmations[today];
+        saveConfirmations();
+    }
+    res.json({ success: true, message: 'Confirmation reset' });
 });
 
 // ───────────────────────────────────────────

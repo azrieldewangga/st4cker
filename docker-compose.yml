@@ -73,8 +73,10 @@ services:
       - "127.0.0.1:4000:4000"  # Local access only for security
     environment:
       - TZ=Asia/Jakarta
+      - TARGET_PHONE=6281311417727
     volumes:
       - wa_auth:/app/auth_state
+      - wa_data:/app/data
     networks:
       - st4cker-net
     healthcheck:
@@ -95,6 +97,8 @@ services:
       - TZ=Asia/Jakarta
       - WA_API_URL=http://wa-gateway:4000/send
       - TARGET_PHONE=6281311417727
+    volumes:
+      - reminder_data:/tmp
     networks:
       - st4cker-net
     depends_on:
@@ -104,6 +108,8 @@ services:
 volumes:
   postgres_data:
   wa_auth:
+  wa_data:
+  reminder_data:
 
 
 networks:
