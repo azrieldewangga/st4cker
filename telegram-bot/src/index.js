@@ -3,8 +3,9 @@ import { initDatabase } from './db/init.js';
 // Initialize database first, then start services
 await initDatabase();
 
-import './server.js';
-import './bot.js';
+// Dynamic import setelah database ready
+await import('./server.js');
+await import('./bot.js');
 
 console.log('🚀 st4cker Telegram Bot & WebSocket Server started');
 console.log('📱 Bot is polling for Telegram messages');
