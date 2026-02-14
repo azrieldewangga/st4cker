@@ -470,8 +470,8 @@ const Schedule = () => {
             </div>
 
             <Card className="flex-1 overflow-hidden flex flex-col">
-                <ScrollArea className="flex-1 h-full" orientation="horizontal">
-                    <div className="min-w-[800px]">
+                <div className="flex-1 overflow-auto">
+                    <div className="min-w-[800px] h-full">
                     <table className="w-full text-sm border-collapse">
                         <thead className="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
                             <tr>
@@ -522,7 +522,7 @@ const Schedule = () => {
                         </tbody>
                     </table>
                     </div>
-                </ScrollArea>
+                </div>
             </Card>
 
             {/* Selector Popover */}
