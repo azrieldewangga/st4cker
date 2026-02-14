@@ -32,8 +32,8 @@ services:
   # --------------------------------------------------------------------------------
   st4cker-bot:
     # Build Context: Relative to this file (in Root) -> telegram-bot/Dockerfile
-    # build: ./telegram-bot
-    image: st4cker-bot-manual:latest
+    build: ./telegram-bot
+    # image: st4cker-bot-manual:latest  # Uncomment kalau pakai pre-built image
     container_name: st4cker-bot
     restart: always
     ports:
