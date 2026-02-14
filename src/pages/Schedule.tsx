@@ -102,6 +102,20 @@ const Schedule = () => {
     useEffect(() => {
         fetchCourses();
         fetchSchedule();
+        // Auto-pull from backend (VPS) saat page dibuka
+        const pullFromServer = async () => {
+            try {
+                const state = useStore.getState() as any;
+                if (state.fetchScheduleFromBackend) {
+                    await state.fetchScheduleFromBackend();
+                    console.log('[Schedule] Auto-pulled from VPS');
+                }
+            } catch (e) {
+                console.log('[Schedule] Using local data (offline mode)');
+            }
+        };
+        pullFromServer();
+        
         const closeContextMenu = () => setContextMenu(null);
         window.addEventListener('click', closeContextMenu);
         return () => window.removeEventListener('click', closeContextMenu);
