@@ -140,7 +140,7 @@ services:
     container_name: openclaw
     restart: always
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8000"
     environment:
       - TZ=Asia/Jakarta
       - ST4CKER_API_URL=http://st4cker-bot:3001
