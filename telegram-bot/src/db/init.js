@@ -75,6 +75,52 @@ export async function initDatabase() {
             );
         `);
 
+        // Create outbox table (for reminder-bot messenger)
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS outbox (
+                id SERIAL PRIMARY KEY,
+                message TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT NOW(),
+                sent_at TIMESTAMP
+            );
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status, created_at);`);
+
+        // Create schedules table (for reminder-bot)
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS schedules (
+                id SERIAL PRIMARY KEY,
+                telegram_user_id TEXT NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
+                course_name TEXT NOT NULL,
+                start_time TIME NOT NULL,
+                end_time TIME NOT NULL,
+                room TEXT,
+                lecturer TEXT,
+                day_of_week INTEGER NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_schedules_user_day ON schedules(telegram_user_id, day_of_week);`);
+
+        // Create assignments table (for reminder-bot)
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS assignments (
+                id SERIAL PRIMARY KEY,
+                telegram_user_id TEXT NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                course TEXT,
+                type TEXT,
+                deadline DATE NOT NULL,
+                note TEXT,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_assignments_user_deadline ON assignments(telegram_user_id, deadline);`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_assignments_status ON assignments(status);`);
+
         console.log('[DB-Init] Database initialization completed successfully.');
     } catch (error) {
         console.error('[DB-Init] Initialization failed:', error);
