@@ -35,6 +35,33 @@ function resolveCourseName(input) {
 
 const router = express.Router();
 
+// Public endpoint for OpenClaw to get schedules (used for AI responses)
+router.get('/schedules/public', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        const data = await db.select()
+            .from(schedules)
+            .where(eq(schedules.userId, defaultUserId))
+            .orderBy(schedules.dayOfWeek, schedules.startTime);
+        
+        const formatted = data.map(s => ({
+            ...s,
+            dayName: dayNames[s.dayOfWeek],
+        }));
+        
+        res.json({ success: true, count: data.length, data: formatted });
+    } catch (error) {
+        console.error('[API] Public Schedules Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Middleware: API Key Auth
 const authenticateApiKey = (req, res, next) => {
     const VALID_API_KEY = process.env.AGENT_API_KEY;
