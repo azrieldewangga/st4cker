@@ -120,6 +120,7 @@ export async function initDatabase() {
                 deadline TEXT,
                 note TEXT,
                 semester INTEGER,
+                progress INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
             );
