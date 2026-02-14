@@ -55,6 +55,7 @@ const Schedule = () => {
     const schedule = useStore(state => state.schedule);
     const fetchSchedule = useStore(state => state.fetchSchedule);
     const setScheduleItem = useStore(state => state.setScheduleItem);
+    const syncScheduleToBackend = useStore(state => state.syncScheduleToBackend);
     const performanceRecords = useStore(state => state.performanceRecords);
     const theme = useStore(state => state.theme);
     const fetchMaterials = useStore(state => state.fetchMaterials);
@@ -62,6 +63,7 @@ const Schedule = () => {
     const addMaterial = useStore(state => state.addMaterial);
     const deleteMaterial = useStore(state => state.deleteMaterial);
     const undo = useStore(state => state.undo);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // UI State
     const [searchTerm, setSearchTerm] = useState('');
@@ -201,15 +203,27 @@ const Schedule = () => {
         }
     };
 
-    const handleSelectCourse = (courseId: string) => {
+    const handleSelectCourse = async (courseId: string) => {
         if (!activeSlot) return;
-        if (courseId) {
-            const course = courses.find(c => c.id === courseId);
-            setScheduleItem(activeSlot.day, activeSlot.time, courseId, 'dynamic', course?.location || '', course?.lecturer || '');
-        } else {
-            setScheduleItem(activeSlot.day, activeSlot.time, '', '');
+        setIsSyncing(true);
+        try {
+            if (courseId) {
+                const course = courses.find(c => c.id === courseId);
+                await setScheduleItem(activeSlot.day, activeSlot.time, courseId, 'dynamic', course?.location || '', course?.lecturer || '');
+            } else {
+                await setScheduleItem(activeSlot.day, activeSlot.time, '', '');
+            }
+            // Auto-sync to backend
+            if (syncScheduleToBackend) {
+                await syncScheduleToBackend();
+                toast.success('Schedule synced to server');
+            }
+        } catch (error) {
+            toast.error('Failed to sync schedule');
+        } finally {
+            setIsSyncing(false);
+            setIsSelectorOpen(false);
         }
-        setIsSelectorOpen(false);
     };
 
     const handleSaveDetail = async () => {
@@ -261,9 +275,16 @@ const Schedule = () => {
 
             await fetchCourses();
             await fetchMaterials(detailSlot.data.course.id);
-            toast.success("Details Updated", {
-                description: detailSlot.data.course.name,
-            });
+            
+            // Auto-sync to backend
+            if (syncScheduleToBackend) {
+                await syncScheduleToBackend();
+                toast.success('Schedule synced to server');
+            } else {
+                toast.success("Details Updated", {
+                    description: detailSlot.data.course.name,
+                });
+            }
         }
         setIsEditingDetail(false);
         setIsDetailOpen(false);
@@ -430,17 +451,21 @@ const Schedule = () => {
                     variant="outline" 
                     size="sm" 
                     onClick={async () => {
+                        setIsSyncing(true);
                         try {
-                            await get().syncScheduleToBackend?.();
+                            await syncScheduleToBackend?.();
                             toast.success('Schedule synced to server');
                         } catch (e) {
                             toast.error('Failed to sync schedule');
+                        } finally {
+                            setIsSyncing(false);
                         }
                     }}
+                    disabled={isSyncing}
                     className="gap-2"
                 >
-                    <RefreshCw className="w-4 h-4" />
-                    Sync to Server
+                    <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+                    {isSyncing ? 'Syncing...' : 'Sync to Server'}
                 </Button>
             </div>
 
