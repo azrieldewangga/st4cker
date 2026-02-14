@@ -22,6 +22,28 @@ if (!fs.existsSync(DATA_DIR)) {
 // User confirmation state
 let userConfirmations = {};
 
+// Track last reminder sent for context-aware confirmation
+let lastReminderState = {
+    sentAt: null,
+    date: null,
+    phone: null,
+    type: null, // 'schedule' atau 'task'
+    scheduleInfo: null // Detail schedule untuk OpenClaw context
+};
+
+// Track task reminder state
+let taskReminderState = {
+    active: false,
+    sentAt: null,
+    taskCount: 0,
+    date: null,
+    tasks: [] // Store task details from OpenClaw
+};
+
+// OpenClaw configuration
+const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:8000';
+const OPENCLAW_API_KEY = process.env.OPENCLAW_API_KEY || '';
+
 // Load confirmations from file
 function loadConfirmations() {
     try {
@@ -55,10 +77,18 @@ let initAttempts = 0;
 const MAX_RETRIES = 5;
 
 // Target phone from env
-const TARGET_PHONE = process.env.TARGET_PHONE || '6281311417727';
+const TARGET_PHONE = process.env.TARGET_PHONE; // MUST be set via environment
+
+// Validate TARGET_PHONE is set
+if (!TARGET_PHONE) {
+    console.error('❌ ERROR: TARGET_PHONE environment variable must be set!');
+    console.error('   Example: TARGET_PHONE=6281234567890');
+    process.exit(1);
+}
 
 // Keywords for confirmation
-const CONFIRM_KEYWORDS = ['iya', 'yes', 'ok', 'oke', 'okee', 'gas', 'otw', 'let\'s go', 'yoi', 'siap', 'siapp', 'y', 'ya', 'yuk', 'ayo', 'lanjut', 'lanjutkan'];
+// Note: Removed 'ya' and 'y' because they're too common in casual Indonesian chat
+const CONFIRM_KEYWORDS = ['iya', 'yes', 'ok', 'oke', 'okee', 'gas', 'otw', 'let\'s go', 'yoi', 'siap', 'siapp', 'yuk', 'ayo', 'lanjut', 'lanjutkan'];
 
 // ───────────────────────────────────────────
 // WhatsApp Client with Puppeteer
@@ -158,28 +188,157 @@ async function initWhatsApp() {
             // Only process messages from target phone and not from ourselves
             if (!msg.fromMe && msg.from.includes(TARGET_PHONE)) {
                 const text = msg.body.toLowerCase().trim();
+                const originalText = msg.body.trim();
                 console.log(`[WA] Received message: "${msg.body}"`);
                 
-                // Check if it's a confirmation keyword
-                const isConfirmed = CONFIRM_KEYWORDS.some(keyword => text.includes(keyword));
+                const now = new Date();
                 
-                if (isConfirmed) {
-                    console.log(`[WA] User confirmed: ${msg.body}`);
+                // ─── TASK REMINDER HANDLER (OpenClaw as Brain) ───
+                const TASK_WINDOW_MINUTES = 30;
+                const isTaskWindowActive = taskReminderState.active && 
+                    taskReminderState.sentAt &&
+                    ((now - taskReminderState.sentAt) / (1000 * 60)) < TASK_WINDOW_MINUTES &&
+                    taskReminderState.date === now.toISOString().split('T')[0];
+                
+                if (isTaskWindowActive) {
+                    console.log(`[WA] Task window active, forwarding to OpenClaw: "${originalText}"`);
                     
-                    // Mark user as confirmed for today
-                    const today = new Date().toISOString().split('T')[0];
-                    if (!userConfirmations[today]) {
-                        userConfirmations[today] = {};
+                    // Forward to OpenClaw for processing
+                    try {
+                        const response = await fetch(`${OPENCLAW_URL}/api/v1/st4cker/task-reply`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-API-Key': OPENCLAW_API_KEY
+                            },
+                            body: JSON.stringify({
+                                phone: TARGET_PHONE,
+                                userId: TARGET_PHONE,
+                                message: originalText,
+                                context: {
+                                    event: 'task_reminder_reply',
+                                    reminderSentAt: taskReminderState.sentAt,
+                                    tasks: taskReminderState.tasks,
+                                    taskCount: taskReminderState.taskCount
+                                }
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log(`[WA] OpenClay replied: ${data.reply}`);
+                            
+                            // Send OpenClaw's reply back to user
+                            if (data.reply) {
+                                await client.sendMessage(msg.from, data.reply);
+                            }
+                            
+                            // If OpenClaw says done/cancelled, clear the state
+                            if (data.done || data.clearContext) {
+                                taskReminderState.active = false;
+                                console.log('[WA] Task context cleared by OpenClaw');
+                            }
+                            
+                            return; // Handled by OpenClaw
+                        } else {
+                            console.error(`[WA] OpenClaw returned ${response.status}`);
+                        }
+                    } catch (e) {
+                        console.error('[WA] Failed to contact OpenClaw:', e.message);
                     }
-                    userConfirmations[today][TARGET_PHONE] = {
-                        confirmed: true,
-                        confirmedAt: new Date().toISOString(),
-                        message: msg.body
-                    };
-                    saveConfirmations();
                     
-                    // Send acknowledgment
-                    await client.sendMessage(msg.from, '✅ Oke! Siap berangkat. Nanti aku ingetin lagi 15 menit sebelum matkul berikutnya ya!');
+                    // Fallback: if OpenClaw fails, just acknowledge
+                    await client.sendMessage(msg.from, '👍 Oke! Catat ya~');
+                    taskReminderState.active = false;
+                    return;
+                }
+                
+                // ─── SCHEDULE REMINDER HANDLER (OpenClaw as Brain) ───
+                const SCHEDULE_WINDOW_MINUTES = 30;
+                const isScheduleWindowActive = lastReminderState.sentAt && 
+                    lastReminderState.type === 'schedule' &&
+                    ((now - lastReminderState.sentAt) / (1000 * 60)) < SCHEDULE_WINDOW_MINUTES &&
+                    lastReminderState.date === now.toISOString().split('T')[0];
+                
+                if (isScheduleWindowActive) {
+                    console.log(`[WA] Schedule window active, forwarding to OpenClaw: "${originalText}"`);
+                    
+                    // Forward to OpenClaw for processing
+                    try {
+                        const response = await fetch(`${OPENCLAW_URL}/api/v1/st4cker/schedule-reply`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-API-Key': OPENCLAW_API_KEY
+                            },
+                            body: JSON.stringify({
+                                phone: TARGET_PHONE,
+                                userId: TARGET_PHONE,
+                                message: originalText,
+                                context: {
+                                    event: 'schedule_reminder_reply',
+                                    reminderSentAt: lastReminderState.sentAt,
+                                    reminderType: lastReminderState.type
+                                }
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log(`[WA] OpenClaw replied: ${data.reply}`);
+                            
+                            // Send OpenClaw's reply back to user
+                            if (data.reply) {
+                                await client.sendMessage(msg.from, data.reply);
+                            }
+                            
+                            // Update local confirmation state if confirmed
+                            if (data.confirmed) {
+                                const today = new Date().toISOString().split('T')[0];
+                                if (!userConfirmations[today]) {
+                                    userConfirmations[today] = {};
+                                }
+                                userConfirmations[today][TARGET_PHONE] = {
+                                    confirmed: true,
+                                    confirmedAt: new Date().toISOString(),
+                                    message: msg.body
+                                };
+                                saveConfirmations();
+                            }
+                            
+                            // If OpenClaw says done/cancelled, clear the state
+                            if (data.done) {
+                                lastReminderState = { sentAt: null, date: null, phone: null, type: null };
+                                console.log('[WA] Schedule context cleared by OpenClaw');
+                            }
+                            
+                            return; // Handled by OpenClaw
+                        } else {
+                            console.error(`[WA] OpenClaw returned ${response.status}`);
+                        }
+                    } catch (e) {
+                        console.error('[WA] Failed to contact OpenClaw:', e.message);
+                    }
+                    
+                    // Fallback: simple keyword matching if OpenClaw fails
+                    const matchedKeyword = CONFIRM_KEYWORDS.find(keyword => {
+                        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+                        return regex.test(text);
+                    });
+                    
+                    if (matchedKeyword) {
+                        const today = new Date().toISOString().split('T')[0];
+                        if (!userConfirmations[today]) {
+                            userConfirmations[today] = {};
+                        }
+                        userConfirmations[today][TARGET_PHONE] = {
+                            confirmed: true,
+                            confirmedAt: new Date().toISOString(),
+                            message: msg.body
+                        };
+                        saveConfirmations();
+                        await client.sendMessage(msg.from, '✅ Oke! Siap berangkat. Nanti aku ingetin lagi 15 menit sebelum matkul berikutnya ya!');
+                    }
                 }
             }
         });
@@ -236,6 +395,31 @@ app.post('/send', async (req, res) => {
 
         const response = await client.sendMessage(chatId, message);
         
+        // Track if this is a reminder message for context-aware confirmation
+        const isScheduleReminder = message.includes('⏰ PENGINGAT') || 
+                                   message.includes('⏰ 15 MENIT LAGI') ||
+                                   message.includes('Jangan lupa berangkat');
+        
+        const isTaskReminder = message.includes('📋 REMINDER TUGAS');
+        
+        if (isScheduleReminder) {
+            lastReminderState = {
+                sentAt: new Date(),
+                date: new Date().toISOString().split('T')[0],
+                phone: number,
+                type: 'schedule'
+            };
+            console.log(`[WA] Schedule reminder sent, tracking for confirmation window. Target: ${number}`);
+        } else if (isTaskReminder) {
+            lastReminderState = {
+                sentAt: new Date(),
+                date: new Date().toISOString().split('T')[0],
+                phone: number,
+                type: 'task'
+            };
+            console.log(`[WA] Task reminder sent. Target: ${number}`);
+        }
+        
         res.json({ 
             success: true, 
             messageId: response.id.id,
@@ -258,6 +442,38 @@ app.get('/confirmation/:phone', (req, res) => {
         confirmedAt: confirmation?.confirmedAt || null,
         today: today
     });
+});
+
+// Receive task reminder notification from reminder-bot
+app.post('/confirmation/task-reminder', (req, res) => {
+    const { user_id, task_count, sent_at, tasks } = req.body;
+    
+    taskReminderState = {
+        active: true,
+        sentAt: new Date(sent_at || Date.now()),
+        taskCount: task_count || 0,
+        date: new Date().toISOString().split('T')[0],
+        tasks: tasks || []
+    };
+    
+    console.log(`[WA] Task reminder tracking activated: ${task_count} tasks`);
+    res.json({ success: true, message: 'Task reminder tracking activated' });
+});
+
+// Receive schedule reminder notification from reminder-bot
+app.post('/confirmation/schedule-reminder', (req, res) => {
+    const { user_id, schedule, reminder_type, sent_at } = req.body;
+    
+    lastReminderState = {
+        sentAt: new Date(sent_at || Date.now()),
+        date: new Date().toISOString().split('T')[0],
+        phone: TARGET_PHONE,
+        type: 'schedule',
+        scheduleInfo: schedule
+    };
+    
+    console.log(`[WA] Schedule reminder tracking activated: ${reminder_type} - ${schedule?.course_name}`);
+    res.json({ success: true, message: 'Schedule reminder tracking activated' });
 });
 
 // Reset confirmation (for testing)

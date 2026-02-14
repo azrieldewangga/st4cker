@@ -13,12 +13,12 @@ DB_CONFIG = {
     "port": os.environ.get("DB_PORT", "5432"),
     "database": os.environ.get("DB_NAME", "st4cker_db"),
     "user": os.environ.get("DB_USER", "st4cker_admin"),
-    "password": os.environ.get("DB_PASS", "Parkit234")
+    "password": os.environ.get("DB_PASSWORD", "")  # NO DEFAULT
 }
 
 # WhatsApp Gateway endpoint
 WA_API_URL = os.environ.get("WA_API_URL", "http://wa-gateway:4000/send")
-TARGET_PHONE = os.environ.get("TARGET_PHONE", "6281311417727")
+TARGET_PHONE = os.environ.get("TARGET_PHONE", "")  # MUST be set via environment
 
 def send_to_whatsapp(message):
     try:

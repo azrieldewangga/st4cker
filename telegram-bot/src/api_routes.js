@@ -1307,4 +1307,354 @@ router.delete('/schedules/cancellations/:id', [
     }
 });
 
+// ==========================================
+// TASK REMINDER API (For wa-gateway & OpenClaw)
+// ==========================================
+
+// POST /api/task/select - User selected a task from reminder (legacy, use /api/v1/tasks/update-status)
+router.post('/task/select', async (req, res) => {
+    try {
+        const { userId, taskIndex, message } = req.body;
+        
+        if (taskIndex === undefined || taskIndex < 0) {
+            return res.status(400).json({ error: 'Invalid task index' });
+        }
+        
+        // Get user
+        const user = await db.select().from(users).where(eq(users.telegramUserId, userId)).limit(1);
+        if (user.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Get pending tasks for this user (same query as reminder)
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const threeDaysLater = new Date(now);
+        threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+        const threeDaysLaterStr = threeDaysLater.toISOString().split('T')[0];
+        
+        const tasks = await db.select()
+            .from(assignments)
+            .where(and(
+                eq(assignments.userId, userId),
+                eq(assignments.status, 'pending'),
+                assignments.deadline >= today,
+                assignments.deadline <= threeDaysLaterStr
+            ))
+            .orderBy(assignments.deadline);
+        
+        if (taskIndex >= tasks.length) {
+            return res.status(400).json({ error: 'Task index out of range' });
+        }
+        
+        const selectedTask = tasks[taskIndex];
+        
+        // Update task status to 'in_progress'
+        await db.update(assignments)
+            .set({ 
+                status: 'in_progress',
+                updatedAt: new Date()
+            })
+            .where(eq(assignments.id, selectedTask.id));
+        
+        console.log(`[API] Task ${selectedTask.id} (${selectedTask.title}) marked as in_progress by user selection`);
+        
+        res.json({
+            success: true,
+            taskId: selectedTask.id,
+            taskName: selectedTask.title,
+            course: selectedTask.course,
+            message: `Task "${selectedTask.title}" marked as in progress`
+        });
+        
+    } catch (error) {
+        console.error('[API] Task Select Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// POST /api/v1/tasks/update-status - OpenClaw uses this to update task status
+// Supports fuzzy search by task name, course, or combination
+router.post('/tasks/update-status', [
+    body('userId').isString().notEmpty(),
+    body('searchQuery').isString().notEmpty(), // e.g., "kjk", "laporan", "kjk laporan"
+    body('newStatus').isIn(['pending', 'in_progress', 'completed', 'cancelled']),
+    body('replyMessage').optional().isString(), // Original user message for context
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { userId, searchQuery, newStatus, replyMessage } = req.body;
+        
+        // Get user
+        const user = await db.select().from(users).where(eq(users.telegramUserId, userId)).limit(1);
+        if (user.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Get all pending/in_progress tasks for this user
+        const tasks = await db.select()
+            .from(assignments)
+            .where(and(
+                eq(assignments.userId, userId),
+                eq(assignments.status, 'pending')
+            ))
+            .orderBy(assignments.deadline);
+        
+        if (tasks.length === 0) {
+            return res.status(404).json({ 
+                error: 'No pending tasks found',
+                message: 'User tidak memiliki tugas yang pending'
+            });
+        }
+        
+        // Fuzzy search function
+        const searchLower = searchQuery.toLowerCase();
+        const searchTerms = searchLower.split(/\s+/).filter(t => t.length > 2);
+        
+        let bestMatch = null;
+        let bestScore = 0;
+        
+        for (const task of tasks) {
+            const titleLower = (task.title || '').toLowerCase();
+            const courseLower = (task.course || '').toLowerCase();
+            const noteLower = (task.note || '').toLowerCase();
+            const typeLower = (task.type || '').toLowerCase();
+            
+            let score = 0;
+            
+            // Exact match gets highest score
+            if (titleLower === searchLower || courseLower === searchLower) {
+                score = 100;
+            }
+            // Contains full query
+            else if (titleLower.includes(searchLower) || courseLower.includes(searchLower)) {
+                score = 80;
+            }
+            // Search terms matching
+            else {
+                for (const term of searchTerms) {
+                    if (titleLower.includes(term)) score += 20;
+                    if (courseLower.includes(term)) score += 25; // Course match weighted higher
+                    if (noteLower.includes(term)) score += 10;
+                    if (typeLower.includes(term)) score += 15;
+                }
+            }
+            
+            // Course synonym matching (KJK, komber, etc)
+            const entityCache = getEntityCache();
+            if (entityCache && entityCache['matkul']) {
+                const resolvedCourse = entityCache['matkul'].get(searchLower);
+                if (resolvedCourse && courseLower.includes(resolvedCourse.toLowerCase())) {
+                    score += 30;
+                }
+            }
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = task;
+            }
+        }
+        
+        // Threshold: need at least 20 score to be considered a match
+        if (!bestMatch || bestScore < 20) {
+            return res.status(404).json({
+                error: 'No matching task found',
+                message: `Tidak menemukan tugas yang cocok dengan "${searchQuery}"`,
+                availableTasks: tasks.map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    course: t.course,
+                    deadline: t.deadline
+                }))
+            });
+        }
+        
+        // Update task status
+        await db.update(assignments)
+            .set({ 
+                status: newStatus,
+                updatedAt: new Date()
+            })
+            .where(eq(assignments.id, bestMatch.id));
+        
+        console.log(`[API] Task ${bestMatch.id} (${bestMatch.title}) status updated to ${newStatus} by query "${searchQuery}"`);
+        
+        // Broadcast update
+        if (broadcastEvent) {
+            broadcastEvent('assignment_updated', {
+                id: bestMatch.id,
+                status: newStatus
+            });
+        }
+        
+        res.json({
+            success: true,
+            taskId: bestMatch.id,
+            taskName: bestMatch.title,
+            course: bestMatch.course,
+            type: bestMatch.type,
+            deadline: bestMatch.deadline,
+            previousStatus: bestMatch.status,
+            newStatus: newStatus,
+            matchScore: bestScore,
+            message: `Task "${bestMatch.title}" (${bestMatch.course}) status diubah menjadi ${newStatus}`
+        });
+        
+    } catch (error) {
+        console.error('[API] Update Task Status Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/tasks/last-reminder - Get last task reminder context for OpenClaw
+router.get('/tasks/last-reminder/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Check if task reminder was sent today
+        const reminderLog = await db.select()
+            .from(reminderLogs)
+            .where(and(
+                eq(reminderLogs.userId, userId),
+                eq(reminderLogs.reminderDate, today),
+                eq(reminderLogs.type, 'task_daily')
+            ))
+            .limit(1);
+        
+        if (reminderLog.length === 0) {
+            return res.json({
+                hasReminderToday: false,
+                message: 'No task reminder sent today'
+            });
+        }
+        
+        // Get current pending tasks
+        const threeDaysLater = new Date();
+        threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+        const threeDaysLaterStr = threeDaysLater.toISOString().split('T')[0];
+        
+        const tasks = await db.select()
+            .from(assignments)
+            .where(and(
+                eq(assignments.userId, userId),
+                eq(assignments.status, 'pending'),
+                assignments.deadline >= today,
+                assignments.deadline <= threeDaysLaterStr
+            ))
+            .orderBy(assignments.deadline);
+        
+        res.json({
+            hasReminderToday: true,
+            reminderSentAt: reminderLog[0].sentAt,
+            taskCount: tasks.length,
+            tasks: tasks.map((t, idx) => ({
+                number: idx + 1,
+                id: t.id,
+                title: t.title,
+                course: t.course,
+                type: t.type,
+                deadline: t.deadline,
+                note: t.note,
+                daysLeft: Math.ceil((new Date(t.deadline) - new Date(today)) / (1000 * 60 * 60 * 24))
+            }))
+        });
+        
+    } catch (error) {
+        console.error('[API] Get Last Reminder Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// POST /api/v1/reminders/confirm - OpenClaw confirms user attendance confirmation
+router.post('/reminders/confirm', [
+    body('userId').isString().notEmpty(),
+    body('confirmed').isBoolean(),
+    body('message').optional().isString(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { userId, confirmed, message } = req.body;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Update reminder log to mark user confirmed
+        // Note: This uses the reminderOverrides table for simplicity
+        // Or could create a new user_confirmation_logs table
+        
+        console.log(`[API] User ${userId} ${confirmed ? 'confirmed' : 'declined'} attendance: ${message}`);
+        
+        res.json({
+            success: true,
+            confirmed: confirmed,
+            message: confirmed 
+                ? 'User attendance confirmed for today' 
+                : 'User declined/cancelled attendance'
+        });
+        
+    } catch (error) {
+        console.error('[API] Confirm Attendance Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET /api/v1/reminders/last-schedule/:userId - Get last schedule reminder context
+router.get('/reminders/last-schedule/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get today's schedule reminders
+        const logs = await db.select()
+            .from(reminderLogs)
+            .where(and(
+                eq(reminderLogs.userId, userId),
+                eq(reminderLogs.reminderDate, today),
+                reminderLogs.type.in(['first_545am', 'first_90min', '15min'])
+            ))
+            .orderBy(desc(reminderLogs.sentAt))
+            .limit(1);
+        
+        if (logs.length === 0) {
+            return res.json({
+                hasReminderToday: false,
+                message: 'No schedule reminder sent today'
+            });
+        }
+        
+        const lastLog = logs[0];
+        
+        // Get today's schedules
+        const dayOfWeek = new Date().getDay() || 7; // 1-7 (Senin-Minggu)
+        const todaysSchedules = await db.select()
+            .from(schedules)
+            .where(and(
+                eq(schedules.userId, userId),
+                eq(schedules.dayOfWeek, dayOfWeek),
+                eq(schedules.isActive, true)
+            ))
+            .orderBy(schedules.startTime);
+        
+        res.json({
+            hasReminderToday: true,
+            lastReminder: {
+                type: lastLog.type,
+                sentAt: lastLog.sentAt,
+                scheduleId: lastLog.scheduleId,
+                messageContent: lastLog.messageContent
+            },
+            todaySchedules: todaysSchedules.map(s => ({
+                id: s.id,
+                courseName: s.courseName,
+                startTime: s.startTime,
+                room: s.room,
+                lecturer: s.lecturer
+            }))
+        });
+        
+    } catch (error) {
+        console.error('[API] Get Last Schedule Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 export default router;

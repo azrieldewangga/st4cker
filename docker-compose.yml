@@ -73,7 +73,7 @@ services:
       - "127.0.0.1:4000:4000"  # Local access only for security
     environment:
       - TZ=Asia/Jakarta
-      - TARGET_PHONE=6281311417727
+      - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
     volumes:
       - wa_auth:/app/auth_state
       - wa_data:/app/data
@@ -87,7 +87,7 @@ services:
       start_period: 30s
 
   # --------------------------------------------------------------------------------
-  # 4. REMINDER AGENT (The Scheduler)
+  # 4. REMINDER AGENT (Trigger Only)
   # --------------------------------------------------------------------------------
   reminder-bot:
     build: ./reminder-bot
@@ -95,21 +95,73 @@ services:
     restart: always
     environment:
       - TZ=Asia/Jakarta
-      - WA_API_URL=http://wa-gateway:4000/send
-      - TARGET_PHONE=6281311417727
+      - OPENCLAW_WEBHOOK_URL=http://openclaw:8000/webhook/st4cker-reminder-trigger
+      - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
+      - DB_HOST=st4cker-db
+      - DB_PORT=5432
+      - DB_NAME=st4cker_db
+      - DB_USER=st4cker_admin
+      - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - reminder_data:/tmp
     networks:
       - st4cker-net
     depends_on:
-      postgres:
-        condition: service_healthy
+      - openclaw
+      - postgres
+
+  # --------------------------------------------------------------------------------
+  # 5. FOLLOW-UP AGENT (Trigger Only)
+  # --------------------------------------------------------------------------------
+  followup-bot:
+    build: ./followup-bot
+    container_name: followup-bot
+    restart: always
+    environment:
+      - TZ=Asia/Jakarta
+      - OPENCLAW_WEBHOOK_URL=http://openclaw:8000/webhook/st4cker-reminder-trigger
+      - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
+      - DB_HOST=st4cker-db
+      - DB_PORT=5432
+      - DB_NAME=st4cker_db
+      - DB_USER=st4cker_admin
+      - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    networks:
+      - st4cker-net
+    depends_on:
+      - openclaw
+      - postgres
+
+  # --------------------------------------------------------------------------------
+  # 6. OPENCLAW BRAIN (The Decision Maker)
+  # --------------------------------------------------------------------------------
+  openclaw:
+    build: ./openclaw
+    container_name: openclaw
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - TZ=Asia/Jakarta
+      - ST4CKER_API_URL=http://st4cker-bot:3001
+    env_file:
+      - .env
+    networks:
+      - st4cker-net
+    depends_on:
+      - st4cker-bot
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres_data:
   wa_auth:
   wa_data:
   reminder_data:
+  followup_data:
 
 
 networks:
