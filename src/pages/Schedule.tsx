@@ -108,10 +108,12 @@ const Schedule = () => {
                 const state = useStore.getState() as any;
                 if (state.fetchScheduleFromBackend) {
                     await state.fetchScheduleFromBackend();
-                    console.log('[Schedule] Auto-pulled from VPS');
+                    toast.success('Schedule loaded from server');
+                } else {
+                    toast.error('Sync function not available in store');
                 }
-            } catch (e) {
-                console.log('[Schedule] Using local data (offline mode)');
+            } catch (e: any) {
+                toast.error('Failed to load from server: ' + (e.message || 'Check console'));
             }
         };
         pullFromServer();
