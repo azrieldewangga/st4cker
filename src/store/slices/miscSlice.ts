@@ -9,6 +9,8 @@ export interface MiscSlice {
     schedule: Record<string, any>;
     fetchSchedule: () => Promise<void>;
     setScheduleItem: (day: string, time: string, courseId: string, color?: string, room?: string, lecturer?: string, skipLog?: boolean) => Promise<void>;
+    syncScheduleToBackend: () => Promise<void>;
+    fetchScheduleFromBackend: () => Promise<void>;
 
     // Materials
     materials: Record<string, CourseMaterial[]>;
@@ -137,6 +139,90 @@ export const createMiscSlice: StateCreator<
             get().fetchSchedule();
         } catch (error) {
             console.error('[MiscSlice] Set schedule item error:', error);
+        }
+    },
+
+    syncScheduleToBackend: async () => {
+        try {
+            const state = get() as any;
+            const { schedule, userProfile } = state;
+            const apiBase = userProfile?.telegramWebsocketUrl?.replace(':3000', ':3001') || 'http://localhost:3001';
+            const apiKey = import.meta.env.VITE_AGENT_API_KEY || '';
+            
+            const schedulesArray = Object.entries(schedule).map(([key, value]: [string, any]) => ({
+                id: value.id || key,
+                day: value.day,
+                startTime: value.startTime,
+                endTime: value.endTime || '',
+                course: value.course,
+                location: value.location || '',
+                lecturer: value.lecturer || '',
+                isActive: true,
+                semester: userProfile?.semester || 1,
+            }));
+
+            const response = await fetch(`${apiBase}/api/v1/schedules/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey,
+                },
+                body: JSON.stringify({ schedules: schedulesArray }),
+            });
+
+            if (!response.ok) throw new Error('Failed to sync');
+            console.log('[MiscSlice] Schedule synced to backend');
+        } catch (error) {
+            console.error('[MiscSlice] Sync to backend error:', error);
+            throw error;
+        }
+    },
+
+    fetchScheduleFromBackend: async () => {
+        try {
+            const state = get() as any;
+            const { userProfile } = state;
+            const apiBase = userProfile?.telegramWebsocketUrl?.replace(':3000', ':3001') || 'http://localhost:3001';
+            const apiKey = import.meta.env.VITE_AGENT_API_KEY || '';
+            
+            const response = await fetch(`${apiBase}/api/v1/schedules`, {
+                headers: {
+                    'X-API-Key': apiKey,
+                },
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch');
+            const data = await response.json();
+            
+            // Convert array to schedule map
+            const scheduleMap: Record<string, any> = {};
+            data.data?.forEach((item: any) => {
+                const key = `${item.day}-${item.startTime}`;
+                scheduleMap[key] = {
+                    ...item,
+                    course: item.courseName || item.course,
+                    location: item.room || item.location,
+                };
+                // Save to local SQLite
+                window.electronAPI.schedule.upsert({
+                    id: item.id,
+                    day: item.day,
+                    startTime: item.startTime,
+                    endTime: item.endTime,
+                    course: item.courseName || item.course,
+                    location: item.room || item.location,
+                    lecturer: item.lecturer,
+                    note: JSON.stringify({ color: 'bg-primary' }),
+                    updatedAt: new Date().toISOString(),
+                });
+            });
+            
+            set({ schedule: scheduleMap });
+            console.log('[MiscSlice] Schedule fetched from backend');
+        } catch (error) {
+            console.error('[MiscSlice] Fetch from backend error:', error);
+            // Fallback to local
+            get().fetchSchedule();
         }
     },
 

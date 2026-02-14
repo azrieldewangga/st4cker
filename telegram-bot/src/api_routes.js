@@ -956,6 +956,52 @@ router.delete('/schedules/:id', [
     }
 });
 
+// POST /api/v1/schedules/sync - Bulk sync schedules from desktop app
+router.post('/schedules/sync', async (req, res) => {
+    try {
+        const { schedules: schedulesData } = req.body;
+        const usersList = await db.select().from(users).limit(1);
+        
+        if (usersList.length === 0) {
+            return res.status(400).json({ error: 'No users found' });
+        }
+        
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        // Upsert each schedule
+        for (const item of schedulesData) {
+            await db.insert(schedules).values({
+                id: item.id || crypto.randomUUID(),
+                userId: defaultUserId,
+                courseName: item.course,
+                courseCode: item.course?.substring(0, 3).toUpperCase(),
+                dayOfWeek: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].indexOf(item.day) + 1,
+                startTime: item.startTime,
+                endTime: item.endTime || '',
+                room: item.location,
+                lecturer: item.lecturer,
+                isActive: item.isActive ?? true,
+                semester: item.semester || 1,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }).onConflictDoUpdate({
+                target: schedules.id,
+                set: {
+                    courseName: item.course,
+                    room: item.location,
+                    lecturer: item.lecturer,
+                    updatedAt: new Date(),
+                }
+            });
+        }
+        
+        res.json({ success: true, count: schedulesData.length });
+    } catch (error) {
+        console.error('[API] Sync Schedules Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ==========================================
 // REMINDER ENDPOINTS (OpenClaw Integration)
 // ==========================================

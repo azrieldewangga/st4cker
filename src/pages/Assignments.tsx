@@ -614,7 +614,7 @@ const Assignments = () => {
 
                         {/* Active Filter Chips */}
                         {(search || statusFilter !== 'all' || courseFilter !== 'all') && (
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2 px-[1px]">
                                 {search && (
                                     <FilterChip
                                         label={`Search: "${search}"`}

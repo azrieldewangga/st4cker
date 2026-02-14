@@ -426,10 +426,27 @@ const Schedule = () => {
                     <h2 className="text-2xl font-semibold tracking-tight">Schedule</h2>
                     <p className="text-sm text-muted-foreground mt-1">Manage your weekly classes.</p>
                 </div>
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={async () => {
+                        try {
+                            await get().syncScheduleToBackend?.();
+                            toast.success('Schedule synced to server');
+                        } catch (e) {
+                            toast.error('Failed to sync schedule');
+                        }
+                    }}
+                    className="gap-2"
+                >
+                    <RefreshCw className="w-4 h-4" />
+                    Sync to Server
+                </Button>
             </div>
 
             <Card className="flex-1 overflow-hidden flex flex-col">
-                <ScrollArea className="flex-1 h-full">
+                <ScrollArea className="flex-1 h-full" orientation="horizontal">
+                    <div className="min-w-[800px]">
                     <table className="w-full text-sm border-collapse">
                         <thead className="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
                             <tr>
@@ -479,7 +496,7 @@ const Schedule = () => {
                             ))}
                         </tbody>
                     </table>
-
+                    </div>
                 </ScrollArea>
             </Card>
 
