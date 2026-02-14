@@ -1,3 +1,8 @@
+import { initDatabase } from './db/init.js';
+
+// Initialize database first, then start services
+await initDatabase();
+
 import './server.js';
 import './bot.js';
 
