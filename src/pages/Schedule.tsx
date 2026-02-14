@@ -483,9 +483,8 @@ const Schedule = () => {
                 </Button>
             </div>
 
-            <Card className="flex-1 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-auto">
-                    <div className="min-w-[800px] h-full">
+            <Card className="flex-1 overflow-auto">
+                <div className="min-w-[1000px]">
                     <table className="w-full text-sm border-collapse">
                         <thead className="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
                             <tr>
@@ -535,7 +534,6 @@ const Schedule = () => {
                             ))}
                         </tbody>
                     </table>
-                    </div>
                 </div>
             </Card>
 

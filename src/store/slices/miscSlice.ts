@@ -146,8 +146,9 @@ export const createMiscSlice: StateCreator<
         try {
             const state = get() as any;
             const { schedule, userProfile } = state;
-            const apiBase = userProfile?.telegramWebsocketUrl?.replace(':3000', ':3001') || 'http://localhost:3001';
-            const apiKey = import.meta.env.VITE_AGENT_API_KEY || '';
+            // Use server URL from userProfile or env
+            const serverUrl = userProfile?.serverUrl || 'http://103.127.134.173:3001';
+            const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
             
             const schedulesArray = Object.entries(schedule).map(([key, value]: [string, any]) => ({
                 id: value.id || key,
@@ -161,7 +162,7 @@ export const createMiscSlice: StateCreator<
                 semester: userProfile?.semester || 1,
             }));
 
-            const response = await fetch(`${apiBase}/api/v1/schedules/sync`, {
+            const response = await fetch(`${serverUrl}/api/v1/schedules/sync`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -182,10 +183,10 @@ export const createMiscSlice: StateCreator<
         try {
             const state = get() as any;
             const { userProfile } = state;
-            const apiBase = userProfile?.telegramWebsocketUrl?.replace(':3000', ':3001') || 'http://localhost:3001';
-            const apiKey = import.meta.env.VITE_AGENT_API_KEY || '';
+            const serverUrl = userProfile?.serverUrl || 'http://103.127.134.173:3001';
+            const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
             
-            const response = await fetch(`${apiBase}/api/v1/schedules`, {
+            const response = await fetch(`${serverUrl}/api/v1/schedules`, {
                 headers: {
                     'X-API-Key': apiKey,
                 },
@@ -193,6 +194,12 @@ export const createMiscSlice: StateCreator<
 
             if (!response.ok) throw new Error('Failed to fetch');
             const data = await response.json();
+            
+            // Jangan overwrite kalau server kosong tapi lokal ada data
+            if (!data.data?.length) {
+                console.log('[MiscSlice] Server has no schedules, keeping local data');
+                return;
+            }
             
             // Convert array to schedule map
             const scheduleMap: Record<string, any> = {};
