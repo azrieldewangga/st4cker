@@ -41,6 +41,7 @@ services:
     environment:
       - NODE_ENV=production
       - TZ=Asia/Jakarta
+      - AGENT_API_KEY=${AGENT_API_KEY}
       # Connect to LOCAL DB service (service name: "postgres", port: 5432)
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-st4cker_db}
       - REMINDER_SECRET=${REMINDER_SECRET:-r3m1nd3r_s3cr3t}
