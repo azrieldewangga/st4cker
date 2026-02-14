@@ -147,7 +147,7 @@ export const createMiscSlice: StateCreator<
             const state = get() as any;
             const { schedule, userProfile } = state;
             // Use server URL from userProfile or env
-            const serverUrl = userProfile?.serverUrl || 'http://103.127.134.173:3001';
+            const serverUrl = userProfile?.serverUrl || 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
             
             const schedulesArray = Object.entries(schedule).map(([key, value]: [string, any]) => ({
@@ -183,7 +183,7 @@ export const createMiscSlice: StateCreator<
         try {
             const state = get() as any;
             const { userProfile } = state;
-            const serverUrl = userProfile?.serverUrl || 'http://103.127.134.173:3001';
+            const serverUrl = userProfile?.serverUrl || 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
             
             const response = await fetch(`${serverUrl}/api/v1/schedules`, {
