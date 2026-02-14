@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
 
 # Configuration
-ST4CKER_API_URL = os.getenv("ST4CKER_API_URL", "http://st4cker-bot:3001")
+ST4CKER_API_URL = os.getenv("ST4CKER_API_URL", "http://st4cker-bot:3000")
 ST4CKER_API_KEY = os.getenv("ST4CKER_API_KEY", "ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62")
 OPENCLAW_API_KEY = os.getenv("OPENCLAW_API_KEY", "st4cker_openclaw_secure_key_2024")
 

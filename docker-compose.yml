@@ -144,7 +144,9 @@ services:
       - "127.0.0.1:8001:8000"
     environment:
       - TZ=Asia/Jakarta
-      - ST4CKER_API_URL=http://st4cker-bot:3001
+      - ST4CKER_API_URL=http://st4cker-bot:3000
+      - ST4CKER_API_KEY=ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62
+      - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
     env_file:
       - .env
     networks:
