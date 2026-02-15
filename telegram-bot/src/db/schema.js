@@ -170,10 +170,10 @@ export const schedules = pgTable('schedules', {
 // --- REMINDER LOGS ---
 export const reminderLogs = pgTable('reminder_logs', {
     id: text('id').primaryKey(),
-    scheduleId: text('schedule_id').notNull().references(() => schedules.id, { onDelete: 'cascade' }),
+    scheduleId: text('schedule_id').references(() => schedules.id, { onDelete: 'cascade' }), // Nullable for task reminders
     userId: text('user_id').notNull().references(() => users.telegramUserId, { onDelete: 'cascade' }),
     sentAt: timestamp('sent_at').defaultNow(),
-    type: text('type').notNull(), // 'first_6am', 'first_90min', '15min', 'retry', 'manual'
+    type: text('type').notNull(), // 'first_6am', 'first_90min', '15min', 'task_daily', 'task_followup', 'crisis_check', 'retry', 'manual'
     messageContent: text('message_content'),
     userConfirmed: boolean('user_confirmed').default(false),
     confirmedAt: timestamp('confirmed_at'),

@@ -1730,4 +1730,62 @@ router.get('/reminders/last-schedule/:userId', async (req, res) => {
     }
 });
 
+// POST /api/v1/reminders/log - Log a reminder (called by OpenClaw when sending reminders)
+router.post('/reminders/log', [
+    body('userId').isString().notEmpty(),
+    body('type').isIn(['task_daily', 'task_followup', 'first_545am', 'first_90min', '15min', 'crisis_check', 'night_preview']),
+    body('messageContent').optional().isString(),
+    body('scheduleId').optional().isUUID(),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { userId, type, messageContent, scheduleId } = req.body;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Check if already logged today for this type
+        const existing = await db.select()
+            .from(reminderLogs)
+            .where(and(
+                eq(reminderLogs.userId, userId),
+                eq(reminderLogs.reminderDate, today),
+                eq(reminderLogs.type, type)
+            ))
+            .limit(1);
+        
+        if (existing.length > 0) {
+            return res.json({
+                success: true,
+                message: 'Reminder already logged today',
+                logId: existing[0].id
+            });
+        }
+        
+        // Create new log entry
+        const newLog = {
+            id: crypto.randomUUID(),
+            userId: userId,
+            scheduleId: scheduleId || null, // Nullable for task reminders
+            type: type,
+            messageContent: messageContent || null,
+            reminderDate: today,
+            sentAt: new Date(),
+            userConfirmed: false
+        };
+        
+        await db.insert(reminderLogs).values(newLog);
+        
+        console.log(`[API] Reminder logged: ${type} for user ${userId}`);
+        
+        res.json({
+            success: true,
+            message: 'Reminder logged successfully',
+            logId: newLog.id
+        });
+        
+    } catch (error) {
+        console.error('[API] Log Reminder Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 export default router;

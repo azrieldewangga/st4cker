@@ -94,10 +94,29 @@ def trigger_openclaw(trigger_type: str, trigger_time: str, data: dict):
         logger.error(f"[OpenClaw] Failed to trigger: {e}")
         return False
 
+def was_reminder_sent_today(cur, user_id, today):
+    """
+    Check if initial task reminder was sent today (jam 15:00).
+    """
+    try:
+        cur.execute("""
+            SELECT id FROM reminder_logs
+            WHERE user_id = %s
+            AND reminder_date = %s
+            AND type = 'task_daily'
+            LIMIT 1
+        """, (user_id, today))
+        return cur.fetchone() is not None
+    except Exception as e:
+        logger.error(f"Error checking reminder log: {e}")
+        return False
+
+
 def check_followup_reminders():
     """
     Check follow-up jam 20:00.
     Trigger OpenClaw untuk tugas yang perlu follow-up.
+    Hanya kirim jika user sudah menerima reminder jam 15:00.
     """
     try:
         conn = get_db_connection()
@@ -116,6 +135,24 @@ def check_followup_reminders():
         state = load_state()
         if state.get(f"followup_{today}"):
             return
+        
+        # Get user_id
+        cur.execute("SELECT telegram_user_id FROM users LIMIT 1")
+        user_result = cur.fetchone()
+        if not user_result:
+            logger.info("No users found")
+            return
+        user_id = user_result[0]
+        
+        # CEK: Apakah reminder jam 15:00 sudah dikirim hari ini?
+        if not was_reminder_sent_today(cur, user_id, today):
+            logger.info("[Follow-up] SKIP - Initial task reminder (15:00) was NOT sent today")
+            # Mark as triggered anyway to prevent retrying
+            state[f"followup_{today}"] = True
+            save_state(state)
+            return
+        
+        logger.info("[Follow-up] Initial reminder was sent, proceeding with follow-up check")
         
         # Ambil tugas dengan deadline H-0 s/d H-3
         three_days_later = (now + timedelta(days=3)).strftime('%Y-%m-%d')

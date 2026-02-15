@@ -183,11 +183,11 @@ export async function initDatabase() {
         `);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_project_sessions_prj ON project_sessions(project_id);`);
 
-        // Create reminder_logs table
+        // Create reminder_logs table (schedule_id is nullable for task reminders)
         await db.execute(sql`
             CREATE TABLE IF NOT EXISTS reminder_logs (
                 id TEXT PRIMARY KEY,
-                schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+                schedule_id TEXT REFERENCES schedules(id) ON DELETE CASCADE,
                 user_id TEXT NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
                 sent_at TIMESTAMP DEFAULT NOW(),
                 type TEXT NOT NULL,

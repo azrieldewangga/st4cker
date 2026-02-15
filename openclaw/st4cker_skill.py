@@ -6,6 +6,7 @@ Fully conversational AI for St4cker reminder system
 Persona: Azriel (Zril) - teman kuliah yang friendly & supportive
 """
 
+import asyncio
 import os
 import re
 from datetime import datetime, timedelta
@@ -31,6 +32,41 @@ nlu = NLU()
 msg_gen = MessageGenerator()
 context_store = ContextStore()
 tools = St4ckerTools(ST4CKER_API_URL, ST4CKER_API_KEY)
+
+# =============================================================================
+# Helper: Log reminder to St4cker API (so followup-bot knows reminder was sent)
+# =============================================================================
+async def log_reminder_to_st4cker(user_id: str, reminder_type: str, message_content: str = "", schedule_id: str = None):
+    """
+    Log reminder to St4cker API so followup-bot can check if initial reminder was sent.
+    This is crucial to prevent follow-up reminders when initial reminder was skipped.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            payload = {
+                "userId": user_id,
+                "type": reminder_type,
+                "messageContent": message_content[:500] if message_content else None  # Limit size
+            }
+            if schedule_id:
+                payload["scheduleId"] = schedule_id
+            
+            response = await client.post(
+                f"{ST4CKER_API_URL}/api/v1/reminders/log",
+                json=payload,
+                headers={"X-API-Key": ST4CKER_API_KEY, "Content-Type": "application/json"},
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                print(f"[LogReminder] Success: {reminder_type} for {user_id}")
+                return True
+            else:
+                print(f"[LogReminder] Failed: {response.status_code} - {response.text}")
+                return False
+    except Exception as e:
+        print(f"[LogReminder] Error: {e}")
+        return False
 
 # Pydantic Models
 class ReminderTrigger(BaseModel):
@@ -97,6 +133,30 @@ async def handle_reminder_trigger(
     
     # Generate message with persona Azriel
     message = msg_gen.generate(data.trigger_type, data.data, user_ctx)
+    
+    # LOG THE REMINDER - This is crucial for followup-bot to know if initial reminder was sent
+    # Determine the log type based on trigger_type
+    log_type_map = {
+        "task_list": "task_daily",
+        "followup": "task_followup", 
+        "crisis_check": "crisis_check",
+        "night_preview": "night_preview",
+        "schedule": "schedule_reminder"
+    }
+    log_type = log_type_map.get(data.trigger_type, data.trigger_type)
+    
+    # Get schedule_id if this is a schedule reminder
+    schedule_id = None
+    if data.trigger_type == "schedule" and data.data:
+        schedule_id = data.data.get("schedule_id") or data.data.get("id")
+    
+    # Log async (don't wait for it to complete)
+    asyncio.create_task(log_reminder_to_st4cker(
+        user_id=data.user_id,
+        reminder_type=log_type,
+        message_content=message,
+        schedule_id=schedule_id
+    ))
     
     # Update context
     context_store.update_context(data.user_id, {
