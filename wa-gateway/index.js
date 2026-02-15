@@ -320,25 +320,9 @@ async function initWhatsApp() {
                         console.error('[WA] Failed to contact OpenClaw:', e.message);
                     }
                     
-                    // Fallback: simple keyword matching if OpenClaw fails
-                    const matchedKeyword = CONFIRM_KEYWORDS.find(keyword => {
-                        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
-                        return regex.test(text);
-                    });
-                    
-                    if (matchedKeyword) {
-                        const today = new Date().toISOString().split('T')[0];
-                        if (!userConfirmations[today]) {
-                            userConfirmations[today] = {};
-                        }
-                        userConfirmations[today][TARGET_PHONE] = {
-                            confirmed: true,
-                            confirmedAt: new Date().toISOString(),
-                            message: msg.body
-                        };
-                        saveConfirmations();
-                        await client.sendMessage(msg.from, '✅ Oke! Siap berangkat. Nanti aku ingetin lagi 15 menit sebelum matkul berikutnya ya!');
-                    }
+                    // Fallback: forward to OpenClaw conversational handler
+                    // Old keyword matching removed - now handled by OpenClaw fully
+                    console.log('[WA] OpenClaw unavailable for schedule reply, waiting for next reminder cycle');
                 }
             }
         });
