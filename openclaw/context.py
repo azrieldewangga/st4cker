@@ -171,3 +171,15 @@ class ContextStore:
 
 # Global instance
 context_store = ContextStore()
+
+# Patch: Ensure thread-safe initialization
+import threading
+_context_lock = threading.Lock()
+
+# Recreate if needed (workaround for potential initialization issues)
+def get_context_store():
+    global context_store
+    with _context_lock:
+        if context_store is None:
+            context_store = ContextStore()
+        return context_store
