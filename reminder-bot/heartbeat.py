@@ -30,11 +30,17 @@ DB_CONFIG = {
 OPENCLAW_WEBHOOK_URL = os.environ.get("OPENCLAW_WEBHOOK_URL", "http://openclaw:8000/webhook/st4cker-reminder-trigger")
 OPENCLAW_API_KEY = os.environ.get("OPENCLAW_API_KEY", "st4cker_openclaw_secure_key_2024")
 TARGET_PHONE = os.environ.get("TARGET_PHONE", "")  # MUST be set via environment
+TARGET_USER_ID = os.environ.get("TARGET_USER_ID", "")  # Telegram ID untuk DB
 
 # Validate required environment variables
 if not TARGET_PHONE:
     logger.error("❌ ERROR: TARGET_PHONE environment variable must be set!")
     logger.error("   Example: TARGET_PHONE=6281234567890")
+    exit(1)
+
+if not TARGET_USER_ID:
+    logger.error("❌ ERROR: TARGET_USER_ID environment variable must be set!")
+    logger.error("   Example: TARGET_USER_ID=1168825716")
     exit(1)
 
 if not DB_CONFIG["password"]:
@@ -77,7 +83,7 @@ def trigger_openclaw(trigger_type: str, trigger_time: str, data: dict):
             "source": "reminder-bot",
             "trigger_type": trigger_type,
             "trigger_time": trigger_time,
-            "user_id": TARGET_PHONE,
+            "user_id": TARGET_USER_ID,
             "phone": TARGET_PHONE,
             "data": data
         }
@@ -414,6 +420,7 @@ if __name__ == "__main__":
     logger.info("Semua decision di OpenClaw")
     logger.info("="*50)
     logger.info(f"OpenClaw URL: {OPENCLAW_WEBHOOK_URL}")
+    logger.info(f"Target User ID: {TARGET_USER_ID}")
     logger.info(f"Target Phone: {TARGET_PHONE}")
     logger.info("="*50)
     
