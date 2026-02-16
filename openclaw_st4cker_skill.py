@@ -96,7 +96,7 @@ class OpenClawResponse(BaseModel):
 # St4cker API Client
 async def st4cker_request(method: str, endpoint: str, data: Dict = None) -> Dict:
     url = f"{ST4CKER_API_URL}/api/v1{endpoint}"
-    headers = {"X-API-Key": ST4CKER_API_KEY, "Content-Type": "application/json"}
+    headers = {"x-api-key": ST4CKER_API_KEY, "Content-Type": "application/json"}
     
     # Log untuk debug
     print(f"[St4cker API] {method} {url}")
