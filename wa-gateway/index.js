@@ -247,8 +247,8 @@ async function initWhatsApp() {
                         console.error('[WA] Failed to contact OpenClaw:', e.message);
                     }
                     
-                    // Fallback: if OpenClaw fails, just acknowledge
-                    await client.sendMessage(msg.from, '👍 Oke! Catat ya~');
+                    // Fallback: if OpenClaw fails, just acknowledge (kimi persona)
+                    await client.sendMessage(msg.from, 'okee, aku catet ✌🏻');
                     taskReminderState.active = false;
                     return;
                 }

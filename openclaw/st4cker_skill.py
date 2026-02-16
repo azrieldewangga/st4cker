@@ -636,13 +636,12 @@ async def handle_incoming_message(
     _: bool = Depends(verify_api_key)
 ) -> Dict[str, Any]:
     """
-    Handle incoming message dari WA Gateway.
+    Handle incoming message dari WA Gateway (generic endpoint).
     Forward ke chat handler dengan user_id yang sesuai.
     """
     print(f"[Incoming WA] {data.from_phone}: {data.message}")
     
-    # Map phone to user_id (dalam production, query dari DB)
-    # Untuk sekarang, hardcode ke TARGET_USER_ID
+    # Map phone to user_id
     user_id = TARGET_USER_ID if TARGET_USER_ID else "1168825716"
     
     # Create ChatRequest
@@ -653,7 +652,7 @@ async def handle_incoming_message(
         context={}
     )
     
-    # Handle dengan chat handler yang sudah ada
+    # Handle dengan chat handler
     response = await handle_chat(chat_request, _)
     
     return {
@@ -661,6 +660,71 @@ async def handle_incoming_message(
         "reply": response.reply,
         "action": response.action,
         "user_id": user_id
+    }
+
+# Legacy endpoints for backward compatibility with wa-gateway
+class ScheduleReplyRequest(BaseModel):
+    phone: str
+    userId: str
+    message: str
+    context: Optional[Dict[str, Any]] = None
+
+class TaskReplyRequest(BaseModel):
+    phone: str
+    userId: str
+    message: str
+    context: Optional[Dict[str, Any]] = None
+
+@app.post("/api/v1/st4cker/schedule-reply")
+async def handle_schedule_reply(
+    data: ScheduleReplyRequest,
+    _: bool = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Handle schedule reminder reply dari WA Gateway (backward compatible).
+    """
+    print(f"[Schedule Reply] {data.userId}: {data.message}")
+    
+    chat_request = ChatRequest(
+        phone=data.phone,
+        user_id=data.userId,
+        message=data.message,
+        context=data.context or {}
+    )
+    
+    response = await handle_chat(chat_request, _)
+    
+    return {
+        "reply": response.reply,
+        "action": response.action,
+        "done": response.done,
+        "confirmed": response.context_update.get("confirmed_attendance") if response.context_update else False
+    }
+
+@app.post("/api/v1/st4cker/task-reply")
+async def handle_task_reply(
+    data: TaskReplyRequest,
+    _: bool = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Handle task reminder reply dari WA Gateway (backward compatible).
+    """
+    print(f"[Task Reply] {data.userId}: {data.message}")
+    
+    chat_request = ChatRequest(
+        phone=data.phone,
+        user_id=data.userId,
+        message=data.message,
+        context=data.context or {}
+    )
+    
+    response = await handle_chat(chat_request, _)
+    
+    return {
+        "reply": response.reply,
+        "action": response.action,
+        "done": response.done,
+        "clearContext": response.done
     }
 
 # =============================================================================
