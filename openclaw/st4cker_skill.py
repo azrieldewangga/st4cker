@@ -54,7 +54,7 @@ async def log_reminder_to_st4cker(user_id: str, reminder_type: str, message_cont
             response = await client.post(
                 f"{ST4CKER_API_URL}/api/v1/reminders/log",
                 json=payload,
-                headers={"X-API-Key": ST4CKER_API_KEY, "Content-Type": "application/json"},
+                headers={"x-api-key": ST4CKER_API_KEY, "Content-Type": "application/json"},
                 timeout=5
             )
             
