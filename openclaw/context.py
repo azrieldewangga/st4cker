@@ -7,6 +7,7 @@ In-memory dengan TTL (Time To Live)
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import threading
+from threading import RLock
 
 class UserContext:
     """
@@ -111,7 +112,7 @@ class ContextStore:
     def __init__(self, ttl_hours: int = 24):
         self.contexts: Dict[str, UserContext] = {}
         self.ttl = timedelta(hours=ttl_hours)
-        self.lock = threading.Lock()
+        self.lock = RLock()  # Reentrant lock to prevent deadlocks
     
     def get_context(self, user_id: str) -> Dict[str, Any]:
         """Get context untuk user (return sebagai dict)."""
@@ -129,7 +130,8 @@ class ContextStore:
                 self.contexts[user_id].skip_preferences = skip_prefs
                 ctx = self.contexts[user_id]
             
-            return ctx.to_dict()
+            # Return copy to avoid external modification issues
+            return ctx.to_dict().copy()
     
     def get_user_context_obj(self, user_id: str) -> UserContext:
         """Get UserContext object (untuk internal use)."""
@@ -169,17 +171,10 @@ class ContextStore:
             return len(expired)
 
 
-# Global instance
+# Global instance - create fresh
 context_store = ContextStore()
 
-# Patch: Ensure thread-safe initialization
-import threading
-_context_lock = threading.Lock()
-
-# Recreate if needed (workaround for potential initialization issues)
+# For async/ FastAPI compatibility
 def get_context_store():
-    global context_store
-    with _context_lock:
-        if context_store is None:
-            context_store = ContextStore()
-        return context_store
+    """Get context store instance."""
+    return context_store
