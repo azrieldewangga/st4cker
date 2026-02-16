@@ -71,7 +71,24 @@ class MessageGenerator:
         return min(score, 10)
     
     async def generate(self, trigger_type: str, data: Dict, user_ctx: Dict) -> str:
-        """Hybrid: Template untuk normal, AI untuk urgent."""
+        """
+        Hybrid message generation:
+        - Template mode: schedule reminders (normal urgency)
+        - AI mode: user interaction (confirm/skip/conversation) OR high urgency reminders
+        """
+        # User interaction: ALWAYS AI (never template)
+        if trigger_type in ["user_confirm", "user_skip", "conversation", "chat"]:
+            if self.use_ai:
+                try:
+                    return await self._generate_ai(trigger_type, data, user_ctx, urgency=5)
+                except Exception as e:
+                    print(f"[MessageGen] AI generation failed for user interaction: {e}")
+                    # Fallback ke simple response
+                    return self._fallback_user_response(trigger_type, data)
+            else:
+                return self._fallback_user_response(trigger_type, data)
+        
+        # Reminder: Hybrid based on urgency
         urgency = self._calculate_urgency(trigger_type, data)
         
         if urgency >= self.URGENCY_AI_THRESHOLD and self.use_ai:
@@ -82,6 +99,15 @@ class MessageGenerator:
                 return self._generate_template(trigger_type, data, user_ctx, urgency)
         else:
             return self._generate_template(trigger_type, data, user_ctx, urgency)
+    
+    def _fallback_user_response(self, trigger_type: str, data: Dict) -> str:
+        """Fallback response untuk user interaction kalau AI fail."""
+        if trigger_type == "user_confirm":
+            return random.choice(["okee, aku catet ✌🏻", "siapp, zril", "iyaa, noted"])
+        elif trigger_type == "user_skip":
+            return random.choice(["okee, skip dulu", "iyaa, next time", "siapp, paham"])
+        else:
+            return random.choice(["hmm, bisa jelasin lagi?", "iyaa?", "okee"])
     
     def _generate_template(self, trigger_type: str, data: Dict, user_ctx: Dict, urgency: int = 0) -> str:
         """Generate message using templates with kimi persona."""
@@ -331,6 +357,65 @@ Generate reminder message sesuai urgency level yang diberikan."""
     def _build_ai_prompt(self, trigger_type: str, data: Dict, user_ctx: Dict, urgency: int) -> str:
         """Build user prompt for AI generation."""
         
+        # User interaction prompts (NOT reminder)
+        if trigger_type == "user_confirm":
+            course = data.get("course", "kelas")
+            return f"""User (zril) confirmed attendance for {course}.
+
+Generate short acknowledgment with kimi persona:
+- Minimalist, friendly
+- Use "okee", "iyaa", or "siapp" with repeated letters
+- No emoji except ✌🏻
+- Max 1 sentence
+- Single asterisk for emphasis (if needed)
+
+Examples: "okee, aku catet ✌🏻" | "siapp, zril" | "iyaa, noted"""
+        
+        elif trigger_type == "user_skip":
+            course = data.get("course", "kelas")
+            return f"""User (zril) skipped/cancelled attendance for {course}.
+
+Generate short acknowledgment with kimi persona:
+- Minimalist, no judgement
+- Use "okee", "iyaa", or "siapp" with repeated letters
+- No emoji except ✌🏻
+- Max 1 sentence
+
+Examples: "okee, skip dulu" | "iyaa, next time" | "siapp, paham"""
+        
+        elif trigger_type == "user_progress":
+            task = data.get("task", "tugas")
+            progress = data.get("progress", 0)
+            return f"""User (zril) reported progress {progress}% on {task}.
+
+Generate encouraging acknowledgment with kimi persona:
+- Minimalist, supportive
+- Use repeated letters (okee, iyaa, siapp)
+- No emoji except ✌🏻
+- Max 2 sentences
+- Single asterisk for emphasis
+
+Acknowledge progress and give brief motivation."""
+        
+        elif trigger_type in ["conversation", "chat"]:
+            user_message = data.get("user_message", "")
+            intent = data.get("intent", "unknown")
+            return f"""User (zril) said: "{user_message}"
+Intent detected: {intent}
+
+Generate conversational reply with kimi persona:
+- Minimalist, friendly, bold
+- Use repeated letters (okee, iyaa, siapp, hmm)
+- No emoji except ✌🏻
+- Single asterisk for emphasis (WhatsApp style)
+- Brevity mandatory - max 2 sentences
+- Indonesian only
+- Swearing allowed when appropriate
+- Call user "zril" or "azriel", self as "aku"
+
+Be helpful but concise. If asking clarification, keep it simple."""
+        
+        # Reminder prompts (existing logic)
         prompt_parts = [f"Urgency Level: {urgency}/10"]
         prompt_parts.append(f"Trigger: {trigger_type}")
         

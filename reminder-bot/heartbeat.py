@@ -103,6 +103,38 @@ def trigger_openclaw(trigger_type: str, trigger_time: str, data: dict):
         logger.error(f"[OpenClaw] Failed to trigger: {e}")
         return False
 
+def get_attendance_from_openclaw(course: str, date: str) -> str:
+    """
+    Query OpenClaw API untuk attendance status.
+    Returns: "confirmed" | "skipped" | "unknown"
+    """
+    try:
+        # Extract base URL dari OPENCLAW_WEBHOOK_URL
+        base_url = OPENCLAW_WEBHOOK_URL.replace("/webhook/st4cker-reminder-trigger", "")
+        
+        url = f"{base_url}/api/v1/attendance/get"
+        params = {
+            "course": course,
+            "date": date,
+            "user_id": TARGET_USER_ID
+        }
+        headers = {"X-API-Key": OPENCLAW_API_KEY}
+        
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            result = response.json()
+            status = result.get("status", "unknown")
+            logger.info(f"[Attendance API] {course} @ {date}: {status}")
+            return status
+        else:
+            logger.warning(f"[Attendance API] Failed: {response.status_code}")
+            return "unknown"
+            
+    except Exception as e:
+        logger.error(f"[Attendance API] Error: {e}")
+        return "unknown"
+
 def parse_time(time_str):
     """Parse time string HH:MM."""
     try:
@@ -205,13 +237,18 @@ def check_schedule_reminders():
             # === Decide reminder strategy ===
             # Kalau ini bukan matkul pertama, check apakah prev course di-confirmed
             if idx > 0:
-                # Get attendance status dari state (sync dengan OpenClaw context)
-                attendance_key = f"attendance_{today}_{prev_course_name}"
-                prev_confirmed = today_state.get(attendance_key) == "confirmed"
+                # Query OpenClaw API untuk attendance status
+                attendance_status = get_attendance_from_openclaw(prev_course_name, today)
+                prev_confirmed = (attendance_status == "confirmed")
                 
                 # Kalau prev confirmed → reminder 15 menit
                 # Kalau prev tidak confirmed (skip/reschedule/tidak respon) → reminder 90 menit
                 use_15min = prev_confirmed
+                
+                if use_15min:
+                    logger.info(f"[Attendance] {prev_course_name} confirmed → using 15min reminder for {course_name}")
+                else:
+                    logger.info(f"[Attendance] {prev_course_name} not confirmed ({attendance_status}) → using 90min reminder for {course_name}")
             else:
                 use_15min = False  # First class pakai 90min (atau 05:45)
             

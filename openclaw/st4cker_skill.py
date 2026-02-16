@@ -315,16 +315,18 @@ async def handle_clarification_response(data: ChatRequest, user_ctx: Dict) -> Op
 
 async def ask_clarification(intent: Dict, user_ctx: Dict) -> OpenClawResponse:
     """
-    Ask user for clarification kalo intent ambiguous.
+    Ask user for clarification kalo intent ambiguous - dengan AI-generated question.
     """
     clarification_q = intent.get("clarification_question")
     
     if clarification_q == "scope":
         affected = intent.get("extracted", {}).get("affected_course", "matkul ini")
         
-        reply = f"Waduh Zril, {affected} kena masalah ya?\n\n"
-        reply += "Ini cuma matkul pertamanya aja atau hari ini full libur?\n\n"
-        reply += "Reply: \"{affected} aja\" atau \"skip hari ini\""
+        # AI generate clarification question
+        reply = await msg_gen.generate("conversation", {
+            "user_message": f"ask clarification for skip scope: {affected}",
+            "intent": "clarification_scope"
+        }, user_ctx)
         
         return OpenClawResponse(
             reply=reply,
@@ -338,11 +340,11 @@ async def ask_clarification(intent: Dict, user_ctx: Dict) -> OpenClawResponse:
         )
     
     elif clarification_q == "help_type":
-        reply = "Oke Zril, stuck ya? 🤔\n\n"
-        reply += "Bagian mana yang buntu?\n"
-        reply += "• Bab 2?\n"
-        reply += "• Implementasi coding?\n"
-        reply += "• Atau mau aku bantu pecah jadi sub-task aja?"
+        # AI generate clarification question
+        reply = await msg_gen.generate("conversation", {
+            "user_message": "ask clarification for help type",
+            "intent": "clarification_help"
+        }, user_ctx)
         
         return OpenClawResponse(
             reply=reply,
@@ -354,9 +356,14 @@ async def ask_clarification(intent: Dict, user_ctx: Dict) -> OpenClawResponse:
             done=False
         )
     
-    # Default clarification
+    # Default clarification dengan AI
+    reply = await msg_gen.generate("conversation", {
+        "user_message": "ambiguous intent",
+        "intent": "clarification_default"
+    }, user_ctx)
+    
     return OpenClawResponse(
-        reply="Hmm Zril, aku kurang paham maksudnya 😅\n\nBisa jelasin lagi?",
+        reply=reply,
         action="send",
         done=False
     )
@@ -396,7 +403,7 @@ async def handle_clear_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -
     )
 
 async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
-    """Handle cancel/reschedule intent - tapi conversational."""
+    """Handle cancel/reschedule intent - dengan AI-generated response."""
     extracted = intent.get("extracted", {})
     scope = extracted.get("scope", "unknown")
     reason = extracted.get("reason", "")
@@ -415,14 +422,12 @@ async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) 
         # Full day skip - reminder berikutnya tetap 90 menit (default)
         context_store.update_skip_preference(data.user_id, today, "_full_day", True, reason, is_temporary=False)
         
-        reply = "Oke Zril, hari ini full libur ya 👍\n\n"
-        
-        if "sakit" in reason.lower():
-            reply += "Istirahat yang cukup ya, semoga cepet sembuh! 🙏\n"
-        elif "macet" in reason.lower():
-            reply += "Hati-hati di jalan, tetep jaga kesehatan! ☕\n"
-        
-        reply += "\nKalau ternyata bisa ke kampus nanti, reply 'lanjut' aja ya."
+        # AI generate response
+        reply = await msg_gen.generate("user_skip", {
+            "course": "full_day",
+            "context": "full_day_skip",
+            "reason": reason
+        }, user_ctx)
         
         return OpenClawResponse(
             reply=reply,
@@ -435,22 +440,20 @@ async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) 
         course = extracted.get("course", "") or current_course
         
         if is_reschedule:
-            # Reschedule sementara - berlaku 1 minggu saja
-            # Matkul ini di-skip, tapi jadwal permanen tidak berubah
+            # Reschedule sementara
             context_store.update_skip_preference(data.user_id, today, course, True, f"rescheduled: {reason}", is_temporary=True)
-            
-            reply = f"Oke Zril, {course} dipindah dulu ya 👍\n\n"
-            reply += "Aku catet buat minggu ini aja. Minggu depan balik jadwal normal ya.\n\n"
+            skip_context = "reschedule"
         else:
             # Skip permanen
             context_store.update_skip_preference(data.user_id, today, course, True, reason, is_temporary=False)
-            reply = f"Oke, {course} aku skip 👍\n\n"
+            skip_context = "skip"
         
-        # Mention next course - reminder akan 90 menit (karena ini skip, bukan confirmed)
-        next_course = user_ctx.get("next_course")
-        if next_course:
-            reply += f"Jam {next_course['time']} ada {next_course['name']} tetep jadi kan?"
-            reply += "\n(_Aku bakal ingetin 90 menit sebelumnya ya_)"
+        # AI generate response
+        reply = await msg_gen.generate("user_skip", {
+            "course": course,
+            "context": skip_context,
+            "reason": reason
+        }, user_ctx)
         
         return OpenClawResponse(
             reply=reply,
@@ -471,23 +474,20 @@ async def handle_confirm_intent(intent: Dict, data: ChatRequest, user_ctx: Dict)
     today = datetime.now().strftime('%Y-%m-%d')
     
     # Log attendance sebagai 'confirmed'
-    # Ini akan trigger reminder 15 menit untuk matkul berikutnya
     ctx_obj = context_store.get_user_context_obj(data.user_id)
     ctx_obj.log_attendance(today, course, "confirmed")
     
-    reply = f"✅ Oke Zril! Siap berangkat ke {course}.\n\n"
-    
-    next_course = user_ctx.get("next_course")
-    if next_course:
-        reply += f"Nanti aku ingetin lagi 15 menit sebelum {next_course['name']} ya!"
-    else:
-        reply += "Semangat kuliahnya! 💪"
+    # Generate AI response (user interaction - always AI)
+    reply = await msg_gen.generate("user_confirm", {
+        "course": course,
+        "context": "attendance_confirmed"
+    }, user_ctx)
     
     # Update context
     context_store.update_context(data.user_id, {
         "confirmed_attendance": True,
         "awaiting_reply": False,
-        "use_short_reminder": True  # Flag untuk reminder berikutnya jadi 15 menit
+        "use_short_reminder": True
     })
     
     return OpenClawResponse(
@@ -620,6 +620,109 @@ async def handle_resume_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) 
         context_update={"skip_cancelled": True},
         done=True
     )
+
+# =============================================================================
+# ENDPOINT 3: Incoming Message from WA Gateway
+# =============================================================================
+
+class IncomingMessage(BaseModel):
+    from_phone: str
+    message: str
+    timestamp: Optional[str] = None
+
+@app.post("/webhook/st4cker-incoming")
+async def handle_incoming_message(
+    data: IncomingMessage,
+    _: bool = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Handle incoming message dari WA Gateway.
+    Forward ke chat handler dengan user_id yang sesuai.
+    """
+    print(f"[Incoming WA] {data.from_phone}: {data.message}")
+    
+    # Map phone to user_id (dalam production, query dari DB)
+    # Untuk sekarang, hardcode ke TARGET_USER_ID
+    user_id = TARGET_USER_ID if TARGET_USER_ID else "1168825716"
+    
+    # Create ChatRequest
+    chat_request = ChatRequest(
+        phone=data.from_phone,
+        user_id=user_id,
+        message=data.message,
+        context={}
+    )
+    
+    # Handle dengan chat handler yang sudah ada
+    response = await handle_chat(chat_request, _)
+    
+    return {
+        "success": True,
+        "reply": response.reply,
+        "action": response.action,
+        "user_id": user_id
+    }
+
+# =============================================================================
+# ENDPOINT 4: Attendance API (untuk reminder-bot query)
+# =============================================================================
+
+@app.get("/api/v1/attendance/get")
+async def get_attendance(
+    course: str,
+    date: str,
+    user_id: Optional[str] = None,
+    _: bool = Depends(verify_api_key)
+) -> Dict[str, str]:
+    """
+    Get attendance status untuk course tertentu di date tertentu.
+    Digunakan oleh reminder-bot untuk decide 15min vs 90min reminder.
+    """
+    if not user_id:
+        user_id = TARGET_USER_ID if TARGET_USER_ID else "1168825716"
+    
+    ctx = context_store.get_context(user_id)
+    attendance_log = ctx.get("attendance_log", {})
+    
+    date_log = attendance_log.get(date, {})
+    course_status = date_log.get(course, "unknown")
+    
+    print(f"[Attendance API] {user_id} - {course} @ {date}: {course_status}")
+    
+    return {
+        "user_id": user_id,
+        "course": course,
+        "date": date,
+        "status": course_status  # "confirmed" | "skipped" | "unknown"
+    }
+
+@app.post("/api/v1/attendance/log")
+async def log_attendance(
+    course: str,
+    date: str,
+    status: str,  # "confirmed" | "skipped"
+    user_id: Optional[str] = None,
+    _: bool = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Log attendance status.
+    Bisa dipakai untuk manual update atau testing.
+    """
+    if not user_id:
+        user_id = TARGET_USER_ID if TARGET_USER_ID else "1168825716"
+    
+    ctx_obj = context_store.get_user_context_obj(user_id)
+    ctx_obj.log_attendance(date, course, status)
+    
+    print(f"[Attendance Log] {user_id} - {course} @ {date}: {status}")
+    
+    return {
+        "success": True,
+        "user_id": user_id,
+        "course": course,
+        "date": date,
+        "status": status
+    }
 
 # =============================================================================
 # HEALTH CHECK
