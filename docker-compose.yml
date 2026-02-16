@@ -97,6 +97,7 @@ services:
     environment:
       - TZ=Asia/Jakarta
       - OPENCLAW_WEBHOOK_URL=http://openclaw:8000/webhook/st4cker-reminder-trigger
+      - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
       - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
       - DB_HOST=st4cker-db
       - DB_PORT=5432
@@ -121,6 +122,7 @@ services:
     environment:
       - TZ=Asia/Jakarta
       - OPENCLAW_WEBHOOK_URL=http://openclaw:8000/webhook/st4cker-reminder-trigger
+      - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
       - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
       - DB_HOST=st4cker-db
       - DB_PORT=5432

@@ -28,6 +28,7 @@ DB_CONFIG = {
 
 # OpenClaw config
 OPENCLAW_WEBHOOK_URL = os.environ.get("OPENCLAW_WEBHOOK_URL", "http://openclaw:8000/webhook/st4cker-reminder-trigger")
+OPENCLAW_API_KEY = os.environ.get("OPENCLAW_API_KEY", "st4cker_openclaw_secure_key_2024")
 TARGET_PHONE = os.environ.get("TARGET_PHONE", "")  # MUST be set via environment
 
 # Validate required environment variables
@@ -80,7 +81,8 @@ def trigger_openclaw(trigger_type: str, trigger_time: str, data: dict):
             "data": data
         }
         
-        response = requests.post(OPENCLAW_WEBHOOK_URL, json=payload, timeout=15)
+        headers = {"X-API-Key": OPENCLAW_API_KEY}
+        response = requests.post(OPENCLAW_WEBHOOK_URL, json=payload, headers=headers, timeout=15)
         
         if response.status_code == 200:
             result = response.json()
