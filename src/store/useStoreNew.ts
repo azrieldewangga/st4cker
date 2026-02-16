@@ -65,6 +65,24 @@ export const useStore = create<AppState>()((...a) => ({
         }
 
         await Promise.all(promises);
+        
+        // Sync from backend after local data loaded
+        const state = a[1]();
+        if (state.fetchAssignmentsFromBackend) {
+            state.fetchAssignmentsFromBackend().catch(err => 
+                console.error('[initApp] Fetch assignments from backend error:', err)
+            );
+        }
+        if (state.fetchScheduleFromBackend) {
+            state.fetchScheduleFromBackend().catch(err => 
+                console.error('[initApp] Fetch schedule from backend error:', err)
+            );
+        }
+        if (state.fetchTransactionsFromBackend) {
+            state.fetchTransactionsFromBackend().catch(err => 
+                console.error('[initApp] Fetch transactions from backend error:', err)
+            );
+        }
 
         const { assignments, subscriptions } = a[1]();
         NotificationService.checkDeadlineNotifications(assignments, subscriptions);

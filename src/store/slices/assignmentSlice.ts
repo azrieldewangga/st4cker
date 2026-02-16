@@ -11,6 +11,8 @@ export interface AssignmentSlice {
     deleteAssignment: (id: string, skipLog?: boolean) => Promise<void>;
     duplicateAssignment: (id: string) => Promise<void>;
     reorderAssignments: (newOrder: Assignment[]) => Promise<void>;
+    syncAssignmentsToBackend: () => Promise<void>;
+    fetchAssignmentsFromBackend: () => Promise<void>;
 }
 
 export const createAssignmentSlice: StateCreator<
@@ -77,6 +79,13 @@ export const createAssignmentSlice: StateCreator<
                 assignments: [...state.assignments, newItem]
             }));
             get().fetchAssignments();
+            
+            // Auto-sync to backend
+            try {
+                await get().syncAssignmentsToBackend();
+            } catch (syncErr) {
+                console.error('[AssignmentSlice] Auto-sync failed:', syncErr);
+            }
         } catch (err: any) {
             console.error('[AssignmentSlice] Error adding assignment:', err);
             throw err;
@@ -100,6 +109,13 @@ export const createAssignmentSlice: StateCreator<
                 assignments: state.assignments.map((item) => item.id === id ? { ...item, ...data } : item)
             }));
             get().fetchAssignments();
+            
+            // Auto-sync to backend
+            try {
+                await get().syncAssignmentsToBackend();
+            } catch (syncErr) {
+                console.error('[AssignmentSlice] Auto-sync failed:', syncErr);
+            }
         } catch (error) {
             console.error('[AssignmentSlice] Update error:', error);
             throw error;
@@ -123,6 +139,13 @@ export const createAssignmentSlice: StateCreator<
 
             await window.electronAPI.assignments.delete(id);
             get().fetchAssignments();
+            
+            // Auto-sync to backend
+            try {
+                await get().syncAssignmentsToBackend();
+            } catch (syncErr) {
+                console.error('[AssignmentSlice] Auto-sync failed:', syncErr);
+            }
         } catch (error) {
             console.error('[AssignmentSlice] Delete error:', error);
             throw error;
@@ -139,5 +162,96 @@ export const createAssignmentSlice: StateCreator<
 
     reorderAssignments: async (newOrder) => {
         set({ assignments: newOrder });
+    },
+
+    syncAssignmentsToBackend: async () => {
+        try {
+            const state = get() as any;
+            const { assignments, userProfile } = state;
+            const serverUrl = 'http://103.127.134.173:3000';
+            const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
+
+            const assignmentsArray = assignments.map((a: any) => ({
+                id: a.id,
+                title: a.title,
+                course: a.course || a.courseId,
+                type: a.type || 'Tugas',
+                status: a.status || 'to-do',
+                deadline: a.deadline,
+                note: a.note || '',
+                semester: userProfile?.semester || 1,
+            }));
+
+            const response = await fetch(`${serverUrl}/api/sync-user-data`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey,
+                },
+                body: JSON.stringify({
+                    sessionToken: localStorage.getItem('sessionToken'),
+                    data: {
+                        activeAssignments: assignmentsArray
+                    }
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to sync assignments');
+            console.log('[AssignmentSlice] Assignments synced to backend');
+        } catch (error) {
+            console.error('[AssignmentSlice] Sync to backend error:', error);
+            throw error;
+        }
+    },
+
+    fetchAssignmentsFromBackend: async () => {
+        try {
+            const state = get() as any;
+            const { userProfile } = state;
+            const serverUrl = 'http://103.127.134.173:3000';
+            const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
+
+            const response = await fetch(`${serverUrl}/api/v1/tasks?userId=${userProfile?.telegramUserId}`, {
+                headers: {
+                    'X-API-Key': apiKey,
+                },
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch assignments');
+            const data = await response.json();
+
+            if (!data.data?.length) {
+                console.log('[AssignmentSlice] Server has no assignments, keeping local data');
+                return;
+            }
+
+            // Convert and save to local SQLite
+            const localAssignments = await window.electronAPI.assignments.list();
+            for (const item of data.data) {
+                const exists = localAssignments.find((a: any) => a.id === item.id);
+                const assignmentData = {
+                    id: item.id,
+                    title: item.title,
+                    course: item.course,
+                    type: item.type,
+                    status: item.status,
+                    deadline: item.deadline,
+                    note: item.note || '',
+                    semester: item.semester,
+                    updatedAt: new Date().toISOString(),
+                };
+                
+                if (exists) {
+                    await window.electronAPI.assignments.update(item.id, assignmentData);
+                } else {
+                    await window.electronAPI.assignments.create(assignmentData);
+                }
+            }
+
+            get().fetchAssignments();
+            console.log('[AssignmentSlice] Assignments fetched from backend');
+        } catch (error) {
+            console.error('[AssignmentSlice] Fetch from backend error:', error);
+        }
     },
 });
