@@ -141,7 +141,7 @@ async def handle_reminder_trigger(
         "followup": "task_followup", 
         "crisis_check": "crisis_check",
         "night_preview": "night_preview",
-        "schedule": "schedule_reminder"
+        "schedule": "schedule"
     }
     log_type = log_type_map.get(data.trigger_type, data.trigger_type)
     

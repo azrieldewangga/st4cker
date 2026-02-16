@@ -1733,7 +1733,7 @@ router.get('/reminders/last-schedule/:userId', async (req, res) => {
 // POST /api/v1/reminders/log - Log a reminder (called by OpenClaw when sending reminders)
 router.post('/reminders/log', [
     body('userId').isString().notEmpty(),
-    body('type').isIn(['task_daily', 'task_followup', 'first_545am', 'first_90min', '15min', 'crisis_check', 'night_preview']),
+    body('type').isIn(['task_daily', 'task_followup', 'schedule', 'schedule_90min', 'schedule_15min', 'first_545am', 'first_90min', '15min', 'crisis_check', 'night_preview'])
     body('messageContent').optional().isString(),
     body('scheduleId').optional().isUUID(),
     handleValidationErrors
