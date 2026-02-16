@@ -396,15 +396,24 @@ async def handle_clear_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -
     )
 
 async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
-    """Handle cancel intent - tapi conversational."""
+    """Handle cancel/reschedule intent - tapi conversational."""
     extracted = intent.get("extracted", {})
     scope = extracted.get("scope", "unknown")
     reason = extracted.get("reason", "")
     
     today = datetime.now().strftime('%Y-%m-%d')
+    current_course = user_ctx.get("last_course", "")
+    
+    # Detect if this is reschedule (pindah) vs permanent skip
+    msg_lower = data.message.lower()
+    is_reschedule = any(x in msg_lower for x in [
+        "pindah", "geser", "reschedule", "diundur", "dimajukan",
+        "minggu depan", "besok aja", "hari lain", "jam lain"
+    ])
     
     if scope == "full_day":
-        context_store.update_skip_preference(data.user_id, today, "_full_day", True, reason)
+        # Full day skip - reminder berikutnya tetap 90 menit (default)
+        context_store.update_skip_preference(data.user_id, today, "_full_day", True, reason, is_temporary=False)
         
         reply = "Oke Zril, hari ini full libur ya 👍\n\n"
         
@@ -423,15 +432,25 @@ async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) 
         )
     
     elif scope == "single_course":
-        course = extracted.get("course", "")
-        context_store.update_skip_preference(data.user_id, today, course, True, reason)
+        course = extracted.get("course", "") or current_course
         
-        reply = f"Oke, {course} aku skip 👍\n\n"
+        if is_reschedule:
+            # Reschedule sementara - berlaku 1 minggu saja
+            # Matkul ini di-skip, tapi jadwal permanen tidak berubah
+            context_store.update_skip_preference(data.user_id, today, course, True, f"rescheduled: {reason}", is_temporary=True)
+            
+            reply = f"Oke Zril, {course} dipindah dulu ya 👍\n\n"
+            reply += "Aku catet buat minggu ini aja. Minggu depan balik jadwal normal ya.\n\n"
+        else:
+            # Skip permanen
+            context_store.update_skip_preference(data.user_id, today, course, True, reason, is_temporary=False)
+            reply = f"Oke, {course} aku skip 👍\n\n"
         
-        # Mention next course if any
+        # Mention next course - reminder akan 90 menit (karena ini skip, bukan confirmed)
         next_course = user_ctx.get("next_course")
         if next_course:
             reply += f"Jam {next_course['time']} ada {next_course['name']} tetep jadi kan?"
+            reply += "\n(_Aku bakal ingetin 90 menit sebelumnya ya_)"
         
         return OpenClawResponse(
             reply=reply,
@@ -449,6 +468,12 @@ async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) 
 async def handle_confirm_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
     """Handle confirm otw."""
     course = user_ctx.get("last_course", "matkul")
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    # Log attendance sebagai 'confirmed'
+    # Ini akan trigger reminder 15 menit untuk matkul berikutnya
+    ctx_obj = context_store.get_user_context_obj(data.user_id)
+    ctx_obj.log_attendance(today, course, "confirmed")
     
     reply = f"✅ Oke Zril! Siap berangkat ke {course}.\n\n"
     
@@ -461,13 +486,14 @@ async def handle_confirm_intent(intent: Dict, data: ChatRequest, user_ctx: Dict)
     # Update context
     context_store.update_context(data.user_id, {
         "confirmed_attendance": True,
-        "awaiting_reply": False
+        "awaiting_reply": False,
+        "use_short_reminder": True  # Flag untuk reminder berikutnya jadi 15 menit
     })
     
     return OpenClawResponse(
         reply=reply,
         action="send",
-        context_update={"confirmed_attendance": True},
+        context_update={"confirmed_attendance": True, "use_short_reminder": True},
         done=True
     )
 

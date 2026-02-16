@@ -120,8 +120,12 @@ def time_to_minutes(time_str):
 
 def check_schedule_reminders():
     """
-    Check schedule reminders dan trigger OpenClaw.
-    Cuma kirim data mentah, OpenClaw yang decide.
+    Check schedule reminders dengan logic attendance-based.
+    
+    Flow:
+    1. Jam 05:45 - Reminder matkul pertama (jam 8.xx)
+    2. User response "oke/gas" → matkul kedua diingetin 15 menit sebelum
+    3. User response "skip/batal/pindah" → matkul kedua diingetin 90 menit sebelum
     """
     try:
         conn = get_db_connection()
@@ -161,6 +165,10 @@ def check_schedule_reminders():
         state = load_state()
         today_state = state.get(today, {})
         
+        # Track prev course untuk decide 15min vs 90min
+        prev_course_confirmed = False
+        prev_course_name = None
+        
         # Process tiap jadwal
         for idx, schedule in enumerate(schedules):
             sched_id, course_name, start_time, end_time, room, lecturer, day = schedule
@@ -174,49 +182,63 @@ def check_schedule_reminders():
             start_total_minutes = start_hour * 60 + start_minute
             is_first = (idx == 0)
             
-            # Check: Jam 5:45 untuk matkul jam 8
+            # === JAM 05:45: Early bird untuk matkul pertama jam 8.xx ===
             if start_hour == 8 and current_hour == 5 and current_minute == 45:
                 trigger_key = f"{sched_id}_0545"
                 if trigger_key not in today_state.get("triggered", {}):
-                    # Trigger OpenClaw
                     trigger_openclaw("schedule", "05:45", {
                         "course": course_name,
                         "start_time": start_time,
                         "room": room,
                         "lecturer": lecturer,
                         "is_first_class": is_first,
-                        "minutes_before": 135  # 2 jam 15 menit sebelum
+                        "minutes_before": 135,  # 2 jam 15 menit sebelum
+                        "reminder_type": "early_bird"
                     })
                     
-                    # Mark triggered
                     if "triggered" not in today_state:
                         today_state["triggered"] = {}
                     today_state["triggered"][trigger_key] = True
                     state[today] = today_state
                     save_state(state)
             
-            # Check: 90 menit sebelum
-            reminder_start = start_total_minutes - 90
-            reminder_end = reminder_start + 10
+            # === Decide reminder strategy ===
+            # Kalau ini bukan matkul pertama, check apakah prev course di-confirmed
+            if idx > 0:
+                # Get attendance status dari state (sync dengan OpenClaw context)
+                attendance_key = f"attendance_{today}_{prev_course_name}"
+                prev_confirmed = today_state.get(attendance_key) == "confirmed"
+                
+                # Kalau prev confirmed → reminder 15 menit
+                # Kalau prev tidak confirmed (skip/reschedule/tidak respon) → reminder 90 menit
+                use_15min = prev_confirmed
+            else:
+                use_15min = False  # First class pakai 90min (atau 05:45)
             
-            if reminder_start <= current_total_minutes <= reminder_end:
-                trigger_key = f"{sched_id}_90min"
-                if trigger_key not in today_state.get("triggered", {}):
-                    trigger_openclaw("schedule", f"{current_hour}:{current_minute:02d}", {
-                        "course": course_name,
-                        "start_time": start_time,
-                        "room": room,
-                        "lecturer": lecturer,
-                        "is_first_class": is_first,
-                        "minutes_before": 90
-                    })
-                    
-                    today_state["triggered"][trigger_key] = True
-                    state[today] = today_state
-                    save_state(state)
+            # === 90 MENIT SEBELUM (default untuk matkul 2,3,...) ===
+            if not use_15min:
+                reminder_start = start_total_minutes - 90
+                reminder_end = reminder_start + 10
+                
+                if reminder_start <= current_total_minutes <= reminder_end:
+                    trigger_key = f"{sched_id}_90min"
+                    if trigger_key not in today_state.get("triggered", {}):
+                        trigger_openclaw("schedule", f"{current_hour}:{current_minute:02d}", {
+                            "course": course_name,
+                            "start_time": start_time,
+                            "room": room,
+                            "lecturer": lecturer,
+                            "is_first_class": is_first,
+                            "minutes_before": 90,
+                            "reminder_type": "90min"
+                        })
+                        
+                        today_state["triggered"][trigger_key] = True
+                        state[today] = today_state
+                        save_state(state)
             
-            # Check: 15 menit sebelum (hanya untuk matkul berikutnya)
-            if not is_first:  # Skip first class karena udah ada 90min reminder
+            # === 15 MENIT SEBELUM (khusus kalau prev course confirmed) ===
+            else:
                 reminder_start = start_total_minutes - 15
                 reminder_end = reminder_start + 10
                 
@@ -229,12 +251,16 @@ def check_schedule_reminders():
                             "room": room,
                             "lecturer": lecturer,
                             "is_first_class": False,
-                            "minutes_before": 15
+                            "minutes_before": 15,
+                            "reminder_type": "15min"
                         })
                         
                         today_state["triggered"][trigger_key] = True
                         state[today] = today_state
                         save_state(state)
+            
+            # Track prev course untuk iterasi berikutnya
+            prev_course_name = course_name
         
         cur.close()
         conn.close()

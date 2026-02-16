@@ -34,6 +34,13 @@ class NLU:
             "dimarasi", "ada kerjaan", "di perusahaan", "dikantor"
         ]
         
+        # Reschedule indicators - untuk detect pindah jadwal
+        self.reschedule_indicators = [
+            "pindah", "geser", " reschedule", "diundur", "dimajukan",
+            "ganti hari", "ganti jam", "minggu depan", "besok aja",
+            "hari lain", "jam lain", "nanti aja", "next week"
+        ]
+        
         # Confirm indicators
         self.confirm_indicators = [
             "ok", "oke", "okee", "gas", "otw", "on the way", "iya", "ya", 
@@ -209,6 +216,13 @@ class NLU:
     def _has_problem(self, msg_lower: str) -> bool:
         """Check if user indicating a problem/issue."""
         for indicator in self.problem_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_reschedule(self, msg_lower: str) -> bool:
+        """Check if user wants to reschedule (pindah jadwal)."""
+        for indicator in self.reschedule_indicators:
             if indicator in msg_lower:
                 return True
         return False

@@ -23,8 +23,17 @@ class UserContext:
         self.clarification_type = None  # "scope", "help_type", "new_task_details", dll
         self.clarification_data = {}
         
-        # Skip preferences - format: {date: {course: {skipped, reason}}}
+        # Skip preferences - format: {date: {course: {skipped, reason, is_temporary}}}
+        # is_temporary: True jika reschedule sementara (1 minggu), False jika permanen
         self.skip_preferences = {}
+        
+        # Attendance tracking untuk reminder chain
+        # Format: {date: {course_name: confirmed/rescheduled/skipped}}
+        self.attendance_log = {}
+        
+        # Next reminder strategy - untuk decide 15min vs 90min
+        # True = 15 menit sebelum, False = 90 menit sebelum
+        self.use_short_reminder = False
         
         # Active items
         self.active_task = None
@@ -56,6 +65,8 @@ class UserContext:
             "awaiting_clarification": self.awaiting_clarification,
             "clarification_type": self.clarification_type,
             "skip_preferences": self.skip_preferences,
+            "attendance_log": self.attendance_log,
+            "use_short_reminder": self.use_short_reminder,
             "active_task": self.active_task,
             "active_schedule": self.active_schedule,
             "last_course": self.last_course,
@@ -67,6 +78,37 @@ class UserContext:
             "last_updated": self.last_updated.isoformat()
         }
     
+    def log_attendance(self, date: str, course: str, status: str):
+        """
+        Log attendance response untuk course tertentu.
+        status: 'confirmed', 'rescheduled', 'skipped'
+        """
+        if date not in self.attendance_log:
+            self.attendance_log[date] = {}
+        
+        self.attendance_log[date][course] = {
+            "status": status,
+            "logged_at": datetime.now().isoformat()
+        }
+        
+        # Kalau confirmed, next reminder jadi 15 menit sebelum
+        if status == "confirmed":
+            self.use_short_reminder = True
+        
+        self.last_updated = datetime.now()
+    
+    def get_attendance_status(self, date: str, course: str) -> Optional[str]:
+        """Get attendance status untuk course tertentu."""
+        return self.attendance_log.get(date, {}).get(course, {}).get("status")
+    
+    def should_use_short_reminder(self, date: str, prev_course: str) -> bool:
+        """
+        Check apakah course sebelumnya di-confirmed.
+        Kalau ya, reminder ini jadi 15 menit sebelum (bukan 90 menit).
+        """
+        prev_status = self.get_attendance_status(date, prev_course)
+        return prev_status == "confirmed"
+    
     def update(self, data: Dict[str, Any]):
         """Update context dengan data baru."""
         for key, value in data.items():
@@ -75,16 +117,24 @@ class UserContext:
         
         self.last_updated = datetime.now()
     
-    def update_skip_preference(self, date: str, course: str, skipped: bool, reason: str = None):
-        """Update skip preference untuk course tertentu di date tertentu."""
+    def update_skip_preference(self, date: str, course: str, skipped: bool, reason: str = None, is_temporary: bool = True):
+        """
+        Update skip preference untuk course tertentu di date tertentu.
+        is_temporary: True jika reschedule sementara (1 minggu), False jika permanen
+        """
         if date not in self.skip_preferences:
             self.skip_preferences[date] = {}
         
         self.skip_preferences[date][course] = {
             "skipped": skipped,
             "reason": reason,
+            "is_temporary": is_temporary,
             "updated_at": datetime.now().isoformat()
         }
+        
+        # Kalau skip/reschedule, attendance log juga diupdate
+        if skipped:
+            self.log_attendance(date, course, "rescheduled" if is_temporary else "skipped")
         
         self.last_updated = datetime.now()
     
