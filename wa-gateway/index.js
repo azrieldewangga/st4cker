@@ -78,6 +78,7 @@ const MAX_RETRIES = 5;
 
 // Target phone from env
 const TARGET_PHONE = process.env.TARGET_PHONE; // MUST be set via environment
+const TARGET_USER_ID = process.env.TARGET_USER_ID || TARGET_PHONE; // Default to phone if not set
 
 // Validate TARGET_PHONE is set
 if (!TARGET_PHONE) {
@@ -213,7 +214,7 @@ async function initWhatsApp() {
                             },
                             body: JSON.stringify({
                                 phone: TARGET_PHONE,
-                                userId: process.env.TARGET_USER_ID || TARGET_PHONE,
+                                userId: TARGET_USER_ID,
                                 message: originalText,
                                 context: {
                                     event: 'task_reminder_reply',
