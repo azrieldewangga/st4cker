@@ -137,19 +137,14 @@ class MessageGenerator:
         time = data.get("start_time", "08:00")
         room = data.get("room", "")
         
-        # Always include room if available
+        # Always include room if available, always start with "zril, ada"
         if room:
             templates = [
                 f"zril, ada {course} jam {time} di {room}",
-                f"siapp, {course} jam {time} - {room}",
-                f"iyaa, {course} mulai {time} di {room}",
-                f"{course} jam {time} - {room}",
             ]
         else:
             templates = [
                 f"zril, ada {course} jam {time}",
-                f"siapp, {course} jam {time}",
-                f"iyaa, {course} mulai {time}",
             ]
         
         return random.choice(templates)
