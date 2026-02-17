@@ -153,23 +153,13 @@ class MessageGenerator:
         """Template for 15min before class."""
         course = data.get("course_name", "kelas")
         time = data.get("start_time", "08:00")
+        room = data.get("room", "")
         
+        # Consistent format: "zril, ..."
         if room:
-            templates = [
-                f"{course} 15 menit lagi di {room}",
-                f"siapp, {course} sebentar lagi - {room}",
-                f"zril, {course} *mulai 15 menit lagi* di {room}",
-                f"iyaa, {course} jam {time} di {room} - *siap?*",
-            ]
+            return f"zril, {course} mulai 15 menit lagi di {room}"
         else:
-            templates = [
-                f"{course} 15 menit lagi",
-                f"siapp, {course} sebentar lagi",
-                f"zril, {course} *mulai 15 menit lagi*",
-                f"iyaa, {course} jam {time} - *siap?*",
-            ]
-        
-        return random.choice(templates)
+            return f"zril, {course} mulai 15 menit lagi"
     
     def _template_545am(self, data: Dict, urgency: int) -> str:
         """Template for 5:45 AM early bird."""
