@@ -158,12 +158,13 @@ async def handle_reminder_trigger(
         schedule_id=schedule_id
     ))
     
-    # Update context
+    # Update context - simpan course untuk tracking attendance
     context_store.update_context(data.user_id, {
         "last_trigger": data.trigger_type,
         "last_trigger_time": data.trigger_time,
         "last_data": data.data,
-        "awaiting_reply": True
+        "awaiting_reply": True,
+        "last_course": data.data.get("course_name", "")
     })
     
     return OpenClawResponse(
