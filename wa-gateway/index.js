@@ -213,7 +213,7 @@ async function initWhatsApp() {
                             },
                             body: JSON.stringify({
                                 phone: TARGET_PHONE,
-                                userId: TARGET_PHONE,
+                                userId: process.env.TARGET_USER_ID || TARGET_PHONE,
                                 message: originalText,
                                 context: {
                                     event: 'task_reminder_reply',
