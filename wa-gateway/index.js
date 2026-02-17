@@ -214,7 +214,7 @@ async function initWhatsApp() {
                             },
                             body: JSON.stringify({
                                 phone: TARGET_PHONE,
-                                userId: TARGET_USER_ID,
+                                userId: TARGET_USER_ID, // Use TARGET_USER_ID not phone
                                 message: originalText,
                                 context: {
                                     event: 'task_reminder_reply',
