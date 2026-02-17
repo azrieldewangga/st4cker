@@ -284,7 +284,7 @@ def check_schedule_reminders():
                     if "triggered" not in today_state:
                         today_state["triggered"] = {}
                     if trigger_key not in today_state["triggered"]:
-                        trigger_openclaw("90min", f"{current_hour}:{current_minute:02d}", {
+                        trigger_openclaw("schedule_90min", f"{current_hour}:{current_minute:02d}", {
                             "course": course_name,
                             "course_name": course_name,
                             "start_time": start_time,
@@ -309,7 +309,7 @@ def check_schedule_reminders():
                     if "triggered" not in today_state:
                         today_state["triggered"] = {}
                     if trigger_key not in today_state["triggered"]:
-                        trigger_openclaw("15min", f"{current_hour}:{current_minute:02d}", {
+                        trigger_openclaw("schedule_15min", f"{current_hour}:{current_minute:02d}", {
                             "course": course_name,
                             "course_name": course_name,
                             "start_time": start_time,
