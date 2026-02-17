@@ -756,7 +756,8 @@ async def get_attendance(
     attendance_log = ctx.get("attendance_log", {})
     
     date_log = attendance_log.get(date, {})
-    course_status = date_log.get(course, "unknown")
+    course_status_obj = date_log.get(course, {})
+    course_status = course_status_obj.get("status", "unknown") if isinstance(course_status_obj, dict) else course_status_obj
     
     print(f"[Attendance API] {user_id} - {course} @ {date}: {course_status}")
     
