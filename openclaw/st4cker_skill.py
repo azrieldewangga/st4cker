@@ -132,7 +132,7 @@ async def handle_reminder_trigger(
         )
     
     # Generate message with persona Azriel
-    message = msg_gen.generate(data.trigger_type, data.data, user_ctx)
+    message = await msg_gen.generate(data.trigger_type, data.data, user_ctx)
     
     # LOG THE REMINDER - This is crucial for followup-bot to know if initial reminder was sent
     # Determine the log type based on trigger_type
