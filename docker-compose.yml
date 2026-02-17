@@ -75,6 +75,8 @@ services:
     environment:
       - TZ=Asia/Jakarta
       - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
+      - OPENCLAW_URL=http://openclaw:8000
+      - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
     volumes:
       - wa_auth:/app/auth_state
       - wa_data:/app/data
