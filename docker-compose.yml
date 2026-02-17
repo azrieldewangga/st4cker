@@ -91,57 +91,7 @@ services:
       start_period: 30s
 
   # --------------------------------------------------------------------------------
-  # 4. REMINDER AGENT (Trigger Only)
-  # --------------------------------------------------------------------------------
-  reminder-bot:
-    build: ./reminder-bot
-    container_name: reminder-bot
-    restart: always
-    environment:
-      - TZ=Asia/Jakarta
-      - OPENCLAW_WEBHOOK_URL=http://openclaw:8000/webhook/st4cker-reminder-trigger
-      - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
-      - TARGET_USER_ID=${TARGET_USER_ID:?TARGET_USER_ID must be set}
-      - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
-      - DB_HOST=st4cker-db
-      - DB_PORT=5432
-      - DB_NAME=st4cker_db
-      - DB_USER=st4cker_admin
-      - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-    volumes:
-      - reminder_data:/tmp
-    networks:
-      - st4cker-net
-    depends_on:
-      - openclaw
-      - postgres
-
-  # --------------------------------------------------------------------------------
-  # 5. FOLLOW-UP AGENT (Trigger Only)
-  # --------------------------------------------------------------------------------
-  followup-bot:
-    build: ./followup-bot
-    container_name: followup-bot
-    restart: always
-    environment:
-      - TZ=Asia/Jakarta
-      - OPENCLAW_WEBHOOK_URL=http://openclaw:8000/webhook/st4cker-reminder-trigger
-      - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
-      - TARGET_USER_ID=${TARGET_USER_ID:?TARGET_USER_ID must be set}
-      - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
-      - DB_HOST=st4cker-db
-      - DB_PORT=5432
-      - DB_NAME=st4cker_db
-      - DB_USER=st4cker_admin
-      - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-    networks:
-      - st4cker-net
-    depends_on:
-      - openclaw
-      - postgres
-
-  # --------------------------------------------------------------------------------
-  # 6. OPENCLAW BRAIN (The Decision Maker)
+  # 4. OPENCLAW BRAIN (The Decision Maker + Scheduler)
   # --------------------------------------------------------------------------------
   openclaw:
     build: ./openclaw
@@ -172,8 +122,6 @@ volumes:
   postgres_data:
   wa_auth:
   wa_data:
-  reminder_data:
-  followup_data:
 
 
 networks:
