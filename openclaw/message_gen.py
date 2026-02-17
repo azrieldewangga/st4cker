@@ -17,7 +17,7 @@ class MessageGenerator:
     # Communication style constants
     REPEATED_WORDS = ["okee", "iyaa", "siapp", "hmm", "yaa"]
     EMPHASIS_CHAR = "*"  # Single asterisk for WhatsApp style
-    ALLOWED_EMOJI = "✌🏻"
+    ALLOWED_EMOJI = ""
     
     # Urgency thresholds
     URGENCY_AI_THRESHOLD = 7  # Use AI for urgency >= 7
@@ -137,15 +137,20 @@ class MessageGenerator:
         time = data.get("start_time", "08:00")
         room = data.get("room", "")
         
-        templates = [
-            f"zril, ada {course} jam {time} ✌🏻",
-            f"siapp, {course} jam {time}",
-            f"iyaa, {course} mulai {time} ✌🏻",
-        ]
-        
+        # Always include room if available
         if room:
-            templates.append(f"zril, {course} jam {time} di {room}")
-            templates.append(f"{course} jam {time} - {room} ✌🏻")
+            templates = [
+                f"zril, ada {course} jam {time} di {room}",
+                f"siapp, {course} jam {time} - {room}",
+                f"iyaa, {course} mulai {time} di {room}",
+                f"{course} jam {time} - {room}",
+            ]
+        else:
+            templates = [
+                f"zril, ada {course} jam {time}",
+                f"siapp, {course} jam {time}",
+                f"iyaa, {course} mulai {time}",
+            ]
         
         return random.choice(templates)
     
@@ -154,22 +159,30 @@ class MessageGenerator:
         course = data.get("course_name", "kelas")
         time = data.get("start_time", "08:00")
         
-        templates = [
-            f"{course} 15 menit lagi ✌🏻",
-            f"siapp, {course} sebentar lagi",
-            f"zril, {course} *mulai 15 menit lagi*",
-            f"iyaa, {course} jam {time} - *siap?*",
-        ]
+        if room:
+            templates = [
+                f"{course} 15 menit lagi di {room}",
+                f"siapp, {course} sebentar lagi - {room}",
+                f"zril, {course} *mulai 15 menit lagi* di {room}",
+                f"iyaa, {course} jam {time} di {room} - *siap?*",
+            ]
+        else:
+            templates = [
+                f"{course} 15 menit lagi",
+                f"siapp, {course} sebentar lagi",
+                f"zril, {course} *mulai 15 menit lagi*",
+                f"iyaa, {course} jam {time} - *siap?*",
+            ]
         
         return random.choice(templates)
     
     def _template_545am(self, data: Dict, urgency: int) -> str:
         """Template for 5:45 AM early bird."""
         templates = [
-            "pagi zril ✌🏻",
+            "pagi zril",
             "okee, siapin diri",
             "iyaa, pagi",
-            f"siapp {self.ALLOWED_EMOJI}",
+            "siapp",
         ]
         return random.choice(templates)
     
@@ -178,11 +191,18 @@ class MessageGenerator:
         course = data.get("course_name", "kelas")
         time = data.get("start_time", "08:00")
         
-        templates = [
-            f"zril, {course} jam {time} ✌🏻",
-            f"siapp, ada {course} jam {time}",
-            f"iyaa, {course} *{time}*",
-        ]
+        if room:
+            templates = [
+                f"zril, {course} jam {time} di {room}",
+                f"siapp, ada {course} jam {time} - {room}",
+                f"iyaa, {course} *{time}* di {room}",
+            ]
+        else:
+            templates = [
+                f"zril, {course} jam {time}",
+                f"siapp, ada {course} jam {time}",
+                f"iyaa, {course} *{time}*",
+            ]
         
         return random.choice(templates)
     
@@ -193,7 +213,7 @@ class MessageGenerator:
         
         if count == 0:
             templates = [
-                "task aman zril ✌🏻",
+                "task aman zril",
                 "okee, kosong",
                 "iyaa, nothing urgent",
             ]
@@ -201,12 +221,12 @@ class MessageGenerator:
             task_name = tasks[0].get("name", "task")
             templates = [
                 f"zril, ada {task_name}",
-                f"siapp, 1 task pending ✌🏻",
+                f"siapp, 1 task pending",
                 f"iyaa, *{task_name}*",
             ]
         else:
             templates = [
-                f"zril, {count} task hari ini ✌🏻",
+                f"zril, {count} task hari ini",
                 f"siapp, ada {count} task",
                 f"iyaa, *{count} task* waiting",
             ]
@@ -224,7 +244,7 @@ class MessageGenerator:
         """Template for 20:00 followup."""
         templates = [
             "siapp zril, progress hari ini?",
-            "okee, gimana tasknya? ✌🏻",
+            "okee, gimana tasknya?",
             "iyaa, *update dong*",
             "zril, *status?*",
         ]
@@ -238,25 +258,25 @@ class MessageGenerator:
         
         if has_class and task_count > 0:
             templates = [
-                f"besok ada kelas + {task_count} task ✌🏻",
+                f"besok ada kelas + {task_count} task",
                 f"siapp, besok *busy day*",
                 f"iyaa, besok ada {task_count} task",
             ]
         elif has_class:
             templates = [
-                "besok ada kelas ✌🏻",
+                "besok ada kelas",
                 "siapp, besok kuliah",
                 "iyaa, *besok ada jadwal*",
             ]
         elif task_count > 0:
             templates = [
-                f"besok {task_count} task ✌🏻",
+                f"besok {task_count} task",
                 f"siapp, {task_count} task besok",
                 f"iyaa, *{task_count} task* besok",
             ]
         else:
             templates = [
-                "besok kosong zril ✌🏻",
+                "besok kosong zril",
                 "okee, besok free",
                 "iyaa, *besok chill*",
             ]
@@ -269,7 +289,7 @@ class MessageGenerator:
         urgent_count = len([t for t in tasks if t.get("days_left", 7) <= 1])
         
         templates = [
-            f"zril, *{urgent_count} task urgent* ✌🏻",
+            f"zril, *{urgent_count} task urgent*",
             f"siapp, ada *{urgent_count} deadline*",
             f"iyaa, *critical* - {urgent_count} task",
         ]
@@ -279,9 +299,9 @@ class MessageGenerator:
     def _template_generic(self, data: Dict, urgency: int) -> str:
         """Generic fallback template."""
         templates = [
-            f"okee zril ✌🏻",
+            f"okee zril",
             f"siapp",
-            f"iyaa ✌🏻",
+            f"iyaa",
         ]
         return random.choice(templates)
     
@@ -335,7 +355,7 @@ IDENTITY:
 - Panggil user: "zril" atau "azriel"
 
 COMMUNICATION RULES (STRICT - MUST FOLLOW):
-1. NO EMOJIS kecuali ✌🏻 (jangan pakai 😀, 🔥, ⚠️, dll)
+1. NO EMOJIS sama sekali (jangan pakai 😀, 🔥, ⚠️, ✌🏻, dll)
 2. NO BOLD - gunakan *single asterisk* untuk emphasis (jangan pakai **bold**)
 3. Brevity is mandatory - maksimal 2 kalimat, prefer 1 kalimat
 4. Always Indonesian
@@ -346,7 +366,7 @@ COMMUNICATION RULES (STRICT - MUST FOLLOW):
 9. Never open with "Great question" or "I'd be happy to help" - just answer
 
 TONE EXAMPLES:
-- Normal: "zril, ada kelas jam 08:00 ✌🏻"
+- Normal: "zril, ada kelas jam 08:00"
 - Urgent: "shit, deadline besok dan lu masih stuck. *prioritasin yang mana?*"
 - Confirm: "okee, aku catet"
 - Reject: "iyaa, skip dulu"
@@ -365,11 +385,11 @@ Generate reminder message sesuai urgency level yang diberikan."""
 Generate short acknowledgment with kimi persona:
 - Minimalist, friendly
 - Use "okee", "iyaa", or "siapp" with repeated letters
-- No emoji except ✌🏻
+- NO emoji
 - Max 1 sentence
 - Single asterisk for emphasis (if needed)
 
-Examples: "okee, aku catet ✌🏻" | "siapp, zril" | "iyaa, noted"""
+Examples: "okee, aku catet" | "siapp, zril" | "iyaa, noted"""
         
         elif trigger_type == "user_skip":
             course = data.get("course", "kelas")
@@ -378,7 +398,7 @@ Examples: "okee, aku catet ✌🏻" | "siapp, zril" | "iyaa, noted"""
 Generate short acknowledgment with kimi persona:
 - Minimalist, no judgement
 - Use "okee", "iyaa", or "siapp" with repeated letters
-- No emoji except ✌🏻
+- NO emoji
 - Max 1 sentence
 
 Examples: "okee, skip dulu" | "iyaa, next time" | "siapp, paham"""
@@ -391,7 +411,7 @@ Examples: "okee, skip dulu" | "iyaa, next time" | "siapp, paham"""
 Generate encouraging acknowledgment with kimi persona:
 - Minimalist, supportive
 - Use repeated letters (okee, iyaa, siapp)
-- No emoji except ✌🏻
+- NO emoji
 - Max 2 sentences
 - Single asterisk for emphasis
 
@@ -406,7 +426,7 @@ Intent detected: {intent}
 Generate conversational reply with kimi persona:
 - Minimalist, friendly, bold
 - Use repeated letters (okee, iyaa, siapp, hmm)
-- No emoji except ✌🏻
+- NO emoji
 - Single asterisk for emphasis (WhatsApp style)
 - Brevity mandatory - max 2 sentences
 - Indonesian only
@@ -441,7 +461,7 @@ Be helpful but concise. If asking clarification, keep it simple."""
         elif urgency >= 7:
             prompt_parts.append("\n\nGenerate URGENT message. Use *single asterisk* for emphasis. Be direct and bold.")
         else:
-            prompt_parts.append("\n\nGenerate normal reminder. Keep it short and friendly with ✌🏻")
+            prompt_parts.append("\n\nGenerate normal reminder. Keep it short and friendly, NO emoji.")
         
         return "\n".join(prompt_parts)
 
