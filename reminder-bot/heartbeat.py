@@ -279,8 +279,9 @@ def check_schedule_reminders():
                 if reminder_start <= current_total_minutes <= reminder_end:
                     trigger_key = f"{sched_id}_90min"
                     if trigger_key not in today_state.get("triggered", {}):
-                        trigger_openclaw("schedule", f"{current_hour}:{current_minute:02d}", {
+                        trigger_openclaw("90min", f"{current_hour}:{current_minute:02d}", {
                             "course": course_name,
+                            "course_name": course_name,
                             "start_time": start_time,
                             "room": room,
                             "lecturer": lecturer,
@@ -301,8 +302,9 @@ def check_schedule_reminders():
                 if reminder_start <= current_total_minutes <= reminder_end:
                     trigger_key = f"{sched_id}_15min"
                     if trigger_key not in today_state.get("triggered", {}):
-                        trigger_openclaw("schedule", f"{current_hour}:{current_minute:02d}", {
+                        trigger_openclaw("15min", f"{current_hour}:{current_minute:02d}", {
                             "course": course_name,
+                            "course_name": course_name,
                             "start_time": start_time,
                             "room": room,
                             "lecturer": lecturer,
