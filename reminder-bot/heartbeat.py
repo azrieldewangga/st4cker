@@ -236,9 +236,12 @@ def check_schedule_reminders():
             # === JAM 05:45: Early bird untuk matkul pertama jam 8.xx ===
             if start_hour == 8 and current_hour == 5 and current_minute == 45:
                 trigger_key = f"{sched_id}_0545"
-                if trigger_key not in today_state.get("triggered", {}):
-                    trigger_openclaw("schedule", "05:45", {
+                if "triggered" not in today_state:
+                    today_state["triggered"] = {}
+                if trigger_key not in today_state["triggered"]:
+                    trigger_openclaw("first_545am", "05:45", {
                         "course": course_name,
+                        "course_name": course_name,
                         "start_time": start_time,
                         "room": room,
                         "lecturer": lecturer,
@@ -278,7 +281,9 @@ def check_schedule_reminders():
                 
                 if reminder_start <= current_total_minutes <= reminder_end:
                     trigger_key = f"{sched_id}_90min"
-                    if trigger_key not in today_state.get("triggered", {}):
+                    if "triggered" not in today_state:
+                        today_state["triggered"] = {}
+                    if trigger_key not in today_state["triggered"]:
                         trigger_openclaw("90min", f"{current_hour}:{current_minute:02d}", {
                             "course": course_name,
                             "course_name": course_name,
@@ -301,7 +306,9 @@ def check_schedule_reminders():
                 
                 if reminder_start <= current_total_minutes <= reminder_end:
                     trigger_key = f"{sched_id}_15min"
-                    if trigger_key not in today_state.get("triggered", {}):
+                    if "triggered" not in today_state:
+                        today_state["triggered"] = {}
+                    if trigger_key not in today_state["triggered"]:
                         trigger_openclaw("15min", f"{current_hour}:{current_minute:02d}", {
                             "course": course_name,
                             "course_name": course_name,
