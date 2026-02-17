@@ -32,6 +32,9 @@ OPENCLAW_API_KEY = os.environ.get("OPENCLAW_API_KEY", "st4cker_openclaw_secure_k
 TARGET_PHONE = os.environ.get("TARGET_PHONE", "")  # MUST be set via environment
 TARGET_USER_ID = os.environ.get("TARGET_USER_ID", "")  # Telegram ID untuk DB
 
+# WA Gateway config
+WA_GATEWAY_URL = os.environ.get("WA_GATEWAY_URL", "http://wa-gateway:4000/send")
+
 # Validate required environment variables
 if not TARGET_PHONE:
     logger.error("❌ ERROR: TARGET_PHONE environment variable must be set!")
@@ -93,7 +96,23 @@ def trigger_openclaw(trigger_type: str, trigger_time: str, data: dict):
         
         if response.status_code == 200:
             result = response.json()
-            logger.info(f"[OpenClaw] {trigger_type} at {trigger_time} - Action: {result.get('action', 'unknown')}")
+            action = result.get('action', 'unknown')
+            logger.info(f"[OpenClaw] {trigger_type} at {trigger_time} - Action: {action}")
+            
+            # Kirim ke WA Gateway kalau action = send
+            if action == "send":
+                reply_message = result.get('reply', '')
+                if reply_message:
+                    try:
+                        wa_payload = {"to": TARGET_PHONE, "message": reply_message}
+                        wa_response = requests.post(WA_GATEWAY_URL, json=wa_payload, timeout=15)
+                        if wa_response.status_code == 200:
+                            logger.info(f"[WA Gateway] Pesan terkirim ke {TARGET_PHONE}")
+                        else:
+                            logger.warning(f"[WA Gateway] Gagal kirim: {wa_response.status_code}")
+                    except Exception as wa_err:
+                        logger.error(f"[WA Gateway] Error: {wa_err}")
+            
             return True
         else:
             logger.warning(f"[OpenClaw] {trigger_type} returned {response.status_code}")
