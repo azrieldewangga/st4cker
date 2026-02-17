@@ -233,6 +233,7 @@ async def handle_chat(
     
     # Parse intent dengan NLU conversational
     intent = nlu.parse(data.message, user_ctx)
+    print(f"[Intent] Detected: {intent.get('intent')} for message: '{data.message}'")
     
     # Kalau ambiguous, ask for clarification
     if intent.get("needs_clarification"):
@@ -483,6 +484,7 @@ async def handle_confirm_intent(intent: Dict, data: ChatRequest, user_ctx: Dict)
     # Log attendance sebagai 'confirmed'
     ctx_obj = context_store.get_user_context_obj(data.user_id)
     ctx_obj.log_attendance(today, course, "confirmed")
+    print(f"[Attendance Log] {data.user_id} - {course} @ {today}: confirmed")
     
     # Generate AI response (user interaction - always AI)
     reply = await msg_gen.generate("user_confirm", {
