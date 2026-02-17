@@ -34,6 +34,7 @@ TARGET_USER_ID = os.environ.get("TARGET_USER_ID", "")  # Telegram ID untuk DB
 
 # WA Gateway config
 WA_GATEWAY_URL = os.environ.get("WA_GATEWAY_URL", "http://wa-gateway:4000/send")
+WA_GATEWAY_CONFIRM_URL = os.environ.get("WA_GATEWAY_CONFIRM_URL", "http://wa-gateway:4000/confirmation/schedule-reminder")
 
 # Validate required environment variables
 if not TARGET_PHONE:
@@ -108,6 +109,27 @@ def trigger_openclaw(trigger_type: str, trigger_time: str, data: dict):
                         wa_response = requests.post(WA_GATEWAY_URL, json=wa_payload, timeout=15)
                         if wa_response.status_code == 200:
                             logger.info(f"[WA Gateway] Pesan terkirim ke {TARGET_PHONE}")
+                            
+                            # Notify WA Gateway untuk aktifkan tracking
+                            try:
+                                notify_payload = {
+                                    "user_id": TARGET_USER_ID,
+                                    "schedule": {
+                                        "course_name": data.get('course_name', ''),
+                                        "start_time": data.get('start_time', ''),
+                                        "room": data.get('room', ''),
+                                        "lecturer": data.get('lecturer', '')
+                                    },
+                                    "reminder_type": data.get('reminder_type', 'schedule'),
+                                    "sent_at": datetime.now().isoformat()
+                                }
+                                notify_response = requests.post(WA_GATEWAY_CONFIRM_URL, json=notify_payload, timeout=10)
+                                if notify_response.status_code == 200:
+                                    logger.info("[WA Gateway] Reminder tracking activated")
+                                else:
+                                    logger.warning(f"[WA Gateway] Notify failed: {notify_response.status_code}")
+                            except Exception as notify_err:
+                                logger.error(f"[WA Gateway] Notify error: {notify_err}")
                         else:
                             logger.warning(f"[WA Gateway] Gagal kirim: {wa_response.status_code}")
                     except Exception as wa_err:
