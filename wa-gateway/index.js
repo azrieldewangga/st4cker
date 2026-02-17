@@ -278,7 +278,8 @@ async function initWhatsApp() {
                                 context: {
                                     event: 'schedule_reminder_reply',
                                     reminderSentAt: lastReminderState.sentAt,
-                                    reminderType: lastReminderState.type
+                                    reminderType: lastReminderState.type,
+                                    scheduleInfo: lastReminderState.scheduleInfo
                                 }
                             })
                         });

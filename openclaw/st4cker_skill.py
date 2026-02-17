@@ -471,7 +471,13 @@ async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) 
 
 async def handle_confirm_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
     """Handle confirm otw."""
-    course = user_ctx.get("last_course", "matkul")
+    # Get course from user_ctx or from scheduleInfo in context
+    course = user_ctx.get("last_course", "")
+    if not course:
+        schedule_info = user_ctx.get("scheduleInfo", {})
+        course = schedule_info.get("course_name", "matkul")
+    if not course:
+        course = "matkul"
     today = datetime.now().strftime('%Y-%m-%d')
     
     # Log attendance sebagai 'confirmed'
