@@ -97,10 +97,16 @@ export function NotificationsTab() {
         const items: NotificationItem[] = [];
         const now = new Date();
 
-        // 1. Assignment Notifications
+        // 1. Assignment Notifications - Deduplicate by assignment ID
         const currentSemester = userProfile?.semester;
+        const seenAssignmentIds = new Set<string>();
+        
         assignments.forEach(a => {
             if (a.status === 'done') return; // Skip completed
+            
+            // Deduplicate: skip if we've already processed this assignment ID
+            if (seenAssignmentIds.has(a.id)) return;
+            seenAssignmentIds.add(a.id);
             
             // Filter by semester: check assignment.semester or course.semester
             if (a.semester !== undefined && a.semester !== null) {

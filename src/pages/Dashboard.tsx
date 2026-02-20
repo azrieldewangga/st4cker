@@ -837,7 +837,13 @@ function ActiveTasksTable() {
 
   // Same filtering logic as Assignments page
   const filteredTasks = useMemo(() => {
-    let result = [...assignments];
+    // Deduplicate by ID first
+    const seenIds = new Set<string>();
+    let result = assignments.filter((a) => {
+      if (seenIds.has(a.id)) return false;
+      seenIds.add(a.id);
+      return true;
+    });
 
     if (!userProfile) return [];
 
@@ -1140,8 +1146,13 @@ export default function Dashboard() {
     let count = 0;
     const now = new Date();
     const currentSemester = userProfile?.semester;
+    const seenIds = new Set<string>();
 
     assignments.forEach((a) => {
+      // Deduplicate by ID
+      if (seenIds.has(a.id)) return;
+      seenIds.add(a.id);
+      
       if (a.status === "done") return;
       
       // Filter by semester (same as sidebar)

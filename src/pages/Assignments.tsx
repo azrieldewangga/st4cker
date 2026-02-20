@@ -465,7 +465,13 @@ const Assignments = () => {
 
     // Filtering & Sorting
     const filteredAssignments = useMemo(() => {
-        let result = [...assignments];
+        // Deduplicate by ID first
+        const seenIds = new Set<string>();
+        let result = assignments.filter(a => {
+            if (seenIds.has(a.id)) return false;
+            seenIds.add(a.id);
+            return true;
+        });
 
         if (!userProfile) return [];
 

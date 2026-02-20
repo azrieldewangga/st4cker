@@ -109,13 +109,27 @@ export function AppSidebar() {
         }
     }
 
-    // Count assignments due within 7 days
+    // Count assignments due soon (overdue or within 3 days) - same as Dashboard
+    const courses = useStore(state => state.courses)
+    const currentSemester = userProfile?.semester
+    
     const assignmentsDueCount = assignments.filter(a => {
         if (a.status === 'done') return false
+        
+        // Filter by semester (same as Dashboard)
+        if (a.semester !== undefined && a.semester !== null) {
+            if (a.semester !== currentSemester) return false
+        } else {
+            const course = courses.find(c => c.id === a.courseId)
+            if (course && course.semester !== currentSemester) return false
+        }
+        
         const deadline = new Date(a.deadline)
         const now = new Date()
         const diffDays = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-        return diffDays <= 7 && diffDays >= 0
+        
+        // Due soon: overdue OR within 3 days (same as Dashboard)
+        return (diffDays < 0) || (diffDays <= 3 && diffDays >= 0)
     }).length
 
     // Get active projects (not completed)
