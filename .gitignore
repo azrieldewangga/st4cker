@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-electron
 *.local
 
 # Editor directories and files
@@ -33,6 +34,9 @@ RELEASE_NOTES_v1.6.1.md
 square-ui-master/
 tsc_debug.txt
 debug_info.txt
+*.db
+*.db-shm
+*.db-wal
 data/
 project-dashboard-main/
 project-dashboard-main.zip
