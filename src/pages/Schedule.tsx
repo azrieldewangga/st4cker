@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { toast } from "sonner";
 
 // Shadcn Components
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -486,59 +486,60 @@ const Schedule = () => {
             </div>
 
             <Card className="flex-1 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-auto">
+                <ScrollArea className="flex-1">
                     <div className="min-w-[900px] p-2">
                         <table className="w-full text-sm border-collapse">
-                        <thead className="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
-                            <tr>
-                                <th className="p-4 w-20 border-b font-medium text-muted-foreground">Time</th>
-                                {DAYS.map(day => (
-                                    <th key={day} className="p-4 border-b font-medium min-w-[150px]">{day}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {TIMES.map(time => (
-                                <tr key={time} className="group">
-                                    <td className="p-2 border-r border-b text-xs text-muted-foreground font-mono bg-muted/20 sticky left-0 text-center">
-                                        {time}
-                                    </td>
-                                    {DAYS.map(day => {
-                                        const slotData = getCourseForSlot(day, time);
-                                        return (
-                                            <td key={`${day}-${time}`} className="p-1 border-b border-r last:border-r-0 h-16 relative">
-                                                <div
-                                                    onClick={() => handleSlotClick(day, time, slotData)}
-                                                    onContextMenu={(e) => handleContextMenu(e, day, time, slotData)}
-                                                    className={cn(
-                                                        "w-full h-full rounded-md p-2 cursor-pointer transition-all border text-xs flex flex-col justify-center items-center text-center",
-                                                        slotData ? slotData.className : "border-transparent hover:bg-muted/50 opacity-0 hover:opacity-100 placeholder-slot"
-                                                    )}
-                                                >
-                                                    {slotData ? (
-                                                        <>
-                                                            <div className="font-semibold truncate w-full">{slotData.course?.name}</div>
-                                                            {slotData.room && (
-                                                                <div className="flex items-center justify-center gap-1 opacity-70 mt-1 text-[10px]">
-                                                                    <MapPin size={10} /> {slotData.room}
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <div className="flex items-center justify-center h-full">
-                                                            <Plus className="w-4 h-4 text-muted-foreground" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        );
-                                    })}
+                            <thead className="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
+                                <tr>
+                                    <th className="p-4 w-20 border-b font-medium text-muted-foreground">Time</th>
+                                    {DAYS.map(day => (
+                                        <th key={day} className="p-4 border-b font-medium min-w-[150px]">{day}</th>
+                                    ))}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {TIMES.map(time => (
+                                    <tr key={time} className="group">
+                                        <td className="p-2 border-r border-b text-xs text-muted-foreground font-mono bg-muted/20 sticky left-0 text-center">
+                                            {time}
+                                        </td>
+                                        {DAYS.map(day => {
+                                            const slotData = getCourseForSlot(day, time);
+                                            return (
+                                                <td key={`${day}-${time}`} className="p-1 border-b border-r last:border-r-0 h-16 relative">
+                                                    <div
+                                                        onClick={() => handleSlotClick(day, time, slotData)}
+                                                        onContextMenu={(e) => handleContextMenu(e, day, time, slotData)}
+                                                        className={cn(
+                                                            "w-full h-full rounded-md p-2 cursor-pointer transition-all border text-xs flex flex-col justify-center items-center text-center",
+                                                            slotData ? slotData.className : "border-transparent hover:bg-muted/50 opacity-0 hover:opacity-100 placeholder-slot"
+                                                        )}
+                                                    >
+                                                        {slotData ? (
+                                                            <>
+                                                                <div className="font-semibold truncate w-full">{slotData.course?.name}</div>
+                                                                {slotData.room && (
+                                                                    <div className="flex items-center justify-center gap-1 opacity-70 mt-1 text-[10px]">
+                                                                        <MapPin size={10} /> {slotData.room}
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <div className="flex items-center justify-center h-full">
+                                                                <Plus className="w-4 h-4 text-muted-foreground" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
+                    <ScrollBar orientation="horizontal" />
+                </ScrollArea>
             </Card>
 
             {/* Selector Popover */}

@@ -1128,14 +1128,15 @@ export default function Dashboard() {
   const userProfile = useStore((state) => state.userProfile);
   const isAppReady = useStore((state) => state.isAppReady);
 
-  // Notification Count
+  // Notification Count (Tasks only - same as Assignments page)
   const assignments = useStore((state) => state.assignments);
   const subscriptions = useStore((state) => state.subscriptions);
   const transactions = useStore((state) => state.transactions);
   const courses = useStore((state) => state.courses);
   // userProfile sudah dideklarasikan di atas
 
-  const notificationCount = useMemo(() => {
+  // Count assignments due soon (same logic as Assignments sidebar badge)
+  const tasksDueSoonCount = useMemo(() => {
     let count = 0;
     const now = new Date();
     const currentSemester = userProfile?.semester;
@@ -1143,7 +1144,7 @@ export default function Dashboard() {
     assignments.forEach((a) => {
       if (a.status === "done") return;
       
-      // Filter by semester
+      // Filter by semester (same as sidebar)
       if (a.semester !== undefined && a.semester !== null) {
         if (a.semester !== currentSemester) return;
       } else {
@@ -1154,10 +1155,19 @@ export default function Dashboard() {
       
       const dueDate = new Date(a.deadline);
       const daysLeft = differenceInDays(dueDate, now);
+      // Due soon: overdue OR within 3 days
       if ((isPast(dueDate) && !isToday(dueDate)) || (daysLeft >= 0 && daysLeft <= 3)) {
         count++;
       }
     });
+    return count;
+  }, [assignments, courses, userProfile]);
+
+  // Full notification count (includes subscriptions for tab badge)
+  const notificationCount = useMemo(() => {
+    let count = tasksDueSoonCount; // Start with tasks count
+    const now = new Date();
+
     subscriptions.forEach((sub) => {
       let candidate = setDate(now, sub.dueDay);
       if (isPast(candidate) && !isToday(candidate)) {
@@ -1176,7 +1186,7 @@ export default function Dashboard() {
       if (daysUntil >= 0 && daysUntil <= 7) count++;
     });
     return count;
-  }, [assignments, subscriptions, transactions, courses, userProfile]);
+  }, [tasksDueSoonCount, subscriptions, transactions]);
 
   if (!isAppReady && !userProfile) {
     return (
@@ -1200,9 +1210,9 @@ export default function Dashboard() {
             <ChevronRightIcon className="h-4 w-4" />
             <span className="capitalize">{activeTab}</span>
           </div>
-          {notificationCount > 0 && (
+          {tasksDueSoonCount > 0 && (
             <div className="text-sm text-muted-foreground">
-              You have {notificationCount} tasks due soon
+              You have {tasksDueSoonCount} tasks due soon
             </div>
           )}
         </div>

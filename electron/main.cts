@@ -5,11 +5,14 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 
+// Debug: Check if app is available
+console.log('[Main] Electron app check:', typeof app, app ? 'defined' : 'undefined');
+
 // Load .env from the correct path (dev vs production)
+// Note: Don't use app.getPath here as app might not be ready
 const envPaths = [
     path.join(process.cwd(), '.env'),                          // Dev: project root
     path.join(__dirname, '..', '.env'),                        // Production: next to asar
-    path.join(app?.getPath?.('userData') || '', '.env'),       // Production: userData folder
 ];
 for (const envPath of envPaths) {
     if (existsSync(envPath)) {
@@ -43,22 +46,24 @@ import { syncUserDataToBackend } from './helpers/telegram-sync.cjs';
 
 // Startup handled by Electron
 
-// Single Instance Lock - Prevent multiple instances
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-    // Another instance is already running, quit this one
-    app.quit();
-} else {
-    // This is the first instance, set up second-instance handler
-    app.on('second-instance', (event, commandLine, workingDirectory) => {
-        // Someone tried to run a second instance, focus our window instead
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.focus();
-        }
-    });
-}
+// Single Instance Lock - Temporarily disabled for debugging
+// TODO: Re-enable after fixing electron import issue
+let gotTheLock = true;
+// function checkSingleInstance(): boolean {
+//     try {
+//         const gotTheLock = app.requestSingleInstanceLock();
+//         if (!gotTheLock) {
+//             console.log('[Main] Another instance is running, quitting...');
+//             app.quit();
+//             process.exit(0);
+//         }
+//         return gotTheLock;
+//     } catch (e) {
+//         console.error('[Main] Failed to request single instance lock:', e);
+//         return false;
+//     }
+// }
+// const gotTheLock = checkSingleInstance();
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
@@ -173,6 +178,15 @@ const createWindow = () => {
 // @ts-ignore
 import log from 'electron-log/main.js';
 log.initialize();
+
+// Handle second-instance event - DISABLED for debugging
+// app.on('second-instance', (event, commandLine, workingDirectory) => {
+//     console.log('[Main] Second instance detected, focusing window...');
+//     if (mainWindow) {
+//         if (mainWindow.isMinimized()) mainWindow.restore();
+//         mainWindow.focus();
+//     }
+// });
 
 app.on('ready', async () => {
     // Debug Path Logging

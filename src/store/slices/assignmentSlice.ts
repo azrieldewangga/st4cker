@@ -208,6 +208,16 @@ export const createAssignmentSlice: StateCreator<
         try {
             const state = get() as any;
             const { userProfile } = state;
+            
+            // Prevent multiple simultaneous fetches
+            if ((state as any).isFetchingFromBackend) {
+                console.log('[AssignmentSlice] Already fetching from backend, skipping...');
+                return;
+            }
+            
+            // Set flag to prevent duplicate fetches
+            set({ isFetchingFromBackend: true } as any);
+            
             const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
@@ -222,13 +232,26 @@ export const createAssignmentSlice: StateCreator<
 
             if (!data.data?.length) {
                 console.log('[AssignmentSlice] Server has no assignments, keeping local data');
+                set({ isFetchingFromBackend: false } as any);
                 return;
             }
 
             // Convert and save to local SQLite
             const localAssignments = await window.electronAPI.assignments.list();
+            
+            // Create a set of existing assignment keys for duplicate detection
+            const existingKeys = new Set(localAssignments.map((a: any) => 
+                `${a.title?.toLowerCase().trim()}_${a.deadline}_${a.course || a.courseId}`
+            ));
+            
             for (const item of data.data) {
-                const exists = localAssignments.find((a: any) => a.id === item.id);
+                // Check by ID first
+                const existsById = localAssignments.find((a: any) => a.id === item.id);
+                
+                // Also check by content to prevent duplicates with different IDs
+                const itemKey = `${item.title?.toLowerCase().trim()}_${item.deadline}_${item.course}`;
+                const existsByContent = existingKeys.has(itemKey);
+                
                 const assignmentData = {
                     id: item.id,
                     title: item.title,
@@ -241,17 +264,24 @@ export const createAssignmentSlice: StateCreator<
                     updatedAt: new Date().toISOString(),
                 };
                 
-                if (exists) {
+                if (existsById) {
+                    // Update existing by ID
                     await window.electronAPI.assignments.update(item.id, assignmentData);
-                } else {
+                } else if (!existsByContent) {
+                    // Only create if no duplicate by content
                     await window.electronAPI.assignments.create(assignmentData);
+                    existingKeys.add(itemKey); // Add to tracked keys
+                } else {
+                    console.log(`[AssignmentSlice] Skipping duplicate assignment: ${item.title}`);
                 }
             }
 
-            get().fetchAssignments();
+            await get().fetchAssignments();
             console.log('[AssignmentSlice] Assignments fetched from backend');
         } catch (error) {
             console.error('[AssignmentSlice] Fetch from backend error:', error);
+        } finally {
+            set({ isFetchingFromBackend: false } as any);
         }
     },
 });

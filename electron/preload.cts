@@ -1,4 +1,12 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
+// webUtils is available in Electron 33+, fallback for older versions
+let webUtils: any;
+try {
+    const electron = require('electron');
+    webUtils = electron.webUtils;
+} catch {
+    webUtils = null;
+}
 
 contextBridge.exposeInMainWorld('electronAPI', {
     // Window Controls
@@ -114,7 +122,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         openPath: (path: string) => ipcRenderer.invoke('utils:openPath', path),
         saveFile: (content: string, defaultName: string, extensions: string[]) => ipcRenderer.invoke('utils:saveFile', content, defaultName, extensions),
         // @ts-ignore
-        getPathForFile: (file: File) => webUtils.getPathForFile(file)
+        getPathForFile: (file: File) => webUtils ? webUtils.getPathForFile(file) : (file as any).path
     },
 
     notifications: {

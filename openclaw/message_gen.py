@@ -23,9 +23,27 @@ class MessageGenerator:
     URGENCY_AI_THRESHOLD = 7  # Use AI for urgency >= 7
     
     def __init__(self):
+        # Support multiple AI providers
         self.moonshot_api_key = os.getenv("MOONSHOT_API_KEY", "")
         self.moonshot_base_url = os.getenv("MOONSHOT_BASE_URL", "https://api.moonshot.cn/v1")
-        self.use_ai = bool(self.moonshot_api_key)
+        
+        # Gemini configuration
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+        self.gemini_base_url = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+        
+        # Determine which AI to use (Gemini prioritized if both set)
+        self.use_gemini = bool(self.gemini_api_key)
+        self.use_moonshot = bool(self.moonshot_api_key) and not self.use_gemini
+        self.use_ai = self.use_gemini or self.use_moonshot
+        
+        # Log configuration
+        if self.use_gemini:
+            print(f"[MessageGen] Using Gemini AI ({self.gemini_model}) - CHEAP MODE 💰")
+        elif self.use_moonshot:
+            print(f"[MessageGen] Using Moonshot AI (kimi-k2-5)")
+        else:
+            print(f"[MessageGen] AI disabled - using templates only")
         
     def _get_repeated_word(self) -> str:
         """Get random repeated letter word."""
@@ -291,9 +309,51 @@ class MessageGenerator:
         return random.choice(templates)
     
     async def _generate_ai(self, trigger_type: str, data: Dict, user_ctx: Dict, urgency: int) -> str:
-        """Generate message using Moonshot AI for urgent situations."""
+        """Generate message using AI (Gemini prioritized, fallback to Moonshot)."""
         
         prompt = self._build_ai_prompt(trigger_type, data, user_ctx, urgency)
+        
+        if self.use_gemini:
+            return await self._generate_gemini(prompt)
+        else:
+            return await self._generate_moonshot(prompt)
+    
+    async def _generate_gemini(self, prompt: str) -> str:
+        """Generate using Gemini API (cheaper option)."""
+        
+        # Gemini uses different payload format
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": self._get_system_prompt() + "\n\n" + prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 150,
+                "topP": 0.9
+            }
+        }
+        
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.gemini_base_url}/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}",
+                json=payload,
+                timeout=10.0
+            )
+            resp.raise_for_status()
+            result = resp.json()
+            
+            # Parse Gemini response format
+            if "candidates" in result and len(result["candidates"]) > 0:
+                content = result["candidates"][0]["content"]["parts"][0]["text"]
+                return content.strip()
+            else:
+                raise Exception("No response from Gemini")
+    
+    async def _generate_moonshot(self, prompt: str) -> str:
+        """Generate using Moonshot API (legacy)."""
         
         headers = {
             "Authorization": f"Bearer {self.moonshot_api_key}",
@@ -301,14 +361,8 @@ class MessageGenerator:
         }
         
         messages = [
-            {
-                "role": "system",
-                "content": self._get_system_prompt()
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
+            {"role": "system", "content": self._get_system_prompt()},
+            {"role": "user", "content": prompt}
         ]
         
         payload = {

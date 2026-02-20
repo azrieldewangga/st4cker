@@ -122,7 +122,7 @@ const SortableRow = ({
         >
             {/* Drag Grip & Checkbox */}
             <TableCell className="w-[50px] p-2 pl-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center h-4">
                     <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => {
@@ -136,7 +136,7 @@ const SortableRow = ({
                         <div
                             {...attributes}
                             {...listeners}
-                            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded opacity-0 group-hover:opacity-100 transition-opacity flex justify-center"
+                            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded opacity-0 group-hover:opacity-100 transition-opacity flex justify-center absolute left-8"
                         >
                             <GripVertical size={16} className="text-muted-foreground" />
                         </div>
@@ -433,7 +433,10 @@ const Assignments = () => {
     };
 
     useEffect(() => {
-        fetchAssignments();
+        // Only fetch if assignments are empty (prevent duplicate fetches on refresh)
+        if (assignments.length === 0) {
+            fetchAssignments();
+        }
         fetchCourses();
     }, []); // Remove functions from deps
 
@@ -652,12 +655,14 @@ const Assignments = () => {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[50px]">
-                                                <Checkbox
-                                                    checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
-                                                    onCheckedChange={toggleSelectAll}
-                                                    className="scale-75 translate-y-[2px]"
-                                                />
+                                            <TableHead className="w-[50px] p-2 pl-4">
+                                                <div className="flex items-center justify-center h-4">
+                                                    <Checkbox
+                                                        checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
+                                                        onCheckedChange={toggleSelectAll}
+                                                        className="scale-75"
+                                                    />
+                                                </div>
                                             </TableHead>
                                             <TableHead>Deadline</TableHead>
                                             <TableHead>Status</TableHead>
