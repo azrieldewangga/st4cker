@@ -69,8 +69,40 @@ class NLU:
         
         # New task indicators
         self.new_task_indicators = [
-            "tugas baru", "ada tugas", "ditambah tugas", "dikasih tugas",
+            "tugas baru", "ditambah tugas", "dikasih tugas",
             "baru keluar tugas", "tugas mendadak"
+        ]
+        
+        # List tasks indicators
+        self.list_tasks_indicators = [
+            "list tugas", "daftar tugas", "tugas apa", "ada tugas",
+            "tugasku", "tugas gue", "lihat tugas", "cek tugas", "tugas pending",
+            "berapa tugas", "tugas apa aja", "semua tugas"
+        ]
+        
+        # List schedules indicators
+        self.list_schedules_indicators = [
+            "jadwal", "kuliah hari ini", "ada matkul apa", "matkul hari ini",
+            "schedule", "kelas hari ini", "ada kelas apa", "lihat jadwal",
+            "cek jadwal", "jadwal kuliah", "jam berapa kelas", "besok ada kuliah"
+        ]
+        
+        # Check balance indicators
+        self.check_balance_indicators = [
+            "saldo", "duit", "uang", "balance", "tabungan", "sisa uang",
+            "duit berapa", "uang sisa", "cek saldo", "lihat saldo", "sisa duit"
+        ]
+        
+        # List projects indicators
+        self.list_projects_indicators = [
+            "project", "proyek", "list project", "daftar project",
+            "cek project", "lihat project", "project apa aja"
+        ]
+        
+        # List transactions indicators
+        self.list_transactions_indicators = [
+            "transaksi", "pengeluaran", "pemasukan", "list transaksi",
+            "cek transaksi", "lihat transaksi", "uang keluar", "uang masuk"
         ]
     
     def parse(self, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -92,6 +124,53 @@ class NLU:
         if self._is_resume(msg_lower):
             return {
                 "intent": "resume_attendance",
+                "confidence": 0.9,
+                "needs_clarification": False,
+                "extracted": {}
+            }
+        
+        # Check for list tasks
+        if self._is_list_tasks(msg_lower):
+            filters = self._extract_task_filters(msg_lower)
+            return {
+                "intent": "list_tasks",
+                "confidence": 0.9,
+                "needs_clarification": False,
+                "extracted": filters
+            }
+        
+        # Check for list schedules
+        if self._is_list_schedules(msg_lower):
+            day = self._extract_day(msg_lower)
+            return {
+                "intent": "list_schedules",
+                "confidence": 0.9,
+                "needs_clarification": False,
+                "extracted": {"day": day}
+            }
+        
+        # Check for check balance
+        if self._is_check_balance(msg_lower):
+            return {
+                "intent": "check_balance",
+                "confidence": 0.95,
+                "needs_clarification": False,
+                "extracted": {}
+            }
+        
+        # Check for list projects
+        if self._is_list_projects(msg_lower):
+            return {
+                "intent": "list_projects",
+                "confidence": 0.9,
+                "needs_clarification": False,
+                "extracted": {}
+            }
+        
+        # Check for list transactions
+        if self._is_list_transactions(msg_lower):
+            return {
+                "intent": "list_transactions",
                 "confidence": 0.9,
                 "needs_clarification": False,
                 "extracted": {}
@@ -205,6 +284,72 @@ class NLU:
             if indicator in msg_lower:
                 return True
         return False
+    
+    def _is_list_tasks(self, msg_lower: str) -> bool:
+        """Check if user wants to list tasks."""
+        for indicator in self.list_tasks_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_list_schedules(self, msg_lower: str) -> bool:
+        """Check if user wants to list schedules."""
+        for indicator in self.list_schedules_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_check_balance(self, msg_lower: str) -> bool:
+        """Check if user wants to check balance."""
+        for indicator in self.check_balance_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_list_projects(self, msg_lower: str) -> bool:
+        """Check if user wants to list projects."""
+        for indicator in self.list_projects_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_list_transactions(self, msg_lower: str) -> bool:
+        """Check if user wants to list transactions."""
+        for indicator in self.list_transactions_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _extract_task_filters(self, msg_lower: str) -> Dict:
+        """Extract filters for task listing."""
+        filters = {}
+        
+        # Status filter
+        if "pending" in msg_lower or "belum" in msg_lower:
+            filters["status"] = "pending"
+        elif "completed" in msg_lower or "selesai" in msg_lower or "done" in msg_lower:
+            filters["status"] = "completed"
+        
+        # Course filter
+        course = self._extract_course(msg_lower)
+        if course:
+            filters["course"] = course
+        
+        return filters
+    
+    def _extract_day(self, msg_lower: str) -> Optional[str]:
+        """Extract day from message."""
+        days = {
+            "senin": "Senin", "selasa": "Selasa", "rabu": "Rabu",
+            "kamis": "Kamis", "jumat": "Jumat", "sabtu": "Sabtu", "minggu": "Minggu",
+            "hari ini": "today", "besok": "tomorrow"
+        }
+        
+        for key, value in days.items():
+            if key in msg_lower:
+                return value
+        
+        return None
     
     def _is_stuck(self, msg_lower: str) -> bool:
         """Check if user is stuck/need help."""

@@ -397,6 +397,21 @@ async def handle_clear_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -
     elif intent_type == "resume_attendance":
         return await handle_resume_intent(intent, data, user_ctx)
     
+    elif intent_type == "list_tasks":
+        return await handle_list_tasks_intent(intent, data, user_ctx)
+    
+    elif intent_type == "list_schedules":
+        return await handle_list_schedules_intent(intent, data, user_ctx)
+    
+    elif intent_type == "check_balance":
+        return await handle_check_balance_intent(intent, data, user_ctx)
+    
+    elif intent_type == "list_projects":
+        return await handle_list_projects_intent(intent, data, user_ctx)
+    
+    elif intent_type == "list_transactions":
+        return await handle_list_transactions_intent(intent, data, user_ctx)
+    
     # Fallback
     return OpenClawResponse(
         reply=f"Halo Zril! 👋 Aku dengerin, tapi belum ngerti maksudnya 😅\n\nAda yang bisa aku bantu?",
@@ -797,6 +812,306 @@ async def log_attendance(
         "date": date,
         "status": status
     }
+
+# =============================================================================
+# NEW INTENT HANDLERS (List Tasks, Schedules, Balance, Projects, Transactions)
+# =============================================================================
+
+async def handle_list_tasks_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle list tasks intent."""
+    extracted = intent.get("extracted", {})
+    status_filter = extracted.get("status")
+    course_filter = extracted.get("course")
+    
+    # Call API
+    result = await tools.get_tasks(status=status_filter, course=course_filter)
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Aduh zril, ada error pas ambil data tugas 😅\n\nCoba lagi nanti ya!",
+            action="send",
+            done=True
+        )
+    
+    tasks = result.get("data", [])
+    count = result.get("count", 0)
+    
+    if count == 0:
+        return OpenClawResponse(
+            reply=f"Santai zril, gak ada tugas pending! ✌🏻\n\nMau nambah tugas baru?",
+            action="send",
+            done=True
+        )
+    
+    # Format task list dengan persona kimi (minimalist, bold, ✌🏻)
+    reply_lines = [f"zril, ada *{count} tugas* nih ✌🏻\n"]
+    
+    now = datetime.now()
+    for i, task in enumerate(tasks[:10], 1):  # Limit 10 tasks
+        title = task.get("title", "Tugas")
+        course = task.get("course", "")
+        deadline_str = task.get("deadline", "")
+        status = task.get("status", "pending")
+        
+        # Calculate days left
+        days_left = None
+        if deadline_str:
+            try:
+                deadline = datetime.fromisoformat(deadline_str.replace("Z", "+00:00"))
+                days_left = (deadline - now).days
+            except:
+                pass
+        
+        # Format status icon
+        if status == "completed":
+            icon = "✅"
+        elif days_left is not None and days_left < 0:
+            icon = "🔥"
+        elif days_left is not None and days_left <= 1:
+            icon = "⚠️"
+        else:
+            icon = "⬜"
+        
+        # Format deadline text
+        if days_left is not None:
+            if days_left < 0:
+                deadline_text = f"telat {abs(days_left)} hari"
+            elif days_left == 0:
+                deadline_text = "hari ini"
+            elif days_left == 1:
+                deadline_text = "besok"
+            else:
+                deadline_text = f"{days_left} hari lagi"
+        else:
+            deadline_text = "deadline TBD"
+        
+        reply_lines.append(f"{i}. {icon} *{title}* - {course}")
+        reply_lines.append(f"   _{deadline_text}_")
+    
+    if count > 10:
+        reply_lines.append(f"\n...dan {count - 10} tugas lainnya")
+    
+    reply_lines.append("\nmau *update progress* atau pilih nomor buat dikerjain?")
+    
+    return OpenClawResponse(
+        reply="\n".join(reply_lines),
+        action="send",
+        done=True
+    )
+
+async def handle_list_schedules_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle list schedules intent."""
+    extracted = intent.get("extracted", {})
+    day = extracted.get("day")
+    
+    # Map day ke parameter API
+    day_param = None
+    if day == "today":
+        day_param = None  # API akan pakai default (semua)
+    elif day == "tomorrow":
+        # Hitung hari besok
+        tomorrow = datetime.now() + timedelta(days=1)
+        day_names = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
+        day_param = day_names[tomorrow.weekday()]
+    elif day:
+        day_param = day
+    
+    # Call API
+    result = await tools.get_schedules(day=day_param)
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Error ambil jadwal zril 😅\n\nCoba lagi ya!",
+            action="send",
+            done=True
+        )
+    
+    schedules = result.get("data", [])
+    count = result.get("count", 0)
+    
+    if count == 0:
+        return OpenClawResponse(
+            reply=f"zril, gak ada jadwal kuliah! ✌🏻\n\nLibur nih, santai aja~",
+            action="send",
+            done=True
+        )
+    
+    # Format schedule list
+    reply_lines = [f"jadwal kuliah zril ✌🏻\n"]
+    
+    current_day = None
+    for sched in schedules:
+        day_name = sched.get("dayName", "")
+        course = sched.get("courseName", "")
+        start_time = sched.get("startTime", "")
+        end_time = sched.get("endTime", "")
+        room = sched.get("room", "")
+        
+        # Group by day
+        if day_name != current_day:
+            reply_lines.append(f"\n*{day_name}*")
+            current_day = day_name
+        
+        time_str = f"{start_time}-{end_time}" if end_time else start_time
+        room_str = f" ({room})" if room else ""
+        
+        reply_lines.append(f"  • {time_str} - *{course}*{room_str}")
+    
+    return OpenClawResponse(
+        reply="\n".join(reply_lines),
+        action="send",
+        done=True
+    )
+
+async def handle_check_balance_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle check balance intent."""
+    # Call API
+    result = await tools.get_balance()
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Error cek saldo zril 😅\n\nCoba lagi ya!",
+            action="send",
+            done=True
+        )
+    
+    balance_data = result.get("data", {})
+    formatted_balance = balance_data.get("formattedBalance", "Rp0")
+    semester = balance_data.get("semester", "-")
+    
+    # Get summary for additional info
+    summary_result = await tools.get_summary()
+    recent_tx = []
+    if summary_result.get("success"):
+        recent_tx = summary_result.get("data", {}).get("recentTransactions", [])
+    
+    reply_lines = [
+        f"zril, saldo kamu ✌🏻",
+        f"",
+        f"💰 *{formatted_balance}*",
+        f"📚 Semester: {semester}",
+    ]
+    
+    if recent_tx:
+        reply_lines.append(f"\n_transaksi terakhir:_")
+        for tx in recent_tx[:3]:
+            tx_type = tx.get("type", "")
+            amount = tx.get("amount", 0)
+            category = tx.get("category", "")
+            icon = "💸" if tx_type == "expense" else "💵"
+            reply_lines.append(f"{icon} {category}: Rp{abs(amount):,}")
+    
+    reply_lines.append(f"\nmau *catat transaksi* baru?")
+    
+    return OpenClawResponse(
+        reply="\n".join(reply_lines),
+        action="send",
+        done=True
+    )
+
+async def handle_list_projects_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle list projects intent."""
+    result = await tools.get_projects(status="active")
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Error ambil project zril 😅\n\nCoba lagi ya!",
+            action="send",
+            done=True
+        )
+    
+    projects = result.get("data", [])
+    count = result.get("count", 0)
+    
+    if count == 0:
+        return OpenClawResponse(
+            reply=f"zril, gak ada project aktif ✌🏻\n\nMau mulai project baru?",
+            action="send",
+            done=True
+        )
+    
+    reply_lines = [f"project aktif zril ✌🏻\n"]
+    
+    for i, project in enumerate(projects[:5], 1):
+        title = project.get("title", "Project")
+        progress = project.get("totalProgress", 0)
+        project_type = project.get("type", "personal")
+        course = project.get("courseName", "")
+        
+        # Progress bar
+        progress_bar = "█" * (progress // 10) + "░" * (10 - progress // 10)
+        
+        type_icon = "👤" if project_type == "personal" else "📚"
+        course_str = f" ({course})" if course else ""
+        
+        reply_lines.append(f"{i}. {type_icon} *{title}*{course_str}")
+        reply_lines.append(f"   {progress_bar} {progress}%")
+    
+    if count > 5:
+        reply_lines.append(f"\n...dan {count - 5} project lainnya")
+    
+    reply_lines.append(f"\nmau *update progress* project?")
+    
+    return OpenClawResponse(
+        reply="\n".join(reply_lines),
+        action="send",
+        done=True
+    )
+
+async def handle_list_transactions_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle list transactions intent."""
+    result = await tools.get_transactions(limit=10)
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Error ambil transaksi zril 😅\n\nCoba lagi ya!",
+            action="send",
+            done=True
+        )
+    
+    transactions = result.get("data", [])
+    count = result.get("count", 0)
+    
+    if count == 0:
+        return OpenClawResponse(
+            reply=f"zril, belum ada transaksi tercatat ✌🏻\n\nMau catat pengeluaran?",
+            action="send",
+            done=True
+        )
+    
+    reply_lines = [f"transaksi terakhir zril ✌🏻\n"]
+    
+    total_income = 0
+    total_expense = 0
+    
+    for tx in transactions[:5]:
+        tx_type = tx.get("type", "")
+        amount = tx.get("amount", 0)
+        category = tx.get("category", "")
+        title = tx.get("title", "")
+        date = tx.get("date", "")[:10]  # YYYY-MM-DD
+        
+        if tx_type == "income":
+            icon = "💵"
+            total_income += amount
+            amount_str = f"+Rp{amount:,.0f}"
+        else:
+            icon = "💸"
+            total_expense += abs(amount)
+            amount_str = f"-Rp{abs(amount):,.0f}"
+        
+        reply_lines.append(f"{icon} *{amount_str}* - {category}")
+        if title and title != category:
+            reply_lines.append(f"   _{title}_")
+    
+    reply_lines.append(f"\n📊 Total: +Rp{total_income:,.0f} | -Rp{total_expense:,.0f}")
+    reply_lines.append(f"\nmau *catat transaksi* baru?")
+    
+    return OpenClawResponse(
+        reply="\n".join(reply_lines),
+        action="send",
+        done=True
+    )
 
 # =============================================================================
 # HEALTH CHECK
