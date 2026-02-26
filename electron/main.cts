@@ -346,16 +346,20 @@ app.on('ready', async () => {
             try {
                 const token = telegramStore.get('sessionToken');
                 const serverUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
-                const apiKey = process.env.AGENT_API_KEY;
+                const apiKey = process.env.AGENT_API_KEY || '';
                 
                 // Kirim custom course name ke API
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey,
+                };
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
                 await fetch(`${serverUrl}/api/v1/user/courses/names`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': apiKey,
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers,
                     body: JSON.stringify({
                         courseId: c.id,
                         customName: c.name
