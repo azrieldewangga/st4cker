@@ -9,16 +9,16 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python packages
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn \
-    httpx \
-    pydantic
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY st4cker_skill.py .
 COPY nlu.py .
+COPY llm_nlu.py .
+COPY ai_responder.py .
+COPY memory.py .
 COPY message_gen.py .
 COPY context.py .
 COPY tools.py .
@@ -26,10 +26,13 @@ COPY attendance_nlu.py .
 COPY course_manager_nlu.py .
 COPY smart_reminder_client.py .
 
+# Create data directory for memory
+RUN mkdir -p /app/data
+
 # Environment
 ENV PYTHONUNBUFFERED=1
 ENV TZ=Asia/Jakarta
 
 EXPOSE 8000
 
-CMD ["python", "st4cker_skill.py"]
+CMD ["uvicorn", "st4cker_skill:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -102,12 +102,14 @@ services:
     environment:
       - TZ=Asia/Jakarta
       - ST4CKER_API_URL=http://st4cker-bot:3000
-      - ST4CKER_API_KEY=ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62
+      - ST4CKER_API_KEY=st4cker-agent-secret
       - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
-      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
-      - MOONSHOT_BASE_URL=${MOONSHOT_BASE_URL:-https://api.moonshot.cn/v1}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MEMORY_STORAGE_PATH=/app/data/memory.json
     env_file:
-      - .env
+      - openclaw/.env
+    volumes:
+      - openclaw_memory:/app/data
     networks:
       - st4cker-net
     depends_on:
@@ -122,6 +124,7 @@ volumes:
   postgres_data:
   wa_auth:
   wa_data:
+  openclaw_memory:
 
 
 networks:
