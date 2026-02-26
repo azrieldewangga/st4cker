@@ -7,7 +7,7 @@ set -e
 echo "🚀 Deploying OpenClaw..."
 
 # Go to project directory
-cd ~/st4cker || exit 1
+cd ~/projects/st4cker || exit 1
 
 # Pull latest changes
 echo "📦 Pulling latest changes..."
@@ -17,7 +17,12 @@ git pull origin main
 if ! grep -q "GEMINI_API_KEY" openclaw/.env 2>/dev/null; then
     echo "⚠️  GEMINI_API_KEY not found in openclaw/.env"
     echo "Adding from telegram-bot/.env..."
-    GEMINI_KEY=$(grep GEMINI_API_KEY telegram-bot/.env | cut -d= -f2)
+    GEMINI_KEY=$(grep GEMINI_API_KEY ../telegram-bot/.env 2>/dev/null | cut -d= -f2 || echo "")
+    if [ -z "$GEMINI_KEY" ]; then
+        echo "❌ GEMINI_API_KEY not found in telegram-bot/.env either"
+        echo "Please add it manually to openclaw/.env"
+        exit 1
+    fi
     echo "GEMINI_API_KEY=$GEMINI_KEY" >> openclaw/.env
     echo "✅ GEMINI_API_KEY added"
 fi
