@@ -30,12 +30,14 @@ export function useSync() {
             // Push local changes first (if any in queue)
             await store.syncAssignmentsToBackend?.();
             await store.syncTransactionsToBackend?.();
+            await store.syncProjectsToBackend?.();
             await store.syncScheduleToBackend?.();
 
             // Then fetch from backend
             await Promise.all([
                 store.fetchAssignmentsFromBackend?.(),
                 store.fetchTransactionsFromBackend?.(),
+                store.fetchProjectsFromBackend?.(),
                 store.fetchScheduleFromBackend?.()
             ]);
 
@@ -233,7 +235,17 @@ export function useSync() {
     }, [syncAll, broadcastSync]);
 
     // Sync specific entity
-    const syncEntity = useCallback(async (entity: 'assignments' | 'transactions' | 'schedule') => {
+    const syncProjects = useCallback(async () => {
+        try {
+            await store.syncProjectsToBackend?.();
+            await store.fetchProjectsFromBackend?.();
+            console.log('[useSync] Projects synced');
+        } catch (error) {
+            console.error('[useSync] Project sync failed:', error);
+        }
+    }, [store]);
+
+    const syncEntity = useCallback(async (entity: 'assignments' | 'transactions' | 'projects' | 'schedule') => {
         toast.info(`Sync ${entity}...`);
         
         switch (entity) {
@@ -243,6 +255,9 @@ export function useSync() {
             case 'transactions':
                 await syncTransactions();
                 break;
+            case 'projects':
+                await syncProjects();
+                break;
             case 'schedule':
                 await syncSchedule();
                 break;
@@ -250,7 +265,7 @@ export function useSync() {
         
         toast.success(`${entity} tersinkron!`);
         broadcastSync(`ENTITY_${entity.toUpperCase()}`);
-    }, [syncAssignments, syncTransactions, syncSchedule, broadcastSync]);
+    }, [syncAssignments, syncTransactions, syncProjects, syncSchedule, broadcastSync]);
 
     return {
         syncAll,
@@ -258,6 +273,7 @@ export function useSync() {
         syncEntity,
         syncAssignments,
         syncTransactions,
+        syncProjects,
         syncSchedule,
         isOnline: () => navigator.onLine,
         lastSync: null // Could track this in the future
