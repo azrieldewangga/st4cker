@@ -4,6 +4,7 @@ import SearchResults from './SearchResults';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ThemeTogglerButton } from "@/components/animate-ui/components/buttons/theme-toggler";
+import { SyncButton, SyncStatus } from "@/components/sync";
 
 const TopBar = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -40,6 +41,8 @@ const TopBar = () => {
             </div>
 
             <div className="flex items-center gap-2">
+                <SyncStatus />
+                <SyncButton />
                 <ThemeTogglerButton modes={['light', 'dark']} />
             </div>
 

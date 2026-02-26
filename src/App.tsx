@@ -25,6 +25,7 @@ import TransactionHistoryModal from './components/modals/TransactionHistoryModal
 import { useTheme } from "@/components/theme-provider";
 import { CommandPalette } from "@/components/ui/command-palette";
 import { useState } from 'react';
+import { useSync } from "@/hooks/useSync";
 
 
 const StandaloneRoutes = () => {
@@ -37,6 +38,9 @@ const StandaloneRoutes = () => {
 
   const { theme: contextTheme } = useTheme(); // Keep for reading current effective theme if needed, or just use storeTheme
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Initialize sync system (polling, online/offline listeners)
+  useSync();
 
   useEffect(() => {
     // Detect window type
