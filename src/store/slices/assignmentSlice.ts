@@ -207,7 +207,7 @@ export const createAssignmentSlice: StateCreator<
     fetchAssignmentsFromBackend: async () => {
         try {
             const state = get() as any;
-            const { userProfile } = state;
+            const { userProfile, assignments: localAssignmentsState } = state;
             
             // Prevent multiple simultaneous fetches
             if ((state as any).isFetchingFromBackend) {
@@ -239,25 +239,38 @@ export const createAssignmentSlice: StateCreator<
             // Convert and save to local SQLite
             const localAssignments = await window.electronAPI.assignments.list();
             
-            // Create a set of existing assignment keys for duplicate detection
-            const existingKeys = new Set(localAssignments.map((a: any) => 
-                `${a.title?.toLowerCase().trim()}_${a.deadline}_${a.course || a.courseId}`
-            ));
+            // IMPROVED DUPLICATE DETECTION:
+            // 1. Track by ID (UUID) - exact match
+            // 2. Track by content hash (title + deadline + course) - content match
+            // 3. Track by ID yang ada di local state (biar ga double fetch)
+            
+            const existingIds = new Set(localAssignments.map((a: any) => a.id));
+            const existingKeys = new Set(localAssignments.map((a: any) => {
+                const course = a.course || a.courseId || '';
+                return `${(a.title || '').toLowerCase().trim()}_${a.deadline}_${course}`;
+            }));
+            
+            // Track local IDs yang sudah ada di state (prevent double create)
+            const localStateIds = new Set(localAssignmentsState.map((a: Assignment) => a.id));
             
             for (const item of data.data) {
+                // Normalize course ID (bisa dari item.course atau item.courseId)
+                const courseId = item.course || item.courseId || '';
+                
                 // Check by ID first
-                const existsById = localAssignments.find((a: any) => a.id === item.id);
+                const existsById = existingIds.has(item.id) || localStateIds.has(item.id);
                 
                 // Also check by content to prevent duplicates with different IDs
-                const itemKey = `${item.title?.toLowerCase().trim()}_${item.deadline}_${item.course}`;
+                // Ini untuk handle tugas yang dibuat di telegram (UUID beda) vs app (UUID beda)
+                const itemKey = `${(item.title || '').toLowerCase().trim()}_${item.deadline}_${courseId}`;
                 const existsByContent = existingKeys.has(itemKey);
                 
                 const assignmentData = {
                     id: item.id,
                     title: item.title,
-                    course: item.course,
+                    course: courseId, // Simpan course ID (format course-X-Y)
                     type: item.type,
-                    status: item.status,
+                    status: item.status === 'pending' ? 'to-do' : item.status,
                     deadline: item.deadline,
                     note: item.note || '',
                     semester: item.semester,
@@ -267,17 +280,20 @@ export const createAssignmentSlice: StateCreator<
                 if (existsById) {
                     // Update existing by ID
                     await window.electronAPI.assignments.update(item.id, assignmentData);
+                    console.log(`[AssignmentSlice] Updated existing assignment by ID: ${item.id}`);
                 } else if (!existsByContent) {
                     // Only create if no duplicate by content
                     await window.electronAPI.assignments.create(assignmentData);
-                    existingKeys.add(itemKey); // Add to tracked keys
+                    existingIds.add(item.id);
+                    existingKeys.add(itemKey);
+                    console.log(`[AssignmentSlice] Created new assignment: ${item.title}`);
                 } else {
-                    console.log(`[AssignmentSlice] Skipping duplicate assignment: ${item.title}`);
+                    console.log(`[AssignmentSlice] Skipping duplicate assignment: ${item.title} (${itemKey})`);
                 }
             }
 
             await get().fetchAssignments();
-            console.log('[AssignmentSlice] Assignments fetched from backend');
+            console.log('[AssignmentSlice] Assignments fetched from backend successfully');
         } catch (error) {
             console.error('[AssignmentSlice] Fetch from backend error:', error);
         } finally {

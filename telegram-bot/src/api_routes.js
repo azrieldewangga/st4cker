@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
 import { db } from './db/index.js';
-import { assignments, projects, transactions, users, schedules, reminderLogs, reminderOverrides, scheduleCancellations } from './db/schema.js';
+import { assignments, projects, transactions, users, schedules, reminderLogs, reminderOverrides, scheduleCancellations, userCourseNames } from './db/schema.js';
 import { eq, and, desc, like } from 'drizzle-orm';
 import crypto from 'crypto';
 import { broadcastEvent } from './server.js';
@@ -1784,6 +1784,84 @@ router.post('/reminders/log', [
         
     } catch (error) {
         console.error('[API] Log Reminder Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// ==========================================
+// USER COURSE NAMES (Custom names from app desktop)
+// ==========================================
+
+// GET /api/v1/user/courses/names - Get all custom course names for user
+router.get('/user/courses/names', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+
+        const courseNames = await db.select()
+            .from(userCourseNames)
+            .where(eq(userCourseNames.userId, defaultUserId));
+
+        res.json({ success: true, count: courseNames.length, data: courseNames });
+    } catch (error) {
+        console.error('[API] Get User Course Names Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// POST /api/v1/user/courses/names - Set custom course name
+router.post('/user/courses/names', [
+    body('courseId').notEmpty().withMessage('courseId is required'),
+    body('customName').notEmpty().withMessage('customName is required'),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { courseId, customName } = req.body;
+        
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+
+        await db.insert(userCourseNames)
+            .values({
+                id: crypto.randomUUID(),
+                userId: defaultUserId,
+                courseId,
+                customName,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            })
+            .onConflictDoUpdate({
+                target: [userCourseNames.userId, userCourseNames.courseId],
+                set: { customName, updatedAt: new Date() }
+            });
+
+        res.json({ success: true, message: 'Course name updated' });
+    } catch (error) {
+        console.error('[API] Set User Course Name Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// DELETE /api/v1/user/courses/names/:courseId - Remove custom course name
+router.delete('/user/courses/names/:courseId', async (req, res) => {
+    try {
+        const { courseId } = req.params;
+        
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+        const defaultUserId = usersList[0].telegramUserId;
+
+        await db.delete(userCourseNames)
+            .where(and(
+                eq(userCourseNames.userId, defaultUserId),
+                eq(userCourseNames.courseId, courseId)
+            ));
+
+        res.json({ success: true, message: 'Course name removed' });
+    } catch (error) {
+        console.error('[API] Delete User Course Name Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

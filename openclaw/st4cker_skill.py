@@ -21,9 +21,13 @@ from nlu import NLU
 from message_gen import MessageGenerator
 from context import ContextStore
 from tools import St4ckerTools
+from attendance_nlu import detect_attendance_intent
+from course_manager_nlu import parse_course_management
+from smart_reminder_client import send_attendance_intent_sync, send_course_management_sync
 
 # Configuration
-ST4CKER_API_URL = os.getenv("ST4CKER_API_URL", "http://localhost:3001")
+# Default ke telegram-bot API (port 3000) - BUKAN localhost:3001
+ST4CKER_API_URL = os.getenv("ST4CKER_API_URL", "http://103.127.134.173:3000")
 ST4CKER_API_KEY = os.getenv("ST4CKER_API_KEY", "")
 OPENCLAW_API_KEY = os.getenv("OPENCLAW_API_KEY", "")
 
@@ -370,11 +374,144 @@ async def ask_clarification(intent: Dict, user_ctx: Dict) -> OpenClawResponse:
         done=False
     )
 
+async def handle_attendance_intent(attendance_result: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """
+    Handle attendance intent dengan SmartReminder integration.
+    Mengerti konteks seperti "5 menit lg berangkat" = confirmed
+    """
+    intent = attendance_result["intent"]
+    details = attendance_result.get("details", {})
+    confidence = attendance_result["confidence"]
+    
+    # Get course info dari context
+    course = user_ctx.get("last_course", "")
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    # Kirim intent ke SmartReminder (sync karena ini blocking operation)
+    try:
+        sm_result = send_attendance_intent_sync(
+            message=data.message,
+            intent=intent,
+            details=details
+        )
+        print(f"[SmartReminder] Intent sent: {intent}, response: {sm_result}")
+    except Exception as e:
+        print(f"[SmartReminder] Error: {e}")
+    
+    if intent == "confirmed":
+        # Log attendance
+        ctx_obj = context_store.get_user_context_obj(data.user_id)
+        ctx_obj.log_attendance(today, course, "confirmed")
+        
+        # Update context
+        context_store.update_context(data.user_id, {
+            "confirmed_attendance": True,
+            "awaiting_reply": False,
+            "use_short_reminder": True
+        })
+        
+        # Generate response - simple acknowledgement
+        # Note: delay_minutes hanya informasi, tidak mengubah jadwal/reminder
+        reply = await msg_gen.generate("user_confirm", {
+            "course": course,
+            "context": "attendance_confirmed"
+        }, user_ctx)
+        
+        return OpenClawResponse(
+            reply=reply,
+            action="send",
+            context_update={"confirmed_attendance": True, "use_short_reminder": True},
+            done=True
+        )
+    
+    elif intent == "declined":
+        # User tidak jadi berangkat
+        context_store.update_context(data.user_id, {
+            "confirmed_attendance": False,
+            "awaiting_reply": False,
+            "use_short_reminder": False
+        })
+        
+        reply = await msg_gen.generate("user_skip", {
+            "course": course,
+            "context": "skip",
+            "reason": details.get("reason", "")
+        }, user_ctx)
+        
+        return OpenClawResponse(
+            reply=reply,
+            action="send",
+            done=True
+        )
+    
+    elif intent == "rescheduled":
+        reply = f"Oke, pindah ke {details.get('suggested_time', 'nanti')} ya. Aku update jadwalnya 👍"
+        return OpenClawResponse(
+            reply=reply,
+            action="send",
+            done=True
+        )
+    
+    return OpenClawResponse(
+        reply="Hmmm, bisa jelasin lagi?",
+        action="send",
+        done=False
+    )
+
+
+async def handle_course_management_intent(course_result: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """
+    Handle course management intent (skip, online, reschedule).
+    Response digenerate dengan AI (bukan template kaku).
+    """
+    intent = course_result["intent"]
+    course = course_result["course"]
+    date = course_result["date"]
+    details = course_result.get("details", {})
+    
+    # Send to SmartReminder
+    try:
+        sm_result = send_course_management_sync(
+            intent=intent,
+            course=course,
+            date=date,
+            details=details
+        )
+        print(f"[SmartReminder] Course mgmt sent: {intent} for {course}")
+    except Exception as e:
+        print(f"[SmartReminder] Error: {e}")
+    
+    # Generate AI response (not template!)
+    reply = await msg_gen.generate("course_mgmt", {
+        "intent": intent,
+        "course": course,
+        "date": date,
+        "details": details,
+        "user_message": data.message
+    }, user_ctx)
+    
+    return OpenClawResponse(
+        reply=reply,
+        action="send",
+        done=True
+    )
+
+
 async def handle_clear_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
     """
     Handle intent yang sudah clear (gak perlu clarification).
     """
     intent_type = intent.get("intent")
+    
+    # Check for course management intent FIRST
+    course_result = parse_course_management(data.message)
+    if course_result["confidence"] >= 0.5:
+        return await handle_course_management_intent(course_result, data, user_ctx)
+    
+    # Check for attendance intent (priority untuk reminder responses)
+    attendance_result = detect_attendance_intent(data.message, user_ctx)
+    if attendance_result["confidence"] >= 0.5:
+        return await handle_attendance_intent(attendance_result, data, user_ctx)
     
     if intent_type == "cancel":
         return await handle_cancel_intent(intent, data, user_ctx)
@@ -1112,6 +1249,136 @@ async def handle_list_transactions_intent(intent: Dict, data: ChatRequest, user_
         action="send",
         done=True
     )
+
+# =============================================================================
+# SMARTREMINDER CONSULTATION ENDPOINT
+# 2-way communication: SmartReminder bisa konsultasi ke OpenClaw
+# =============================================================================
+
+class ConsultRequest(BaseModel):
+    type: str  # ambiguous_intent | missing_info | confirmation_needed
+    message: str
+    user_id: str = "default"
+    context: Optional[Dict[str, Any]] = {}
+    options: List[str] = []
+    missing_fields: List[str] = []
+    proposed_action: Optional[str] = None
+
+class ConsultResponse(BaseModel):
+    decision: str
+    confidence: float
+    reply: str
+    clarification_needed: bool = False
+    follow_up_questions: List[str] = []
+
+
+@app.post("/consult")
+async def consult_smartreminder(request: ConsultRequest):
+    """
+    SmartReminder konsultasi ke OpenClaw untuk decide ambiguous situation.
+    """
+    user_ctx = {"user_id": request.user_id, "persona": "kimi"}
+    
+    if request.type == "ambiguous_intent":
+        return await _handle_ambiguous_consult(request, user_ctx)
+    elif request.type == "missing_info":
+        return await _handle_missing_info_consult(request, user_ctx)
+    elif request.type == "confirmation_needed":
+        return await _handle_confirmation_consult(request, user_ctx)
+    else:
+        return ConsultResponse(
+            decision="unknown_type",
+            confidence=0.0,
+            reply="*error* tipe consult tidak dikenal",
+            clarification_needed=True
+        )
+
+
+async def _handle_ambiguous_consult(request: ConsultRequest, user_ctx: Dict) -> ConsultResponse:
+    """Handle ambiguous intent - AI decide berdasarkan message context."""
+    message_lower = request.message.lower()
+    
+    # Quick rule-based decision untuk common patterns
+    if any(w in message_lower for w in ["iya", "oke", "okee", "siap", "siapp", "hadir", "berangkat", "datang"]):
+        decision = "confirm"
+        confidence = 0.9
+    elif any(w in message_lower for w in ["tidak", "ga", "gak", "skip", "gabisa", "gabs", "bolos", "nggak"]):
+        decision = "decline"
+        confidence = 0.9
+    elif any(w in message_lower for w in ["ganti", "pindah", "reschedule", "ubah", "gantiin"]):
+        decision = "reschedule"
+        confidence = 0.85
+    elif any(w in message_lower for w in ["telat", "bentar", "sebentar", "ntar", "nanti", "lambat"]):
+        decision = "delay"
+        confidence = 0.8
+    elif any(w in message_lower for w in ["online", "zoom", "gmeet", "meet", "virtual"]):
+        decision = "online"
+        confidence = 0.85
+    else:
+        decision = "need_more_info"
+        confidence = 0.4
+    
+    # Generate reply dengan msg_gen
+    reply_data = {
+        "intent": decision,
+        "confidence": confidence,
+        "user_message": request.message,
+        "context": request.context,
+        "is_consultation": True
+    }
+    
+    reply = await msg_gen.generate("ambiguous_decision", reply_data, user_ctx)
+    
+    return ConsultResponse(
+        decision=decision,
+        confidence=confidence,
+        reply=reply,
+        clarification_needed=confidence < 0.7,
+        follow_up_questions=["*confirm* (hadir)?", "*skip* (bolos)?", "*reschedule*?"] if confidence < 0.7 else []
+    )
+
+
+async def _handle_missing_info_consult(request: ConsultRequest, user_ctx: Dict) -> ConsultResponse:
+    """Handle missing information - tanya user dengan sopan."""
+    missing = ", ".join(request.missing_fields)
+    
+    reply_data = {
+        "missing_fields": request.missing_fields,
+        "user_message": request.message,
+        "context": request.context,
+        "is_consultation": True
+    }
+    
+    reply = await msg_gen.generate("missing_info", reply_data, user_ctx)
+    
+    return ConsultResponse(
+        decision="need_more_info",
+        confidence=0.0,
+        reply=reply,
+        clarification_needed=True,
+        follow_up_questions=[f"Info yang kurang: {missing}"]
+    )
+
+
+async def _handle_confirmation_consult(request: ConsultRequest, user_ctx: Dict) -> ConsultResponse:
+    """Handle confirmation needed - minta konfirmasi user."""
+    reply_data = {
+        "proposed_action": request.proposed_action,
+        "user_message": request.message,
+        "context": request.context,
+        "is_consultation": True
+    }
+    
+    reply = await msg_gen.generate("confirmation", reply_data, user_ctx)
+    
+    return ConsultResponse(
+        decision="awaiting_confirmation",
+        confidence=0.5,
+        reply=reply,
+        clarification_needed=True,
+        follow_up_questions=[f"Ketik *iya* untuk {request.proposed_action}, atau *tidak* untuk batal"]
+    )
+
 
 # =============================================================================
 # HEALTH CHECK

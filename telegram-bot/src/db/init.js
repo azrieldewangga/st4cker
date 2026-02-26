@@ -234,6 +234,21 @@ export async function initDatabase() {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_schedule_cancellations_schedule ON schedule_cancellations(schedule_id);`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_schedule_cancellations_date ON schedule_cancellations(cancel_date);`);
 
+        // Create user_course_names table (for custom course names from app desktop)
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS user_course_names (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
+                course_id TEXT NOT NULL,
+                custom_name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, course_id)
+            );
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_course_names_user ON user_course_names(user_id);`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_course_names_course ON user_course_names(course_id);`);
+
         console.log('[DB-Init] Database initialization completed successfully.');
     } catch (error) {
         console.error('[DB-Init] Initialization failed:', error);

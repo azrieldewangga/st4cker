@@ -35,21 +35,26 @@ export async function handleTaskIntent(bot, msg, intent, data, broadcastEvent) {
         const courseName = getVal('matkul') || 'General';
         const taskType = getVal('tipe_tugas') || 'Tugas';
 
+        // INTEGRASI: Gunakan findCourse untuk mendapatkan course ID yang benar
+        // Format: course-{semester_asli}-{index}
+        const courseInfo = findCourse(courseName, []);
+        const courseId = courseInfo?.id || data.matkul?.courseId || null;
+
         // Map Enriched Data to Task Processor
         const res = await processTaskCreation(bot, chatId, userId, {
-            courseId: data.matkul?.courseId, // Critical Fix: Access .courseId inside .matkul
-            courseName: courseName,
+            courseId: courseId,
+            courseName: courseInfo?.name || courseName,
             type: taskType,
             deadline: dateStr,
-            notes: getVal('note') || '',
-            semester: ''
+            notes: getVal('note') || ''
+            // semester akan di-parse dari courseId di processTaskCreation
         }, broadcastEvent);
 
         if (res.success) {
             // Use dynamic response
             const dynamicMsg = await generateDynamicResponse('task_created', {
                 type: taskType,
-                courseName: courseName,
+                courseName: courseInfo?.name || courseName,
                 deadline: dateStr
             });
             bot.sendMessage(chatId, dynamicMsg);

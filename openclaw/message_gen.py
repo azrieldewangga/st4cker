@@ -30,7 +30,7 @@ class MessageGenerator:
         # Gemini configuration
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
         self.gemini_base_url = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
         
         # Determine which AI to use (Gemini prioritized if both set)
         self.use_gemini = bool(self.gemini_api_key)
@@ -95,7 +95,8 @@ class MessageGenerator:
         - AI mode: user interaction (confirm/skip/conversation) OR high urgency reminders
         """
         # User interaction: ALWAYS AI (never template)
-        if trigger_type in ["user_confirm", "user_skip", "conversation", "chat"]:
+        if trigger_type in ["user_confirm", "user_skip", "conversation", "chat", "course_mgmt", 
+                           "ambiguous_decision", "missing_info", "confirmation"]:
             if self.use_ai:
                 try:
                     return await self._generate_ai(trigger_type, data, user_ctx, urgency=5)
@@ -473,6 +474,120 @@ Generate conversational reply with kimi persona:
 - Call user "zril" or "azriel", self as "aku"
 
 Be helpful but concise. If asking clarification, keep it simple."""
+        
+        elif trigger_type == "course_mgmt":
+            intent = data.get("intent", "unknown")
+            course = data.get("course", "matkul")
+            date = data.get("date", "")
+            details = data.get("details", {})
+            user_message = data.get("user_message", "")
+            
+            # Build context description
+            if intent == "skip":
+                context_desc = f"User (zril) informed that {course} on {date} is skipped/kosong."
+            elif intent == "online":
+                context_desc = f"User (zril) informed that {course} on {date} will be conducted online."
+            elif intent == "reschedule_temp":
+                new_day = details.get("new_day", "?")
+                new_time = details.get("new_time", "?")
+                context_desc = f"User (zril) rescheduled {course} on {date} to {new_day} at {new_time} (temporary/one-time)."
+            elif intent == "reschedule_perm":
+                new_day = details.get("new_day", "?")
+                new_time = details.get("new_time", "?")
+                context_desc = f"User (zril) permanently rescheduled {course} to {new_day} at {new_time}."
+            else:
+                context_desc = f"User (zril) updated schedule for {course}."
+            
+            return f"""{context_desc}
+Original message: "{user_message}"
+
+Generate acknowledgment with kimi persona:
+- Confirm the schedule change was noted
+- Minimalist, friendly
+- Use repeated letters (okee, iyaa, siapp, hmm)
+- NO emoji
+- Single asterisk for emphasis
+- Brevity mandatory - max 2 sentences
+- Indonesian only
+- Call user "zril", self as "aku"
+
+Examples:
+- Skip: "okee, aku catet KJK kosong. Matkul berikutnya tetep jadi ya."
+- Online: "siapp, KJK online. Jangan lupa cek linknya."
+- Reschedule: "iyaa, KJK pindah ke Jumat jam 10. Aku update jadwalnya."""
+        
+        elif trigger_type == "ambiguous_decision":
+            intent = data.get("intent", "unknown")
+            confidence = data.get("confidence", 0.5)
+            user_message = data.get("user_message", "")
+            
+            if confidence >= 0.7:
+                return f"""SmartReminder detected ambiguous message from zril: "{user_message}"
+AI decided this is: {intent} (confidence: {confidence:.0%})
+
+Generate acknowledgment with kimi persona:
+- Confirm the decision briefly
+- Minimalist, friendly
+- Use repeated letters (okee, iyaa, siapp)
+- NO emoji
+- Single asterisk for emphasis
+- Brevity mandatory - max 1 sentence
+- Indonesian only
+
+Examples:
+- Confirm: "okee, aku catet zril hadir."
+- Decline: "iyaa, skip dulu ya."
+- Delay: "siapp, dicatet telat {data.get('delay_min', 5)} menit."
+- Online: "okee, online noted."""
+            else:
+                return f"""SmartReminder detected ambiguous message from zril: "{user_message}"
+AI is unsure (confidence: {confidence:.0%})
+
+Generate clarification request with kimi persona:
+- Ask user to clarify simply
+- Minimalist, friendly
+- Use repeated letters (okee, iyaa, siapp, hmm)
+- NO emoji
+- Single asterisk for emphasis
+- Brevity mandatory - max 2 sentences
+- Indonesian only
+
+Examples:
+- "zril, maksudnya *confirm* atau *skip*?"
+- "hmm, ini *hadir* atau *bolos* ya?"
+- "iyaa? maksudnya gimana?"""
+        
+        elif trigger_type == "missing_info":
+            missing_fields = data.get("missing_fields", [])
+            return f"""SmartReminder needs more info from zril.
+Missing: {', '.join(missing_fields)}
+
+Generate polite request with kimi persona:
+- Ask for missing info simply
+- Minimalist, friendly
+- Use repeated letters (okee, iyaa, siapp)
+- NO emoji
+- Single asterisk for emphasis
+- Brevity mandatory - max 2 sentences
+- Indonesian only
+
+Example: "zril, *{missing_fields[0]}* nya kapan ya?"""
+        
+        elif trigger_type == "confirmation":
+            proposed = data.get("proposed_action", "action")
+            return f"""SmartReminder needs confirmation from zril for: {proposed}
+
+Generate confirmation request with kimi persona:
+- Ask for confirmation simply
+- Minimalist, friendly
+- Use repeated letters (okee, iyaa, siapp)
+- NO emoji
+- Single asterisk for emphasis
+- Brevity mandatory - max 2 sentences
+- Indonesian only
+- Make it easy to confirm (just reply "iya")
+
+Example: "zril, aku catet *{proposed}*? Balas *iya* kalau betul."""
         
         # Reminder prompts (existing logic)
         prompt_parts = [f"Urgency Level: {urgency}/10"]

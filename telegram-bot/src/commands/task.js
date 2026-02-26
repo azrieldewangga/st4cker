@@ -1,11 +1,15 @@
 
 import { DbService } from '../services/dbService.js';
+import { CourseMappingService } from '../services/courseMapping.js';
 import { v4 as uuidv4 } from 'uuid';
 import { parseDate, formatDate } from '../nlp/dateParser.js';
 import { broadcastEvent } from '../server.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// Initialize course mapping service
+const courseMapping = new CourseMappingService(DbService);
 
 // Store command sessions
 const commandSessions = new Map();
@@ -34,45 +38,76 @@ function escapeHtml(text) {
 
 // SHARED EXECUTION LOGIC
 export async function processTaskCreation(bot, chatId, userId, data) {
-    const { courseId, courseName, type, deadline, notes, semester } = data;
+    const { courseId, courseName, type, deadline, notes } = data;
 
     // VALIDATION
-    if (!courseName) return { success: false, message: 'Matkulnya belum dipilih nih!' }; // relaxed courseId check as we might be flexible
+    if (!courseName) return { success: false, message: 'Matkulnya belum dipilih nih!' };
     if (!type) return { success: false, message: 'Tipe tugasnya apa?' };
     if (!deadline) return { success: false, message: 'Deadlinenya kapan?' };
 
-    // Get User Data for Semester check
-    const user = await DbService.getUser(userId);
-    const userSemester = semester || (user?.semester || 1); // defaulting to 1 (integer)
-
     try {
+        // Parse course ID untuk mendapatkan semester asli matkul
+        // Format: course-{semester_asli}-{index}
+        let parsedCourseId = courseId;
+        let courseSemester = null;
+        let finalCourseName = courseName;
+        
+        // Jika courseId tidak ada, coba cari dari nama matkul
+        if (!parsedCourseId && courseName) {
+            const found = courseMapping.findCourseIdByName(courseName);
+            if (found) {
+                parsedCourseId = found.courseId;
+                courseSemester = found.semester;
+                finalCourseName = found.name;
+            }
+        } else if (parsedCourseId) {
+            // Parse semester dari courseId
+            const parsed = courseMapping.parseCourseId(parsedCourseId);
+            if (parsed) {
+                courseSemester = parsed.semester;
+                // Cek custom name dari DB
+                const customName = await courseMapping.getCourseName(parsedCourseId, userId);
+                if (customName && customName !== parsedCourseId) {
+                    finalCourseName = customName;
+                }
+            }
+        }
+        
+        // Fallback: kalau ga ketemu, pakai user.semester
+        if (!courseSemester) {
+            const user = await DbService.getUser(userId);
+            courseSemester = user?.semester || 1;
+        }
+
         // 1. Create in DB
+        // Simpan course ID (format course-X-Y), bukan nama
+        // Ini penting untuk filtering dan sync dengan app desktop
         const result = await DbService.createTask(userId, {
             title: type, // Schema expects title
-            course: courseName,
+            course: parsedCourseId || finalCourseName, // Simpan course ID kalau ada
             type: type,
             deadline: deadline,
             note: notes,
-            semester: userSemester
+            semester: courseSemester // Simpan semester ASLI matkul, bukan user.semester
         });
 
         if (!result.success) throw new Error(result.message || 'DB Insert Failed');
 
         // 2. Broadcast Event
         const event = {
-            eventId: result.id, // Use DB ID
+            eventId: result.id,
             eventType: 'task.created',
             telegramUserId: userId,
             timestamp: new Date().toISOString(),
             payload: {
                 id: result.id,
-                courseId: courseId || 'unknown', // Pass ID if we have it, else unknown
-                courseName: courseName,
+                courseId: parsedCourseId || 'unknown',
+                courseName: finalCourseName,
                 type: type,
-                dueDate: deadline, // YYYY-MM-DD
+                dueDate: deadline,
                 notes: notes || '',
                 completed: false,
-                semester: userSemester
+                semester: courseSemester // Semester asli matkul
             },
             source: 'telegram'
         };
@@ -82,9 +117,9 @@ export async function processTaskCreation(bot, chatId, userId, data) {
 
         // FORMAT SUCCESS MESSAGE (HTML)
         const deadlineDate = new Date(deadline);
-        const deadlineStr = formatDate(deadlineDate); // e.g. "15 Januari"
+        const deadlineStr = formatDate(deadlineDate);
 
-        let message = `✅ <b>Siapp, Tugas Dibuat!</b>\n\n📚 Matkul: ${escapeHtml(courseName)}\n📝 Tipe: ${escapeHtml(type)}\n📅 Deadline: ${escapeHtml(deadlineStr)}\n${notes ? `📄 Note: ${escapeHtml(notes)}` : ''}\n\n<i>Semangat ngerjainnya! 🔥</i>`;
+        let message = `✅ <b>Siapp, Tugas Dibuat!</b>\n\n📚 Matkul: ${escapeHtml(finalCourseName)}\n📝 Tipe: ${escapeHtml(type)}\n📅 Deadline: ${escapeHtml(deadlineStr)}\n${notes ? `📄 Note: ${escapeHtml(notes)}` : ''}\n\n<i>Semangat ngerjainnya! 🔥</i>`;
 
         if (isOffline) {
             message += '\n\n☁️ <i>Saved to Cloud (Desktop Offline)</i>';
@@ -172,41 +207,55 @@ export function getEntityCache() {
 }
 
 // Helper: Match course by text
+// INTEGRASI: Menggunakan CourseMappingService untuk mapping nama → course ID
 export function findCourse(text, courses) {
     if (!text) return null;
-    // Courses might be empty or null if not synced.
-    // If courses array is empty, we can still try Entity Cache to standardize Name
-    // But we won't return a Course Object with ID. 
-    // We return a "Simulated" course object: { name: "Resolved Name", id: null }
 
     // Normalize String
     function normalize(name) {
         if (!name) return '';
         return name.toLowerCase().replace(/[^a-z0-9]/g, '');
     }
-    const rawLower = text.toLowerCase();
+    const rawLower = text.toLowerCase().trim();
 
-    // 1. Try Synonym Resolution (Dynamic 'matkul' Entity)
+    // 1. Coba cari di curriculum menggunakan CourseMappingService
+    const mappingResult = courseMapping.findCourseIdByName(text);
+    if (mappingResult) {
+        return {
+            id: mappingResult.courseId,
+            name: mappingResult.name,
+            semester: mappingResult.semester,
+            sks: mappingResult.sks
+        };
+    }
+
+    // 2. Try Synonym Resolution (Dynamic 'matkul' Entity)
     const cache = getEntityCache();
     const map = cache ? cache['matkul'] : null;
 
     // If we have courses list, try to match against it
     if (courses && courses.length > 0) {
-        // [Existing Logic preserved conceptually]
-        // Shortened for brevity in this overwrite, focused on ensuring DbService integration
-        // ... (Re-implementing finding logic if needed)
-        // For simplicity, let's just do direct search first
         const exact = courses.find(c => normalize(c.name) === normalize(text));
         if (exact) return exact;
 
-        // Return first match
         const match = courses.find(c => c.name.toLowerCase().includes(rawLower));
         if (match) return match;
     }
 
     // Fallback: If map exists, check synonyms
     if (map && map.has(rawLower)) {
-        return { name: map.get(rawLower), id: null };
+        const resolvedName = map.get(rawLower);
+        // Coba cari course ID dari nama yang resolved
+        const resolvedMapping = courseMapping.findCourseIdByName(resolvedName);
+        if (resolvedMapping) {
+            return {
+                id: resolvedMapping.courseId,
+                name: resolvedMapping.name,
+                semester: resolvedMapping.semester,
+                sks: resolvedMapping.sks
+            };
+        }
+        return { name: resolvedName, id: null };
     }
 
     return null;

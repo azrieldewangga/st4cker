@@ -338,8 +338,35 @@ app.on('ready', async () => {
         return result;
     });
     ipcMain.handle('performance:getCourses', (_, sem) => performance.getCourses(sem));
-    ipcMain.handle('performance:upsertCourse', (_, c) => {
+    ipcMain.handle('performance:upsertCourse', async (_, c) => {
         const result = performance.upsertCourse(c);
+        
+        // Sync custom course name ke Master DB via API
+        if (telegramStore && telegramStore.get('paired') && c.id && c.name) {
+            try {
+                const token = telegramStore.get('sessionToken');
+                const serverUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
+                const apiKey = process.env.AGENT_API_KEY;
+                
+                // Kirim custom course name ke API
+                await fetch(`${serverUrl}/api/v1/user/courses/names`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey,
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        courseId: c.id,
+                        customName: c.name
+                    })
+                });
+                console.log(`[Main] Synced custom course name: ${c.id} -> ${c.name}`);
+            } catch (e) {
+                console.error('[Main] Failed to sync course name:', e);
+            }
+        }
+        
         if (telegramStore && telegramStore.get('paired')) syncUserDataToBackend(telegramStore, telegramSocket).catch(console.error);
         return result;
     });

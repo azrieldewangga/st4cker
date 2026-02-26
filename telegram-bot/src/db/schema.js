@@ -220,3 +220,18 @@ export const scheduleCancellations = pgTable('schedule_cancellations', {
         cancelDateIdx: index('idx_schedule_cancellations_date').on(table.cancelDate),
     };
 });
+
+// --- USER COURSE NAMES (Custom course names from app desktop) ---
+export const userCourseNames = pgTable('user_course_names', {
+    id: serial('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.telegramUserId, { onDelete: 'cascade' }),
+    courseId: text('course_id').notNull(), // Format: course-{semester}-{index}
+    customName: text('custom_name').notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+    return {
+        userCourseUserIdx: index('idx_user_course_names_user').on(table.userId),
+        userCourseCourseIdx: index('idx_user_course_names_course').on(table.courseId),
+    };
+});

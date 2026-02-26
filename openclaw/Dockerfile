@@ -22,6 +22,9 @@ COPY nlu.py .
 COPY message_gen.py .
 COPY context.py .
 COPY tools.py .
+COPY attendance_nlu.py .
+COPY course_manager_nlu.py .
+COPY smart_reminder_client.py .
 
 # Environment
 ENV PYTHONUNBUFFERED=1

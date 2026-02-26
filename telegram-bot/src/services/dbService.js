@@ -1,6 +1,6 @@
 
 import { db } from '../db/index.js';
-import { users, transactions, assignments, projects, projectSessions } from '../db/schema.js';
+import { users, transactions, assignments, projects, projectSessions, userCourseNames } from '../db/schema.js';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -208,6 +208,55 @@ export class DbService {
                 eq(assignments.deadline, dateStr),
                 sql`${assignments.status} != 'completed'`
             ));
+    }
+
+    // --- USER COURSE NAMES (Custom names from app desktop) ---
+    static async getUserCourseName(userId, courseId) {
+        try {
+            const result = await db.select()
+                .from(userCourseNames)
+                .where(and(
+                    eq(userCourseNames.userId, userId.toString()),
+                    eq(userCourseNames.courseId, courseId)
+                ))
+                .limit(1);
+            return result[0] || null;
+        } catch (e) {
+            console.error('[DB] Get User Course Name Error:', e);
+            return null;
+        }
+    }
+
+    static async setUserCourseName(userId, courseId, customName) {
+        try {
+            await db.insert(userCourseNames)
+                .values({
+                    userId: userId.toString(),
+                    courseId,
+                    customName,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                })
+                .onConflictDoUpdate({
+                    target: [userCourseNames.userId, userCourseNames.courseId],
+                    set: { customName, updatedAt: new Date() }
+                });
+            return { success: true };
+        } catch (e) {
+            console.error('[DB] Set User Course Name Error:', e);
+            return { success: false, message: e.message };
+        }
+    }
+
+    static async getAllUserCourseNames(userId) {
+        try {
+            return await db.select()
+                .from(userCourseNames)
+                .where(eq(userCourseNames.userId, userId.toString()));
+        } catch (e) {
+            console.error('[DB] Get All User Course Names Error:', e);
+            return [];
+        }
     }
 
 
