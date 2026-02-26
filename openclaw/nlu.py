@@ -104,6 +104,34 @@ class NLU:
             "transaksi", "pengeluaran", "pemasukan", "list transaksi",
             "cek transaksi", "lihat transaksi", "uang keluar", "uang masuk"
         ]
+        
+        # Create task indicators
+        self.create_task_indicators = [
+            "tambah tugas", "buat tugas", "input tugas", "catat tugas",
+            "tugas baru", "ada tugas", "ditambah tugas", "dikasih tugas",
+            "baru keluar tugas", "tugas mendadak", "nambah tugas"
+        ]
+        
+        # Create project indicators
+        self.create_project_indicators = [
+            "buat project", "tambah project", "input project", "catat project",
+            "project baru", "nambah project", "mulai project", "bikin project"
+        ]
+        
+        # Create transaction indicators
+        self.create_transaction_indicators = [
+            "catat pengeluaran", "catat pemasukan", "tambah pengeluaran", 
+            "tambah pemasukan", "input pengeluaran", "input pemasukan",
+            "nambah pengeluaran", "nambah pemasukan", "beli", "bayar",
+            "habis duit", "dapet uang", "terima uang", "transfer"
+        ]
+        
+        # Log progress indicators
+        self.log_progress_indicators = [
+            "log progress", "update progress", "catat progress",
+            "progress project", "tambah progress", "update project",
+            "udah kerja", "sudah ngerjain", "progress berapa"
+        ]
     
     def parse(self, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -174,6 +202,49 @@ class NLU:
                 "confidence": 0.9,
                 "needs_clarification": False,
                 "extracted": {}
+            }
+        
+        # Check for create task
+        if self._is_create_task(msg_lower):
+            extracted = self._extract_task_info(message)
+            return {
+                "intent": "create_task",
+                "confidence": 0.85,
+                "needs_clarification": True,
+                "clarification_question": "task_details",
+                "extracted": extracted
+            }
+        
+        # Check for create project
+        if self._is_create_project(msg_lower):
+            return {
+                "intent": "create_project",
+                "confidence": 0.85,
+                "needs_clarification": True,
+                "clarification_question": "project_details",
+                "extracted": {}
+            }
+        
+        # Check for create transaction (expense/income)
+        if self._is_create_transaction(msg_lower):
+            extracted = self._extract_transaction_info(message)
+            return {
+                "intent": "create_transaction",
+                "confidence": 0.85,
+                "needs_clarification": extracted.get("amount") is None,
+                "clarification_question": "transaction_amount" if extracted.get("amount") is None else None,
+                "extracted": extracted
+            }
+        
+        # Check for log progress
+        if self._is_log_progress(msg_lower):
+            progress = self._extract_percentage(msg_lower)
+            return {
+                "intent": "log_progress",
+                "confidence": 0.85,
+                "needs_clarification": progress is None,
+                "clarification_question": "progress_value" if progress is None else None,
+                "extracted": {"progress": progress}
             }
         
         # Check for new task report
@@ -533,6 +604,103 @@ class NLU:
             }
         
         return None
+    
+    def _is_create_task(self, msg_lower: str) -> bool:
+        """Check if user wants to create/add a task."""
+        for indicator in self.create_task_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_create_project(self, msg_lower: str) -> bool:
+        """Check if user wants to create/add a project."""
+        for indicator in self.create_project_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_create_transaction(self, msg_lower: str) -> bool:
+        """Check if user wants to create/add a transaction."""
+        for indicator in self.create_transaction_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _is_log_progress(self, msg_lower: str) -> bool:
+        """Check if user wants to log project progress."""
+        for indicator in self.log_progress_indicators:
+            if indicator in msg_lower:
+                return True
+        return False
+    
+    def _extract_transaction_info(self, message: str) -> Dict:
+        """Extract transaction info from message."""
+        msg_lower = message.lower()
+        
+        # Detect type
+        type_ = "expense"  # default
+        if any(x in msg_lower for x in ["masuk", "terima", "dapet", "gajian", "income", "pemasukan"]):
+            type_ = "income"
+        
+        # Extract amount
+        amount = None
+        amount_patterns = [
+            r'rp\.?\s*([\d.,]+)',
+            r'rp\s*([\d.,]+)',
+            r'([\d.,]+)\s*ribu',
+            r'([\d.,]+)\s*rb',
+            r'([\d.,]+)\s*juta',
+            r'([\d.,]+)\s*jt',
+        ]
+        
+        for pattern in amount_patterns:
+            match = re.search(pattern, msg_lower)
+            if match:
+                amount_str = match.group(1).replace(',', '').replace('.', '')
+                amount = float(amount_str)
+                if "juta" in msg_lower or "jt" in msg_lower:
+                    amount *= 1000000
+                elif "ribu" in msg_lower or "rb" in msg_lower:
+                    amount *= 1000
+                break
+        
+        # Extract category
+        categories = {
+            "makan": "makan",
+            "transport": "transport",
+            "transportasi": "transport", 
+            "bensin": "transport",
+            "parkir": "transport",
+            "kuliah": "kuliah",
+            "print": "kuliah",
+            "atk": "kuliah",
+            "pulsa": "pulsa",
+            "kuota": "pulsa",
+            "entertainment": "hiburan",
+            "hiburan": "hiburan",
+            "nonton": "hiburan",
+            "game": "hiburan",
+            "belanja": "belanja"
+        }
+        
+        category = "lainnya"
+        for key, val in categories.items():
+            if key in msg_lower:
+                category = val
+                break
+        
+        # Extract title
+        title = None
+        title_match = re.search(r'(?:beli|bayar|untuk)\s+(.+?)(?:\s+rp|$)', msg_lower)
+        if title_match:
+            title = title_match.group(1).strip()
+        
+        return {
+            "type": type_,
+            "amount": amount,
+            "category": category,
+            "title": title or category
+        }
     
     # Public methods for clarification handling
     def extract_scope(self, message: str) -> Optional[str]:

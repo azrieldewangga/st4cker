@@ -19,9 +19,14 @@ class St4ckerTools:
         """Make request ke St4cker API."""
         url = f"{self.api_url}{endpoint}"
         headers = {
-            "X-API-Key": self.api_key,
+            "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
+        
+        # Debug logging
+        print(f"[St4cker API] {method} {url}")
+        print(f"[St4cker API] Headers: {headers}")
+        print(f"[St4cker API] API Key length: {len(self.api_key) if self.api_key else 0}")
         
         async with httpx.AsyncClient() as client:
             try:
@@ -34,8 +39,13 @@ class St4ckerTools:
                 else:
                     response = await client.post(url, json=data, headers=headers, timeout=10)
                 
+                print(f"[St4cker API] Response status: {response.status_code}")
+                
                 response.raise_for_status()
                 return response.json()
+            except httpx.HTTPStatusError as e:
+                print(f"[St4cker API Error] HTTP {e.response.status_code}: {e.response.text}")
+                return {"error": str(e), "success": False, "status_code": e.response.status_code}
             except httpx.HTTPError as e:
                 print(f"[St4cker API Error] {e}")
                 return {"error": str(e), "success": False}
@@ -81,6 +91,13 @@ class St4ckerTools:
             "userId": user_id,
             "searchQuery": search_query,
             "newStatus": new_status
+        })
+    
+    async def update_task_progress(self, user_id: str, task_id: str, progress: int) -> Dict:
+        """Update task progress by ID."""
+        return await self._request("PATCH", f"/api/v1/tasks/{task_id}", {
+            "progress": progress,
+            "userId": user_id
         })
     
     async def delete_task(self, task_id: str) -> Dict:
