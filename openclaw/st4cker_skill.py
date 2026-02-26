@@ -17,7 +17,10 @@ from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
 
 # Import modules
-from nlu import NLU
+from nlu import NLU  # Legacy, will phase out
+from llm_nlu import get_llm_nlu
+from ai_responder import get_responder
+from memory import get_user_memory, get_memory_store
 from message_gen import MessageGenerator
 from context import ContextStore
 from tools import St4ckerTools
@@ -26,16 +29,19 @@ from course_manager_nlu import parse_course_management
 from smart_reminder_client import send_attendance_intent_sync, send_course_management_sync
 
 # Configuration
-# Default ke telegram-bot API (port 3000) - BUKAN localhost:3001
 ST4CKER_API_URL = os.getenv("ST4CKER_API_URL", "http://103.127.134.173:3000")
 ST4CKER_API_KEY = os.getenv("ST4CKER_API_KEY", "")
 OPENCLAW_API_KEY = os.getenv("OPENCLAW_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Initialize components
-nlu = NLU()
+nlu = NLU()  # Legacy
+llm_nlu = get_llm_nlu(GEMINI_API_KEY)  # NEW: LLM-based NLU
+responder = get_responder(GEMINI_API_KEY)  # NEW: AI response generator
 msg_gen = MessageGenerator()
 context_store = ContextStore()
 tools = St4ckerTools(ST4CKER_API_URL, ST4CKER_API_KEY)
+memory_store = get_memory_store()  # NEW: Memory for patterns
 
 # =============================================================================
 # Helper: Log reminder to St4cker API (so followup-bot knows reminder was sent)
@@ -220,12 +226,13 @@ async def handle_chat(
 ) -> OpenClawResponse:
     """
     Universal chat handler - semua reply user masuk sini.
-    Conversational NLU - bisa tanya balik untuk clarification.
+    NOW WITH LLM-BASED NLU for truly AI understanding!
     """
     print(f"[Chat] {data.user_id}: {data.message}")
     
-    # Get user context
+    # Get user context dan memory
     user_ctx = context_store.get_context(data.user_id)
+    user_memory = get_user_memory(data.user_id)
     
     # Merge context dari request
     if data.context:
@@ -233,18 +240,20 @@ async def handle_chat(
     
     # Check if we're awaiting clarification
     if user_ctx.get("awaiting_clarification"):
-        return await handle_clarification_response(data, user_ctx)
+        return await handle_clarification_response_v2(data, user_ctx, user_memory)
     
-    # Parse intent dengan NLU conversational
-    intent = nlu.parse(data.message, user_ctx)
-    print(f"[Intent] Detected: {intent.get('intent')} for message: '{data.message}'")
+    # NEW: Parse intent dengan LLM-based NLU
+    parsed = await llm_nlu.parse(data.message, user_ctx)
+    print(f"[LLM_NLU] Intent: {parsed.get('intent')}, Confidence: {parsed.get('confidence')}")
+    print(f"[LLM_NLU] Fields: {parsed.get('fields')}")
+    print(f"[LLM_NLU] Missing: {parsed.get('missing_fields')}")
     
-    # Kalau ambiguous, ask for clarification
-    if intent.get("needs_clarification"):
-        return await ask_clarification(intent, user_ctx)
+    # Kalau perlu clarification, tanya dengan AI-generated question
+    if parsed.get("clarification_needed") or parsed.get("missing_fields"):
+        return await ask_clarification_v2(parsed, user_ctx, user_memory)
     
-    # Handle clear intent
-    return await handle_clear_intent(intent, data, user_ctx)
+    # Handle clear intent dengan LLM-based response
+    return await handle_intent_v2(parsed, data, user_ctx, user_memory)
 
 async def handle_clarification_response(data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
     """
@@ -574,10 +583,584 @@ async def handle_clear_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -
     
     # Fallback
     return OpenClawResponse(
-        reply=f"Halo Zril! 👋 Aku dengerin, tapi belum ngerti maksudnya 😅\n\nAda yang bisa aku bantu?",
+        reply=f"Halo zril! 👋 Aku dengerin, tapi belum ngerti maksudnya 😅\n\nAda yang bisa aku bantu?",
         action="send",
         done=False
     )
+
+
+# =============================================================================
+# NEW LLM-BASED HANDLERS (v2)
+# =============================================================================
+
+async def handle_clarification_response_v2(
+    data: ChatRequest, 
+    user_ctx: Dict, 
+    user_memory: Any
+) -> OpenClawResponse:
+    """
+    Handle clarification response dengan LLM-based NLU.
+    Merge data lama dengan data baru.
+    """
+    # Parse new message
+    parsed = await llm_nlu.parse(data.message, user_ctx)
+    
+    # Get stored partial data
+    partial_data = user_ctx.get("partial_data", {})
+    
+    # Merge fields
+    merged_fields = {**partial_data, **parsed.get("fields", {})}
+    
+    # Check if we have everything now
+    missing = []
+    for field in user_ctx.get("required_fields", []):
+        if not merged_fields.get(field):
+            missing.append(field)
+    
+    if missing:
+        # Still need more info
+        clarification_text = await responder.generate_clarification(
+            missing_fields=missing,
+            partial_data=merged_fields,
+            user_memory=user_memory
+        )
+        
+        return OpenClawResponse(
+            reply=clarification_text,
+            action="send",
+            context_update={
+                "awaiting_clarification": True,
+                "partial_data": merged_fields,
+                "required_fields": missing
+            },
+            done=False
+        )
+    
+    # Complete! Execute the action
+    parsed["fields"] = merged_fields
+    parsed["missing_fields"] = []
+    parsed["clarification_needed"] = False
+    
+    return await handle_intent_v2(parsed, data, user_ctx, user_memory)
+
+
+async def ask_clarification_v2(
+    parsed: Dict, 
+    user_ctx: Dict, 
+    user_memory: Any
+) -> OpenClawResponse:
+    """Generate natural clarification question dengan AI."""
+    
+    missing = parsed.get("missing_fields", [])
+    fields = parsed.get("fields", {})
+    intent = parsed.get("intent")
+    
+    # Store for next iteration
+    context_store.update_context(user_ctx.get("user_id"), {
+        "awaiting_clarification": True,
+        "partial_data": fields,
+        "required_fields": missing,
+        "pending_intent": intent
+    })
+    
+    # Generate natural question
+    clarification = await responder.generate_clarification(
+        missing_fields=missing,
+        partial_data=fields,
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(
+        reply=clarification,
+        action="send",
+        context_update={
+            "awaiting_clarification": True,
+            "partial_data": fields,
+            "required_fields": missing
+        },
+        done=False
+    )
+
+
+async def handle_intent_v2(
+    parsed: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any
+) -> OpenClawResponse:
+    """Handle intent dengan AI-generated responses."""
+    
+    intent = parsed.get("intent")
+    fields = parsed.get("fields", {})
+    patterns = parsed.get("detected_patterns", {})
+    
+    # Route ke handler yang tepat
+    if intent == "create_task":
+        return await handle_create_task_v2(fields, data, user_ctx, user_memory, patterns)
+    
+    elif intent == "create_project":
+        return await handle_create_project_v2(fields, data, user_ctx, user_memory)
+    
+    elif intent == "create_transaction":
+        return await handle_create_transaction_v2(fields, data, user_ctx, user_memory, patterns)
+    
+    elif intent == "list_tasks":
+        return await handle_list_tasks_v2(fields, data, user_ctx, user_memory)
+    
+    elif intent == "list_projects":
+        return await handle_list_projects_v2(fields, data, user_ctx, user_memory)
+    
+    elif intent == "list_transactions":
+        return await handle_list_transactions_v2(fields, data, user_ctx, user_memory)
+    
+    elif intent == "check_balance":
+        return await handle_check_balance_v2(fields, data, user_ctx, user_memory)
+    
+    elif intent == "log_progress":
+        return await handle_log_progress_v2(fields, data, user_ctx, user_memory)
+    
+    elif intent == "general_chat":
+        # General conversational response
+        reply = await responder.generate(
+            context="general_chat",
+            data={"message": data.message},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    # Fallback to legacy handlers
+    return await handle_clear_intent_legacy(parsed, data, user_ctx)
+
+
+# =============================================================================
+# LLM-BASED INTENT HANDLERS
+# =============================================================================
+
+async def handle_create_task_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any,
+    patterns: Dict
+) -> OpenClawResponse:
+    """Create task dengan AI response."""
+    
+    course = fields.get("course", "Umum")
+    deadline = fields.get("deadline") or datetime.now().strftime('%Y-%m-%d')
+    task_type = fields.get("type", "Tugas")
+    title = fields.get("title") or task_type
+    
+    # Create via API
+    result = await tools.create_task(
+        user_id=data.user_id,
+        title=title,
+        course=course,
+        deadline=deadline,
+        task_type=task_type
+    )
+    
+    if result.get("error"):
+        reply = await responder.generate(
+            context="error",
+            data={"error": "create_task_failed"},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    # Add to memory
+    user_memory.add_task({
+        "title": title,
+        "course": course,
+        "deadline": deadline,
+        "type": task_type
+    })
+    memory_store.save()
+    
+    # Check deadline urgency
+    try:
+        deadline_date = datetime.strptime(deadline, '%Y-%m-%d')
+        days_left = (deadline_date - datetime.now()).days
+        is_urgent = days_left <= 1
+    except:
+        is_urgent = False
+    
+    # Generate AI response
+    reply = await responder.generate(
+        context="task_created_urgent" if is_urgent else "task_created",
+        data={
+            "title": title,
+            "course": course,
+            "deadline": deadline,
+            "type": task_type
+        },
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(
+        reply=reply,
+        action="send",
+        context_update={"awaiting_clarification": False},
+        done=True
+    )
+
+
+async def handle_create_project_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any
+) -> OpenClawResponse:
+    """Create project dengan AI response."""
+    
+    title = fields.get("title", "New Project")
+    deadline = fields.get("deadline")
+    priority = fields.get("priority", "medium")
+    
+    result = await tools.create_project(
+        user_id=data.user_id,
+        title=title,
+        description=fields.get("description", ""),
+        project_type=fields.get("project_type", "personal"),
+        priority=priority,
+        deadline=deadline
+    )
+    
+    if result.get("error"):
+        reply = await responder.generate(
+            context="error",
+            data={"error": "create_project_failed"},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    reply = await responder.generate(
+        context="project_created",
+        data={
+            "title": title,
+            "deadline": deadline,
+            "priority": priority
+        },
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(
+        reply=reply,
+        action="send",
+        context_update={"awaiting_clarification": False},
+        done=True
+    )
+
+
+async def handle_create_transaction_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any,
+    patterns: Dict
+) -> OpenClawResponse:
+    """Create transaction dengan AI response dan pattern detection."""
+    
+    amount = fields.get("amount", 0)
+    type_ = fields.get("type", "expense")
+    category = fields.get("category", "lainnya")
+    title = fields.get("title") or category
+    date = fields.get("date") or datetime.now().strftime('%Y-%m-%d')
+    
+    result = await tools.create_transaction(
+        user_id=data.user_id,
+        amount=amount,
+        type_=type_,
+        category=category,
+        title=title,
+        date=date
+    )
+    
+    if result.get("error"):
+        reply = await responder.generate(
+            context="error",
+            data={"error": "create_transaction_failed"},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    # Add to memory
+    tx_data = {
+        "amount": amount,
+        "type": type_,
+        "category": category,
+        "title": title,
+        "date": date
+    }
+    user_memory.add_transaction(tx_data)
+    memory_store.save()
+    
+    # Check for repetitive pattern
+    repetitive = user_memory.get_repetitive_transaction(category=category, title=title)
+    
+    # Generate AI response
+    response_context = "transaction_recorded"
+    if repetitive and repetitive["count"] >= 3:
+        response_context = "transaction_recorded_repetitive"
+    elif amount > 500000:
+        response_context = "transaction_recorded_large"
+    
+    reply = await responder.generate(
+        context=response_context,
+        data={
+            "amount": amount,
+            "type": type_,
+            "category": category,
+            "title": title,
+            "repetitive_count": repetitive["count"] if repetitive else 0
+        },
+        user_memory=user_memory,
+        detected_patterns=patterns
+    )
+    
+    return OpenClawResponse(
+        reply=reply,
+        action="send",
+        context_update={"awaiting_clarification": False},
+        done=True
+    )
+
+
+async def handle_list_tasks_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any
+) -> OpenClawResponse:
+    """List tasks dengan AI response."""
+    
+    result = await tools.get_tasks(
+        status=fields.get("status_filter"),
+        course=fields.get("course_filter")
+    )
+    
+    tasks = result.get("data", [])
+    count = len(tasks)
+    
+    if count == 0:
+        reply = await responder.generate(
+            context="list_tasks_empty",
+            data={},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    # Format tasks
+    task_list = []
+    for t in tasks[:10]:
+        task_list.append({
+            "title": t.get("title"),
+            "course": t.get("course"),
+            "deadline": t.get("deadline"),
+            "status": t.get("status")
+        })
+    
+    reply = await responder.generate(
+        context="list_tasks",
+        data={
+            "count": count,
+            "tasks": task_list
+        },
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(reply=reply, action="send", done=True)
+
+
+async def handle_list_projects_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any
+) -> OpenClawResponse:
+    """List projects dengan AI response."""
+    
+    result = await tools.get_projects(status="active")
+    projects = result.get("data", [])
+    count = len(projects)
+    
+    if count == 0:
+        reply = await responder.generate(
+            context="list_projects_empty",
+            data={},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    project_list = []
+    for p in projects[:5]:
+        project_list.append({
+            "title": p.get("title"),
+            "progress": p.get("totalProgress", 0)
+        })
+    
+    reply = await responder.generate(
+        context="list_projects",
+        data={
+            "count": count,
+            "projects": project_list
+        },
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(reply=reply, action="send", done=True)
+
+
+async def handle_list_transactions_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any
+) -> OpenClawResponse:
+    """List transactions dengan AI response."""
+    
+    result = await tools.get_transactions(limit=10)
+    transactions = result.get("data", [])
+    count = len(transactions)
+    
+    if count == 0:
+        reply = await responder.generate(
+            context="list_transactions_empty",
+            data={},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    tx_list = []
+    total_income = 0
+    total_expense = 0
+    
+    for tx in transactions[:5]:
+        amount = tx.get("amount", 0)
+        tx_type = tx.get("type", "expense")
+        
+        if tx_type == "income":
+            total_income += amount
+        else:
+            total_expense += abs(amount)
+        
+        tx_list.append({
+            "title": tx.get("title"),
+            "amount": amount,
+            "type": tx_type,
+            "category": tx.get("category")
+        })
+    
+    reply = await responder.generate(
+        context="list_transactions",
+        data={
+            "count": count,
+            "transactions": tx_list,
+            "total_income": total_income,
+            "total_expense": total_expense
+        },
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(reply=reply, action="send", done=True)
+
+
+async def handle_check_balance_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any
+) -> OpenClawResponse:
+    """Check balance dengan AI response."""
+    
+    result = await tools.get_balance()
+    balance_data = result.get("data", {})
+    
+    balance = balance_data.get("balance", 0)
+    formatted = balance_data.get("formattedBalance", f"Rp{balance:,.0f}")
+    
+    # Get summary for recent transactions
+    summary = await tools.get_summary()
+    recent = summary.get("data", {}).get("recentTransactions", [])[:3]
+    
+    reply = await responder.generate(
+        context="check_balance",
+        data={
+            "balance": balance,
+            "formatted_balance": formatted,
+            "recent_transactions": recent
+        },
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(reply=reply, action="send", done=True)
+
+
+async def handle_log_progress_v2(
+    fields: Dict,
+    data: ChatRequest,
+    user_ctx: Dict,
+    user_memory: Any
+) -> OpenClawResponse:
+    """Log progress dengan AI response."""
+    
+    project_name = fields.get("project_name")
+    progress = fields.get("progress_percentage", 0)
+    note = fields.get("note", "")
+    
+    # Get project ID dari name
+    projects_result = await tools.get_projects()
+    projects = projects_result.get("data", [])
+    
+    project_id = None
+    project_title = project_name
+    for p in projects:
+        if project_name and project_name.lower() in p.get("title", "").lower():
+            project_id = p.get("id")
+            project_title = p.get("title")
+            break
+    
+    if not project_id:
+        reply = await responder.generate(
+            context="error",
+            data={"error": "project_not_found", "project_name": project_name},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    result = await tools.log_project_progress(
+        project_id=project_id,
+        progress=progress,
+        message=note or f"Progress update: {progress}%"
+    )
+    
+    if result.get("error"):
+        reply = await responder.generate(
+            context="error",
+            data={"error": "log_progress_failed"},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    # Add to memory
+    user_memory.add_project_progress(project_id, progress, note)
+    memory_store.save()
+    
+    reply = await responder.generate(
+        context="progress_logged",
+        data={
+            "project_title": project_title,
+            "progress": progress
+        },
+        user_memory=user_memory
+    )
+    
+    return OpenClawResponse(reply=reply, action="send", done=True)
+
+
+async def handle_clear_intent_legacy(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Fallback to legacy intent handlers."""
+    return await handle_clear_intent(intent, data, user_ctx)
+
 
 async def handle_cancel_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
     """Handle cancel/reschedule intent - dengan AI-generated response."""
