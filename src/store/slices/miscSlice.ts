@@ -183,7 +183,7 @@ export const createMiscSlice: StateCreator<
     fetchScheduleFromBackend: async () => {
         try {
             const state = get() as any;
-            const { userProfile } = state;
+            const { userProfile, schedule: localScheduleState } = state;
             // Use explicit server URL - MUST match VPS IP
             const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
@@ -203,17 +203,31 @@ export const createMiscSlice: StateCreator<
                 return;
             }
             
+            // Get local schedules untuk duplicate detection
+            const localSchedules = await window.electronAPI.schedule.getAll();
+            const existingIds = new Set(localSchedules.map((s: any) => s.id));
+            const existingKeys = new Set(localSchedules.map((s: any) => 
+                `${s.day}_${s.startTime}_${(s.course || '').toLowerCase().trim()}`
+            ));
+            
             // Convert array to schedule map
             const scheduleMap: Record<string, any> = {};
             data.data?.forEach((item: any) => {
                 const key = `${item.day}-${item.startTime}`;
+                const itemKey = `${item.day}_${item.startTime}_${(item.courseName || item.course || '').toLowerCase().trim()}`;
+                
+                // Check for duplicates
+                const existsById = existingIds.has(item.id);
+                const existsByContent = existingKeys.has(itemKey);
+                
                 scheduleMap[key] = {
                     ...item,
                     course: item.courseName || item.course,
                     location: item.room || item.location,
                 };
-                // Save to local SQLite
-                window.electronAPI.schedule.upsert({
+                
+                // Save to local SQLite dengan duplicate check
+                const scheduleData = {
                     id: item.id,
                     day: item.day,
                     startTime: item.startTime,
@@ -223,7 +237,18 @@ export const createMiscSlice: StateCreator<
                     lecturer: item.lecturer,
                     note: JSON.stringify({ color: 'bg-primary' }),
                     updatedAt: new Date().toISOString(),
-                });
+                };
+                
+                if (existsById) {
+                    console.log(`[MiscSlice] Schedule exists by ID: ${item.id}`);
+                } else if (!existsByContent) {
+                    window.electronAPI.schedule.upsert(scheduleData);
+                    existingIds.add(item.id);
+                    existingKeys.add(itemKey);
+                    console.log(`[MiscSlice] Created new schedule: ${item.courseName || item.course}`);
+                } else {
+                    console.log(`[MiscSlice] Skipping duplicate schedule: ${item.courseName || item.course}`);
+                }
             });
             
             set({ schedule: scheduleMap });

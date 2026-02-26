@@ -163,7 +163,7 @@ export const createTransactionSlice: StateCreator<
     fetchTransactionsFromBackend: async () => {
         try {
             const state = get() as any;
-            const { userProfile } = state;
+            const { userProfile, transactions: localTransactionsState } = state;
             const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
@@ -181,10 +181,22 @@ export const createTransactionSlice: StateCreator<
                 return;
             }
 
-            // Convert and save to local SQLite
+            // IMPROVED DUPLICATE DETECTION like assignmentSlice
             const localTx = await window.electronAPI.transactions.list();
+            const existingIds = new Set(localTx.map((t: any) => t.id));
+            const existingKeys = new Set(localTx.map((t: any) => 
+                `${(t.title || '').toLowerCase().trim()}_${t.date}_${t.amount}_${t.type}`
+            ));
+            const localStateIds = new Set(localTransactionsState.map((t: any) => t.id));
+
             for (const item of data.data) {
-                const exists = localTx.find((t: any) => t.id === item.id);
+                // Check by ID first
+                const existsById = existingIds.has(item.id) || localStateIds.has(item.id);
+                
+                // Check by content (title + date + amount + type)
+                const itemKey = `${(item.title || '').toLowerCase().trim()}_${item.date}_${item.amount}_${item.type}`;
+                const existsByContent = existingKeys.has(itemKey);
+                
                 const txData = {
                     id: item.id,
                     title: item.title,
@@ -196,10 +208,16 @@ export const createTransactionSlice: StateCreator<
                     updatedAt: new Date().toISOString(),
                 };
                 
-                if (exists) {
+                if (existsById) {
                     await window.electronAPI.transactions.update(item.id, txData);
-                } else {
+                    console.log(`[TransactionSlice] Updated existing transaction by ID: ${item.id}`);
+                } else if (!existsByContent) {
                     await window.electronAPI.transactions.create(txData);
+                    existingIds.add(item.id);
+                    existingKeys.add(itemKey);
+                    console.log(`[TransactionSlice] Created new transaction: ${item.title}`);
+                } else {
+                    console.log(`[TransactionSlice] Skipping duplicate transaction: ${item.title} (${itemKey})`);
                 }
             }
 
