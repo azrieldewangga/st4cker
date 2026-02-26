@@ -553,12 +553,23 @@ async def handle_clear_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -
         return await handle_create_task_intent(intent, data, user_ctx)
     
     elif intent_type == "create_project":
+        # Handle priority clarification separately
+        if user_ctx.get("clarification_type") == "project_priority":
+            return await handle_project_priority_clarification(intent, data, user_ctx)
         return await handle_create_project_intent(intent, data, user_ctx)
     
     elif intent_type == "create_transaction":
+        # Handle amount clarification
+        if user_ctx.get("clarification_type") == "transaction_amount":
+            return await handle_transaction_amount_clarification(intent, data, user_ctx)
         return await handle_create_transaction_intent(intent, data, user_ctx)
     
     elif intent_type == "log_progress":
+        # Handle project selection and progress value clarification
+        if user_ctx.get("clarification_type") == "select_project_for_progress":
+            return await handle_select_project_for_progress(intent, data, user_ctx)
+        elif user_ctx.get("clarification_type") == "progress_value":
+            return await handle_progress_value_clarification(intent, data, user_ctx)
         return await handle_log_progress_intent(intent, data, user_ctx)
     
     # Fallback
@@ -1268,23 +1279,100 @@ async def handle_list_transactions_intent(intent: Dict, data: ChatRequest, user_
 # =============================================================================
 
 async def handle_create_task_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
-    """Handle create task intent - menggunakan clarification untuk detail."""
-    extracted = intent.get("extracted", {})
+    """Handle create task intent - multi-step clarification seperti Telegram Bot."""
+    msg_lower = data.message.lower()
     
-    # Check if this is a clarification response for new task
+    # Check if this is a clarification response
     if user_ctx.get("clarification_type") == "new_task_details":
-        # User has provided additional details
         temp_task = user_ctx.get("temp_new_task", {})
-        course = temp_task.get("course") or extracted.get("course")
-        deadline = temp_task.get("deadline") or extracted.get("deadline")
+        
+        # Parse course dari jawaban user
+        course = nlu._extract_course(data.message)
+        if not course:
+            # Coba cari dari known courses
+            courses = ["kjk", "komber", "ppl", "sister", "pemjar", "wspk"]
+            for c in courses:
+                if c in msg_lower:
+                    course = c
+                    break
+        
+        # Parse deadline dari jawaban user
+        deadline = None
+        if "besok" in msg_lower:
+            deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        elif "lusa" in msg_lower:
+            deadline = (datetime.now() + timedelta(days=2)).strftime('%Y-%m-%d')
+        elif "minggu" in msg_lower:
+            deadline = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+        else:
+            # Coba parse format YYYY-MM-DD
+            import re
+            date_match = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})', msg_lower)
+            if date_match:
+                deadline = f"{date_match.group(1)}-{date_match.group(2):0>2}-{date_match.group(3):0>2}"
+        
+        # Validasi: Course wajib
+        if not course:
+            return OpenClawResponse(
+                reply=f"Zril, aku belum ngerti matkulnya apa 😅\n\nCoba sebutin matkulnya (misal: KJK, PPL, Sister, dll)",
+                action="send",
+                done=False
+            )
+        
+        # Validasi: Deadline wajib
+        if not deadline:
+            return OpenClawResponse(
+                reply=f"Oke, matkulnya *{course.upper()}*. Deadline kapan?\n\nFormat: besok, lusa, atau YYYY-MM-DD",
+                action="send",
+                context_update={
+                    "awaiting_clarification": True,
+                    "clarification_type": "new_task_details",
+                    "temp_new_task": {**temp_task, "course": course}
+                },
+                done=False
+            )
+        
+        # Validasi: Tipe tugas
+        task_type = temp_task.get("type")
+        if not task_type:
+            # Deteksi dari pesan
+            if any(x in msg_lower for x in ["laporan pendahuluan", "lp"]): 
+                task_type = "Laporan Pendahuluan"
+            elif any(x in msg_lower for x in ["laporan sementara", "ls"]):
+                task_type = "Laporan Sementara"
+            elif any(x in msg_lower for x in ["laporan resmi", "lr"]):
+                task_type = "Laporan Resmi"
+            elif "praktikum" in msg_lower:
+                task_type = "Tugas"
+            else:
+                # Tanyakan tipe tugas
+                return OpenClawResponse(
+                    reply=f"Oke, tugas *{course.upper()}* deadline *{deadline}*.\n\nTipe tugasnya apa?\n• Tugas\n• Laporan Pendahuluan\n• Laporan Sementara\n• Laporan Resmi",
+                    action="send",
+                    context_update={
+                        "awaiting_clarification": True,
+                        "clarification_type": "new_task_type",
+                        "temp_new_task": {**temp_task, "course": course, "deadline": deadline}
+                    },
+                    done=False
+                )
+        
+        # Extract title/note
+        raw_title = temp_task.get("raw", "Tugas")
+        # Remove matkul name dari title
+        title = raw_title
+        for alias in nlu.course_aliases.get(course, []):
+            title = title.replace(alias, "").strip()
+        if not title or title == "Tugas":
+            title = task_type
         
         # Create the task
         result = await tools.create_task(
             user_id=data.user_id,
-            title=temp_task.get("raw", "Tugas Baru"),
-            course=course or "Umum",
-            deadline=deadline or datetime.now().strftime('%Y-%m-%d'),
-            task_type="Tugas"
+            title=title,
+            course=course.upper(),
+            deadline=deadline,
+            task_type=task_type
         )
         
         if result.get("error"):
@@ -1296,15 +1384,55 @@ async def handle_create_task_intent(intent: Dict, data: ChatRequest, user_ctx: D
         
         task = result.get("data", {})
         return OpenClawResponse(
-            reply=f"✅ Oke zril, tugas sudah aku catet!\n\n📋 *{task.get('title', 'Tugas')}*\n📚 {task.get('course', '')}\n📅 Deadline: {task.get('deadline', '')}",
+            reply=f"✅ Tugas tercatat!\n\n📋 *{task.get('title', 'Tugas')}*\n📚 {course.upper()}\n📅 {deadline}\n📝 {task_type}",
             action="send",
             context_update={"awaiting_clarification": False},
             done=True
         )
     
-    # First time - need clarification
+    # Check if waiting for task type
+    if user_ctx.get("clarification_type") == "new_task_type":
+        temp_task = user_ctx.get("temp_new_task", {})
+        course = temp_task.get("course", "")
+        deadline = temp_task.get("deadline", "")
+        
+        # Parse tipe dari jawaban
+        task_type = "Tugas"  # default
+        if any(x in msg_lower for x in ["pendahuluan", "lp"]):
+            task_type = "Laporan Pendahuluan"
+        elif any(x in msg_lower for x in ["sementara", "ls"]):
+            task_type = "Laporan Sementara"
+        elif any(x in msg_lower for x in ["resmi", "lr"]):
+            task_type = "Laporan Resmi"
+        
+        # Create the task
+        result = await tools.create_task(
+            user_id=data.user_id,
+            title=task_type,
+            course=course.upper(),
+            deadline=deadline,
+            task_type=task_type
+        )
+        
+        if result.get("error"):
+            return OpenClawResponse(
+                reply=f"Maaf zril, gagal nambahin tugas 😅\n\nCoba lagi ya!",
+                action="send",
+                done=True
+            )
+        
+        task = result.get("data", {})
+        return OpenClawResponse(
+            reply=f"✅ Tugas tercatat!\n\n📋 *{task_type}*\n📚 {course.upper()}\n📅 {deadline}",
+            action="send",
+            context_update={"awaiting_clarification": False},
+            done=True
+        )
+    
+    # First time - need to collect info
+    extracted = intent.get("extracted", {})
     return OpenClawResponse(
-        reply=f"Oke zril, mau nambah tugas ya?\n\nUntuk matkul apa dan deadline kapan?",
+        reply=f"Oke zril, mau nambah tugas ya?\n\nUntuk matkul apa? (misal: KJK, PPL, Sister)",
         action="send",
         context_update={
             "awaiting_clarification": True,
@@ -1316,36 +1444,105 @@ async def handle_create_task_intent(intent: Dict, data: ChatRequest, user_ctx: D
 
 
 async def handle_create_project_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
-    """Handle create project intent."""
-    extracted = intent.get("extracted", {})
-    
-    # Try to extract project info from message
+    """Handle create project intent - multi-step seperti Telegram Bot."""
     msg_lower = data.message.lower()
-    title = None
     
-    # Extract title from message
-    title_match = re.search(r'(?:buat project|tambah project|bikin project)\s+(.+)', msg_lower)
-    if title_match:
-        title = title_match.group(1).strip().title()
+    # Step 1: Get title
+    if user_ctx.get("clarification_type") != "project_details":
+        title_match = re.search(r'(?:buat project|tambah project|bikin project)\s+(.+)', msg_lower)
+        if title_match:
+            title = title_match.group(1).strip().title()
+            return OpenClawResponse(
+                reply=f"Oke, project *{title}* 📁\n\nDeadline kapan? (YYYY-MM-DD atau 'besok', 'lusa')",
+                action="send",
+                context_update={
+                    "awaiting_clarification": True,
+                    "clarification_type": "project_details",
+                    "temp_project": {"title": title}
+                },
+                done=False
+            )
+        else:
+            return OpenClawResponse(
+                reply=f"Oke zril, mau buat project baru ya?\n\nProjectnya tentang apa? Kasih judul yang deskriptif ya.",
+                action="send",
+                context_update={
+                    "awaiting_clarification": True,
+                    "clarification_type": "project_details",
+                    "temp_project": {}
+                },
+                done=False
+            )
     
-    if not title:
+    # Step 2: Get deadline and other details
+    temp_project = user_ctx.get("temp_project", {})
+    title = temp_project.get("title")
+    
+    # Parse deadline
+    deadline = None
+    if "besok" in msg_lower:
+        deadline = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    elif "lusa" in msg_lower:
+        deadline = (datetime.now() + timedelta(days=2)).strftime('%Y-%m-%d')
+    elif "minggu" in msg_lower:
+        deadline = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+    else:
+        import re
+        date_match = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})', msg_lower)
+        if date_match:
+            deadline = f"{date_match.group(1)}-{date_match.group(2):0>2}-{date_match.group(3):0>2}"
+    
+    # Validasi deadline wajib
+    if not deadline and not temp_project.get("deadline"):
+        # Coba extract title dari pesan jika belum ada
+        if not title:
+            title = msg_lower.strip().title()
+            if len(title) > 50:
+                title = title[:50] + "..."
+        
         return OpenClawResponse(
-            reply=f"Oke zril, mau buat project baru ya?\n\nProjectnya tentang apa? Kasih judul yang deskriptif ya.",
+            reply=f"Oke, project *{title}* 📁\n\nDeadline kapan? (YYYY-MM-DD atau 'besok', 'lusa')",
             action="send",
             context_update={
                 "awaiting_clarification": True,
-                "clarification_type": "project_details"
+                "clarification_type": "project_details",
+                "temp_project": {"title": title}
             },
             done=False
         )
     
+    # Simpan deadline
+    if deadline:
+        temp_project["deadline"] = deadline
+    
+    # Step 3: Get priority (if not provided)
+    priority = temp_project.get("priority")
+    if not priority:
+        if any(x in msg_lower for x in ["high", "penting", "urgent", "tinggi"]):
+            priority = "high"
+        elif any(x in msg_lower for x in ["low", "low", "biasa", "rendah"]):
+            priority = "low"
+        else:
+            # Tanyakan priority
+            return OpenClawResponse(
+                reply=f"Oke, deadline *{temp_project['deadline']}* 📅\n\nPriority project ini?\n• High (urgent)\n• Medium (normal)\n• Low (santai)",
+                action="send",
+                context_update={
+                    "awaiting_clarification": True,
+                    "clarification_type": "project_priority",
+                    "temp_project": temp_project
+                },
+                done=False
+            )
+    
     # Create project
     result = await tools.create_project(
         user_id=data.user_id,
-        title=title,
-        description="",
-        project_type="personal",
-        priority="medium"
+        title=temp_project["title"],
+        description=temp_project.get("description", ""),
+        project_type=temp_project.get("type", "personal"),
+        priority=priority or "medium",
+        deadline=temp_project.get("deadline")
     )
     
     if result.get("error"):
@@ -1357,8 +1554,49 @@ async def handle_create_project_intent(intent: Dict, data: ChatRequest, user_ctx
     
     project = result.get("data", {})
     return OpenClawResponse(
-        reply=f"✅ Project baru berhasil dibuat!\n\n📁 *{project.get('title', 'Project')}*\n\nSemangat ngerjainnya zril! 💪",
+        reply=f"✅ Project baru berhasil dibuat!\n\n📁 *{project.get('title', 'Project')}*\n📅 {temp_project.get('deadline', 'No deadline')}\n⚡ {priority or 'medium'}\n\nSemangat ngerjainnya zril! 💪",
         action="send",
+        context_update={"awaiting_clarification": False},
+        done=True
+    )
+
+
+async def handle_project_priority_clarification(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle priority clarification for project creation."""
+    msg_lower = data.message.lower()
+    temp_project = user_ctx.get("temp_project", {})
+    
+    # Parse priority
+    priority = "medium"
+    if any(x in msg_lower for x in ["high", "penting", "urgent", "tinggi"]):
+        priority = "high"
+    elif any(x in msg_lower for x in ["low", "rendah", "biasa", "santai"]):
+        priority = "low"
+    else:
+        priority = "medium"
+    
+    # Create project
+    result = await tools.create_project(
+        user_id=data.user_id,
+        title=temp_project["title"],
+        description=temp_project.get("description", ""),
+        project_type=temp_project.get("type", "personal"),
+        priority=priority,
+        deadline=temp_project.get("deadline")
+    )
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Maaf zril, gagal buat project 😅\n\nCoba lagi ya!",
+            action="send",
+            done=True
+        )
+    
+    project = result.get("data", {})
+    return OpenClawResponse(
+        reply=f"✅ Project baru berhasil dibuat!\n\n📁 *{project.get('title', 'Project')}*\n📅 {temp_project.get('deadline', 'No deadline')}\n⚡ {priority}\n\nSemangat ngerjainnya zril! 💪",
+        action="send",
+        context_update={"awaiting_clarification": False},
         done=True
     )
 
@@ -1410,6 +1648,89 @@ async def handle_create_transaction_intent(intent: Dict, data: ChatRequest, user
     return OpenClawResponse(
         reply=f"✅ {action_text} tercatat!\n\n{icon} *{tx.get('title', category)}*\n💰 Rp{amount:,.0f}\n📁 {category}",
         action="send",
+        done=True
+    )
+
+
+async def handle_transaction_amount_clarification(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle amount clarification for transaction."""
+    msg_lower = data.message.lower()
+    temp_tx = user_ctx.get("temp_transaction", {})
+    
+    # Parse amount dari jawaban user
+    amount = None
+    amount_patterns = [
+        (r'rp\.?\s*([\d.,]+)', 1),
+        (r'rp\s*([\d.,]+)', 1),
+        (r'([\d.,]+)\s*ribu', 1000),
+        (r'([\d.,]+)\s*rb', 1000),
+        (r'([\d.,]+)\s*juta', 1000000),
+        (r'([\d.,]+)\s*jt', 1000000),
+        (r'([\d.,]+)', 1),
+    ]
+    
+    for pattern, multiplier in amount_patterns:
+        match = re.search(pattern, msg_lower)
+        if match:
+            amount_str = match.group(1).replace(',', '').replace('.', '')
+            try:
+                amount = float(amount_str) * multiplier
+                break
+            except:
+                continue
+    
+    if not amount:
+        return OpenClawResponse(
+            reply=f"Zril, aku belum ngerti nominalnya 😅\n\nCoba tulis angkanya ya (misal: 50000 atau Rp50.000)",
+            action="send",
+            done=False
+        )
+    
+    # Parse category dari jawaban user jika belum ada
+    category = temp_tx.get("category", "lainnya")
+    if category == "lainnya":
+        categories_map = {
+            "makan": "makan", "food": "makan", "kuliner": "makan",
+            "transport": "transport", "transportasi": "transport", "bensin": "transport", "parkir": "transport",
+            "kuliah": "kuliah", "print": "kuliah", "atk": "kuliah",
+            "pulsa": "pulsa", "kuota": "pulsa", "internet": "pulsa",
+            "hiburan": "hiburan", "entertainment": "hiburan", "nonton": "hiburan", "game": "hiburan",
+            "belanja": "belanja", "shopping": "belanja"
+        }
+        for key, val in categories_map.items():
+            if key in msg_lower:
+                category = val
+                break
+    
+    type_ = temp_tx.get("type", "expense")
+    title = temp_tx.get("title") or category
+    
+    # Create transaction
+    today = datetime.now().strftime('%Y-%m-%d')
+    result = await tools.create_transaction(
+        user_id=data.user_id,
+        amount=amount,
+        type_=type_,
+        category=category,
+        title=title,
+        date=today
+    )
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Maaf zril, gagal catat transaksi 😅\n\nCoba lagi ya!",
+            action="send",
+            done=True
+        )
+    
+    tx = result.get("data", {})
+    icon = "💸" if type_ == "expense" else "💵"
+    action_text = "Pengeluaran" if type_ == "expense" else "Pemasukan"
+    
+    return OpenClawResponse(
+        reply=f"✅ {action_text} tercatat!\n\n{icon} *{title}*\n💰 Rp{amount:,.0f}\n📁 {category}",
+        action="send",
+        context_update={"awaiting_clarification": False},
         done=True
     )
 
@@ -1466,6 +1787,130 @@ async def handle_log_progress_intent(intent: Dict, data: ChatRequest, user_ctx: 
     return OpenClawResponse(
         reply=f"✅ Progress updated!\n\n📁 *{active_project.get('title')}*\n{progress_bar} {progress}%\n\nKeren zril! 💪",
         action="send",
+        done=True
+    )
+
+
+async def handle_select_project_for_progress(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle project selection for progress logging."""
+    msg_lower = data.message.lower()
+    
+    # Get projects list
+    result = await tools.get_projects(status="active")
+    projects = result.get("data", [])
+    
+    # Try to match project name from message
+    selected_project = None
+    for project in projects:
+        title = project.get("title", "").lower()
+        if title in msg_lower or any(word in msg_lower for word in title.split()):
+            selected_project = project
+            break
+    
+    if not selected_project:
+        # List projects and ask again
+        if len(projects) == 0:
+            return OpenClawResponse(
+                reply=f"Zril, belum ada project aktif nih. Mau buat project baru dulu?",
+                action="send",
+                context_update={"awaiting_clarification": False},
+                done=True
+            )
+        
+        reply_lines = ["Zril, project yang mana?\n"]
+        for i, project in enumerate(projects[:5], 1):
+            reply_lines.append(f"{i}. {project.get('title')}")
+        
+        return OpenClawResponse(
+            reply="\n".join(reply_lines),
+            action="send",
+            done=False
+        )
+    
+    # Ask for progress value
+    return OpenClawResponse(
+        reply=f"Oke, project *{selected_project.get('title')}* 📁\n\nProgress sekarang berapa persen?",
+        action="send",
+        context_update={
+            "awaiting_clarification": True,
+            "clarification_type": "progress_value",
+            "active_project": selected_project
+        },
+        done=False
+    )
+
+
+async def handle_progress_value_clarification(intent: Dict, data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
+    """Handle progress value clarification."""
+    msg_lower = data.message.lower()
+    active_project = user_ctx.get("active_project")
+    
+    if not active_project:
+        return OpenClawResponse(
+            reply=f"Zril, projectnya yang mana ya? Coba sebutin judulnya.",
+            action="send",
+            context_update={
+                "awaiting_clarification": True,
+                "clarification_type": "select_project_for_progress"
+            },
+            done=False
+        )
+    
+    # Parse progress from message
+    progress = None
+    
+    # Pattern: "50%", "50 persen", "baru 50%"
+    progress_match = re.search(r'(\d+)(?:\s*%|\s*persen)?', msg_lower)
+    if progress_match:
+        try:
+            progress = int(progress_match.group(1))
+            if progress < 0:
+                progress = 0
+            elif progress > 100:
+                progress = 100
+        except:
+            pass
+    
+    # Textual percentages
+    if progress is None:
+        if "setengah" in msg_lower or "separuh" in msg_lower:
+            progress = 50
+        elif "sepertiga" in msg_lower:
+            progress = 33
+        elif "seperempat" in msg_lower:
+            progress = 25
+        elif "selesai" in msg_lower or "done" in msg_lower or "100" in msg_lower:
+            progress = 100
+    
+    if progress is None:
+        return OpenClawResponse(
+            reply=f"Zril, aku belum ngerti progressnya berapa 😅\n\nCoba tulis angkanya ya (misal: 50% atau 75)",
+            action="send",
+            done=False
+        )
+    
+    # Log progress
+    project_id = active_project.get("id")
+    result = await tools.log_project_progress(
+        project_id=project_id,
+        progress=progress,
+        message=f"Progress update via chat: {progress}%"
+    )
+    
+    if result.get("error"):
+        return OpenClawResponse(
+            reply=f"Maaf zril, gagal update progress 😅\n\nCoba lagi ya!",
+            action="send",
+            done=True
+        )
+    
+    # Progress bar
+    progress_bar = "█" * (progress // 10) + "░" * (10 - progress // 10)
+    
+    return OpenClawResponse(
+        reply=f"✅ Progress updated!\n\n📁 *{active_project.get('title')}*\n{progress_bar} {progress}%\n\nKeren zril! 💪",
+        action="send",
+        context_update={"awaiting_clarification": False},
         done=True
     )
 
