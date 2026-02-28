@@ -244,6 +244,9 @@ export const createAssignmentSlice: StateCreator<
             // Track local IDs yang sudah ada di state (prevent double create)
             const localStateIds = new Set(localAssignmentsState.map((a: Assignment) => a.id));
             
+            // Track server IDs untuk deteksi delete
+            const serverIds = new Set(data.data.map((item: any) => item.id));
+            
             for (const item of data.data) {
                 // Normalize course ID (bisa dari item.course atau item.courseId)
                 const courseId = item.course || item.courseId || '';
@@ -280,6 +283,20 @@ export const createAssignmentSlice: StateCreator<
                     console.log(`[AssignmentSlice] Created new assignment: ${item.title}`);
                 } else {
                     console.log(`[AssignmentSlice] Skipping duplicate assignment: ${item.title} (${itemKey})`);
+                }
+            }
+            
+            // HAPUS assignment lokal yang tidak ada di server (sudah dihapus user di device lain)
+            // Tapi hanya hapus kalau assignment tersebut berasal dari server (bukan local-only)
+            for (const localId of localStateIds) {
+                if (!serverIds.has(localId) && existingIds.has(localId)) {
+                    // Assignment ada di local tapi tidak di server = sudah dihapus
+                    try {
+                        await window.electronAPI.assignments.delete(localId);
+                        console.log(`[AssignmentSlice] Deleted local assignment not on server: ${localId}`);
+                    } catch (e) {
+                        console.warn(`[AssignmentSlice] Failed to delete local assignment: ${localId}`, e);
+                    }
                 }
             }
 
