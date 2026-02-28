@@ -17,6 +17,7 @@ export interface AssignmentSlice {
     fetchAssignmentsFromBackend: () => Promise<void>;
     setupAssignmentsRealtimeSync: () => void;
     assignmentsLastSyncedAt: string | null;
+    deletedAssignmentIds: Set<string>;
 }
 
 export const createAssignmentSlice: StateCreator<
@@ -27,6 +28,7 @@ export const createAssignmentSlice: StateCreator<
 > = (set, get) => ({
     assignments: [],
     assignmentsLastSyncedAt: null,
+    deletedAssignmentIds: new Set<string>(),
 
     fetchAssignments: async () => {
         try {
@@ -119,6 +121,9 @@ export const createAssignmentSlice: StateCreator<
         }
     },
 
+    // Track deleted IDs untuk mencegah restore saat fetch
+    deletedAssignmentIds: new Set<string>(),
+
     deleteAssignment: async (id, skipLog = false) => {
         try {
             if (!skipLog) {
@@ -134,11 +139,41 @@ export const createAssignmentSlice: StateCreator<
                 }
             }
 
-            await window.electronAPI.assignments.delete(id);
-            get().fetchAssignments();
+            // Track ID yang dihapus
+            const deletedIds = (get() as any).deletedAssignmentIds || new Set<string>();
+            deletedIds.add(id);
+            set({ deletedAssignmentIds: deletedIds } as any);
             
-            // Auto-sync to backend (debounced)
-            get().autoSyncAssignmentsToBackend();
+            // Update state dulu (optimistic UI)
+            set((state) => ({
+                assignments: state.assignments.filter(a => a.id !== id)
+            }));
+            
+            // Delete dari SQLite
+            await window.electronAPI.assignments.delete(id);
+            
+            // Sync ke backend - kirim ID yang dihapus
+            const state = get() as any;
+            const { userProfile } = state;
+            const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
+            
+            try {
+                // Call API delete langsung
+                const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/tasks/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'X-Session-Token': localStorage.getItem('sessionToken') || '',
+                    },
+                });
+                if (response.ok) {
+                    console.log('[AssignmentSlice] Deleted from backend:', id);
+                }
+            } catch (e) {
+                console.warn('[AssignmentSlice] Failed to delete from backend:', e);
+            }
+            
+            // Tidak fetch dari backend setelah delete
         } catch (error) {
             console.error('[AssignmentSlice] Delete error:', error);
             throw error;
@@ -247,7 +282,15 @@ export const createAssignmentSlice: StateCreator<
             // Track server IDs untuk deteksi delete
             const serverIds = new Set(data.data.map((item: any) => item.id));
             
+            // Get deleted IDs yang sudah dihapus di session ini
+            const deletedIds = (state as any).deletedAssignmentIds || new Set<string>();
+            
             for (const item of data.data) {
+                // SKIP kalau ID ini sudah dihapus di session ini
+                if (deletedIds.has(item.id)) {
+                    console.log(`[AssignmentSlice] Skipping deleted assignment: ${item.id}`);
+                    continue;
+                }
                 // Normalize course ID (bisa dari item.course atau item.courseId)
                 const courseId = item.course || item.courseId || '';
                 
