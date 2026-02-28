@@ -11,6 +11,8 @@ export interface MiscSlice {
     setScheduleItem: (day: string, time: string, courseId: string, color?: string, room?: string, lecturer?: string, skipLog?: boolean) => Promise<void>;
     syncScheduleToBackend: () => Promise<void>;
     fetchScheduleFromBackend: () => Promise<void>;
+    setupScheduleRealtimeSync: () => void;
+    autoSyncScheduleToBackend: () => void;
 
     // Materials
     materials: Record<string, CourseMaterial[]>;
@@ -94,6 +96,7 @@ export const createMiscSlice: StateCreator<
         try {
             const state = get() as any;
             const { schedule, userProfile, undoStack } = state;
+            const now = new Date().toISOString();
 
             if (!skipLog) {
                 const key = `${day}-${time}`;
@@ -134,9 +137,17 @@ export const createMiscSlice: StateCreator<
                 location: room,
                 lecturer: lecturer,
                 note: JSON.stringify({ color }),
-                updatedAt: new Date().toISOString()
+                updatedAt: now,
+                lastModifiedAt: now,
+                modifiedBy: 'app'
             });
+            
+            // Update local state
             get().fetchSchedule();
+            
+            // Trigger auto-sync ke backend (dengan debounce)
+            get().autoSyncScheduleToBackend();
+            
         } catch (error) {
             console.error('[MiscSlice] Set schedule item error:', error);
         }
@@ -188,6 +199,33 @@ export const createMiscSlice: StateCreator<
             const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
             
+            // Get sync status untuk timestamp comparison
+            const syncStatusRes = await fetch(`${serverUrl}/api/v1/schedules/sync-status`, {
+                headers: { 'X-API-Key': apiKey },
+            });
+            
+            let serverLastModified = null;
+            if (syncStatusRes.ok) {
+                const syncStatus = await syncStatusRes.json();
+                serverLastModified = syncStatus.lastModifiedAt;
+            }
+            
+            // Get local last modified
+            const localSchedules = await window.electronAPI.schedule.getAll();
+            const localLastModified = localSchedules.length > 0 
+                ? localSchedules.reduce((latest: string, s: any) => {
+                    const itemDate = s.updatedAt || s.createdAt || '1970-01-01';
+                    return itemDate > latest ? itemDate : latest;
+                }, '1970-01-01')
+                : null;
+            
+            // Skip jika server tidak ada update baru
+            if (serverLastModified && localLastModified && 
+                new Date(serverLastModified) <= new Date(localLastModified)) {
+                console.log('[MiscSlice] Server schedule is not newer, skipping fetch');
+                return;
+            }
+            
             const response = await fetch(`${serverUrl}/api/v1/schedules`, {
                 headers: {
                     'X-API-Key': apiKey,
@@ -203,62 +241,137 @@ export const createMiscSlice: StateCreator<
                 return;
             }
             
-            // Get local schedules untuk duplicate detection
-            const localSchedules = await window.electronAPI.schedule.getAll();
+            // Get local schedules untuk duplicate detection dan conflict resolution
             const existingIds = new Set(localSchedules.map((s: any) => s.id));
             const existingKeys = new Set(localSchedules.map((s: any) => 
                 `${s.day}_${s.startTime}_${(s.course || '').toLowerCase().trim()}`
             ));
             
-            // Convert array to schedule map
-            const scheduleMap: Record<string, any> = {};
+            // Convert array to schedule map dengan timestamp-based conflict resolution
+            const scheduleMap: Record<string, any> = { ...localScheduleState };
+            let updatedCount = 0;
+            
             data.data?.forEach((item: any) => {
                 const key = `${item.day}-${item.startTime}`;
                 const itemKey = `${item.day}_${item.startTime}_${(item.courseName || item.course || '').toLowerCase().trim()}`;
                 
-                // Check for duplicates
-                const existsById = existingIds.has(item.id);
-                const existsByContent = existingKeys.has(itemKey);
+                // Check for existing local schedule
+                const existingLocal = localSchedules.find((s: any) => 
+                    s.id === item.id || 
+                    (`${s.day}-${s.startTime}` === key && (s.course || '').toLowerCase() === (item.courseName || item.course || '').toLowerCase())
+                );
                 
-                scheduleMap[key] = {
-                    ...item,
-                    course: item.courseName || item.course,
-                    location: item.room || item.location,
-                };
+                // Timestamp-based conflict resolution
+                const serverModified = new Date(item.lastModifiedAt || item.updatedAt || 0);
+                const localModified = existingLocal ? new Date(existingLocal.updatedAt || existingLocal.createdAt || 0) : new Date(0);
                 
-                // Save to local SQLite dengan duplicate check
-                const scheduleData = {
-                    id: item.id,
-                    day: item.day,
-                    startTime: item.startTime,
-                    endTime: item.endTime,
-                    course: item.courseName || item.course,
-                    location: item.room || item.location,
-                    lecturer: item.lecturer,
-                    note: JSON.stringify({ color: 'bg-primary' }),
-                    updatedAt: new Date().toISOString(),
-                };
-                
-                if (existsById) {
-                    console.log(`[MiscSlice] Schedule exists by ID: ${item.id}`);
-                } else if (!existsByContent) {
-                    window.electronAPI.schedule.upsert(scheduleData);
-                    existingIds.add(item.id);
-                    existingKeys.add(itemKey);
-                    console.log(`[MiscSlice] Created new schedule: ${item.courseName || item.course}`);
+                // Only update if server data is newer or local doesn't exist
+                if (!existingLocal || serverModified >= localModified) {
+                    scheduleMap[key] = {
+                        ...item,
+                        course: item.courseName || item.course,
+                        location: item.room || item.location,
+                    };
+                    
+                    // Save to local SQLite
+                    const scheduleData = {
+                        id: item.id,
+                        day: item.day,
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        course: item.courseName || item.course,
+                        location: item.room || item.location,
+                        lecturer: item.lecturer,
+                        note: JSON.stringify({ color: 'bg-primary' }),
+                        updatedAt: new Date().toISOString(),
+                    };
+                    
+                    if (!existingIds.has(item.id)) {
+                        window.electronAPI.schedule.upsert(scheduleData);
+                        existingIds.add(item.id);
+                        existingKeys.add(itemKey);
+                    } else {
+                        // Update existing
+                        window.electronAPI.schedule.upsert(scheduleData);
+                        updatedCount++;
+                    }
                 } else {
-                    console.log(`[MiscSlice] Skipping duplicate schedule: ${item.courseName || item.course}`);
+                    console.log(`[MiscSlice] Keeping local schedule (newer): ${item.courseName || item.course}`);
                 }
             });
             
             set({ schedule: scheduleMap });
-            console.log('[MiscSlice] Schedule fetched from backend');
+            console.log(`[MiscSlice] Schedule synced from backend: ${updatedCount} updated`);
         } catch (error) {
             console.error('[MiscSlice] Fetch from backend error:', error);
             // Fallback to local
             get().fetchSchedule();
         }
     },
+
+    // Setup WebSocket listener untuk real-time schedule updates
+    setupScheduleRealtimeSync: () => {
+        const handleScheduleEvent = (event: any) => {
+            const { eventType, payload } = event;
+            console.log(`[MiscSlice] Received schedule event: ${eventType}`, payload);
+            
+            switch (eventType) {
+                case 'schedule.created':
+                case 'schedule.updated':
+                    // Auto-refresh schedule dari backend
+                    get().fetchScheduleFromBackend();
+                    break;
+                case 'schedule.deleted':
+                    // Remove dari local state
+                    if (payload?.id) {
+                        set((state) => {
+                            const newSchedule = { ...state.schedule };
+                            // Find and delete key yang match
+                            Object.keys(newSchedule).forEach(key => {
+                                if (newSchedule[key]?.id === payload.id) {
+                                    delete newSchedule[key];
+                                }
+                            });
+                            return { schedule: newSchedule };
+                        });
+                        // Also delete dari local SQLite
+                        window.electronAPI.schedule.delete?.(payload.id).catch(() => {
+                            // Schedule might not exist locally
+                        });
+                    }
+                    break;
+                case 'schedule.synced':
+                    // Bulk sync completed, refresh
+                    get().fetchScheduleFromBackend();
+                    break;
+            }
+        };
+
+        // Register event listener jika electronAPI tersedia
+        if (window.electronAPI?.onEvent) {
+            window.electronAPI.onEvent('schedule.created', handleScheduleEvent);
+            window.electronAPI.onEvent('schedule.updated', handleScheduleEvent);
+            window.electronAPI.onEvent('schedule.deleted', handleScheduleEvent);
+            window.electronAPI.onEvent('schedule.synced', handleScheduleEvent);
+            console.log('[MiscSlice] Real-time schedule sync enabled');
+        }
+    },
+
+    // Auto-sync schedule ke backend (dengan debounce)
+    autoSyncScheduleToBackend: (() => {
+        let syncTimeout: NodeJS.Timeout | null = null;
+        return () => {
+            if (syncTimeout) clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                const state = get() as any;
+                if (state.syncScheduleToBackend) {
+                    state.syncScheduleToBackend().catch((err: any) => {
+                        console.error('[MiscSlice] Auto-sync failed:', err);
+                    });
+                }
+            }, 2000); // Debounce 2 detik
+        };
+    })(),
 
     fetchMaterials: async (courseId) => {
         try {

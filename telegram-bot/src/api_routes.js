@@ -877,6 +877,9 @@ router.post('/schedules', [
         // Resolve singkatan matkul (komber → Komputasi Bergerak)
         courseName = resolveCourseName(courseName);
 
+        const now = new Date();
+        const modifiedBy = req.body.modifiedBy || 'app';
+        
         const newSchedule = {
             id: crypto.randomUUID(),
             userId: defaultUserId,
@@ -889,11 +892,23 @@ router.post('/schedules', [
             lecturer: lecturer || null,
             semester: semester || userSemester,
             isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date()
+            createdAt: now,
+            updatedAt: now,
+            lastModifiedAt: now,
+            modifiedBy: modifiedBy
         };
 
         await db.insert(schedules).values(newSchedule);
+
+        // Broadcast ke semua connected clients untuk real-time sync
+        await broadcastEvent(defaultUserId, {
+            eventId: crypto.randomUUID(),
+            eventType: 'schedule.created',
+            payload: { 
+                schedule: { ...newSchedule, dayName: ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'][dayNum] },
+                timestamp: now.toISOString()
+            }
+        });
 
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
@@ -922,7 +937,11 @@ router.patch('/schedules/:id', [
     try {
         const { id } = req.params;
         const updates = req.body;
-        updates.updatedAt = new Date();
+        const now = new Date();
+        
+        updates.updatedAt = now;
+        updates.lastModifiedAt = now;
+        updates.modifiedBy = updates.modifiedBy || 'app';
 
         // Convert day name to number if provided
         if (updates.dayOfWeek) {
@@ -944,10 +963,15 @@ router.patch('/schedules/:id', [
         const usersList = await db.select().from(users).limit(1);
         const defaultUserId = usersList[0].telegramUserId;
 
+        // Broadcast dengan timestamp untuk real-time sync
+        const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'schedule.updated',
-            payload: updated[0]
+            payload: { 
+                schedule: { ...updated[0], dayName: dayNames[updated[0].dayOfWeek] },
+                timestamp: now.toISOString()
+            }
         });
 
         res.json({ success: true, message: 'Jadwal berhasil diupdate', data: updated[0] });
@@ -964,16 +988,26 @@ router.delete('/schedules/:id', [
 ], async (req, res) => {
     try {
         const { id } = req.params;
+        const now = new Date();
+        
+        // Get schedule info before delete for broadcast
+        const scheduleToDelete = await db.select().from(schedules).where(eq(schedules.id, id)).limit(1);
+        const courseName = scheduleToDelete[0]?.courseName || 'Unknown';
         
         await db.delete(schedules).where(eq(schedules.id, id));
         
         const usersList = await db.select().from(users).limit(1);
         const defaultUserId = usersList[0].telegramUserId;
 
+        // Broadcast dengan timestamp untuk real-time sync
         await broadcastEvent(defaultUserId, {
             eventId: crypto.randomUUID(),
             eventType: 'schedule.deleted',
-            payload: { id, courseName: 'deleted' }
+            payload: { 
+                id, 
+                courseName,
+                timestamp: now.toISOString()
+            }
         });
 
         res.json({ success: true, message: 'Matkul berhasil dihapus' });
@@ -983,10 +1017,10 @@ router.delete('/schedules/:id', [
     }
 });
 
-// POST /api/v1/schedules/sync - Bulk sync schedules from desktop app
+// POST /api/v1/schedules/sync - Bulk sync schedules from desktop app with timestamp-based conflict resolution
 router.post('/schedules/sync', async (req, res) => {
     try {
-        const { schedules: schedulesData } = req.body;
+        const { schedules: schedulesData, clientTimestamp, modifiedBy = 'app' } = req.body;
         const usersList = await db.select().from(users).limit(1);
         
         if (usersList.length === 0) {
@@ -994,37 +1028,121 @@ router.post('/schedules/sync', async (req, res) => {
         }
         
         const defaultUserId = usersList[0].telegramUserId;
+        const now = new Date();
+        const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
         
-        // Upsert each schedule
+        let created = 0, updated = 0, skipped = 0;
+        const changedSchedules = [];
+        
+        // Upsert each schedule dengan timestamp comparison
         for (const item of schedulesData) {
-            await db.insert(schedules).values({
+            const dayNum = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].indexOf(item.day) + 1;
+            if (dayNum === 0) continue; // Skip invalid day
+            
+            // Check if schedule exists
+            const existing = await db.select()
+                .from(schedules)
+                .where(eq(schedules.id, item.id))
+                .limit(1);
+            
+            const scheduleData = {
                 id: item.id || crypto.randomUUID(),
                 userId: defaultUserId,
                 courseName: item.course,
                 courseCode: item.course?.substring(0, 3).toUpperCase(),
-                dayOfWeek: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].indexOf(item.day) + 1,
+                dayOfWeek: dayNum,
                 startTime: item.startTime,
                 endTime: item.endTime || '',
-                room: item.location,
-                lecturer: item.lecturer,
+                room: item.location || '',
+                lecturer: item.lecturer || '',
                 isActive: item.isActive ?? true,
                 semester: item.semester || 1,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            }).onConflictDoUpdate({
-                target: schedules.id,
-                set: {
-                    courseName: item.course,
-                    room: item.location,
-                    lecturer: item.lecturer,
-                    updatedAt: new Date(),
+                createdAt: now,
+                updatedAt: now,
+                lastModifiedAt: now,
+                modifiedBy: modifiedBy
+            };
+            
+            if (existing.length === 0) {
+                // New schedule - create
+                await db.insert(schedules).values(scheduleData);
+                created++;
+                changedSchedules.push({ ...scheduleData, dayName: dayNames[dayNum], action: 'created' });
+            } else {
+                // Existing schedule - check timestamp for conflict resolution
+                const serverLastModified = new Date(existing[0].lastModifiedAt || existing[0].updatedAt);
+                const clientLastModified = new Date(item.lastModifiedAt || clientTimestamp || now);
+                
+                // Only update if client data is newer (or same time but different content)
+                if (clientLastModified >= serverLastModified) {
+                    await db.update(schedules)
+                        .set(scheduleData)
+                        .where(eq(schedules.id, item.id));
+                    updated++;
+                    changedSchedules.push({ ...scheduleData, dayName: dayNames[dayNum], action: 'updated' });
+                } else {
+                    // Server has newer data, skip this item
+                    skipped++;
+                }
+            }
+        }
+        
+        // Broadcast changes ke semua connected clients
+        if (changedSchedules.length > 0) {
+            await broadcastEvent(defaultUserId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'schedule.synced',
+                payload: {
+                    schedules: changedSchedules,
+                    timestamp: now.toISOString(),
+                    summary: { created, updated, skipped }
                 }
             });
         }
         
-        res.json({ success: true, count: schedulesData.length });
+        res.json({ 
+            success: true, 
+            count: schedulesData.length,
+            summary: { created, updated, skipped },
+            serverTimestamp: now.toISOString()
+        });
     } catch (error) {
         console.error('[API] Sync Schedules Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/v1/schedules/sync-status - Get last modified timestamp for sync detection
+router.get('/schedules/sync-status', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) {
+            return res.status(400).json({ error: 'No users found' });
+        }
+        
+        const defaultUserId = usersList[0].telegramUserId;
+        
+        // Get last modified schedule
+        const lastModified = await db.select()
+            .from(schedules)
+            .where(eq(schedules.userId, defaultUserId))
+            .orderBy(desc(schedules.lastModifiedAt))
+            .limit(1);
+        
+        // Get total count
+        const count = await db.select({ count: sql`COUNT(*)` })
+            .from(schedules)
+            .where(eq(schedules.userId, defaultUserId));
+        
+        res.json({
+            success: true,
+            lastModifiedAt: lastModified[0]?.lastModifiedAt || null,
+            lastModifiedBy: lastModified[0]?.modifiedBy || null,
+            totalCount: count[0]?.count || 0,
+            serverTimestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('[API] Sync Status Error:', error);
         res.status(500).json({ error: error.message });
     }
 });

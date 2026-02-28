@@ -160,10 +160,13 @@ export const schedules = pgTable('schedules', {
     semester: integer('semester').default(4),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
+    lastModifiedAt: timestamp('last_modified_at').defaultNow(), // For sync conflict resolution
+    modifiedBy: text('modified_by').default('app'), // 'app', 'openclaw', 'user', etc.
 }, (table) => {
     return {
         schedUserIdx: index('idx_schedules_user').on(table.userId),
         schedDayIdx: index('idx_schedules_day').on(table.dayOfWeek),
+        schedModifiedIdx: index('idx_schedules_modified').on(table.lastModifiedAt),
     };
 });
 

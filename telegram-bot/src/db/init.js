@@ -102,11 +102,22 @@ export async function initDatabase() {
                 is_active BOOLEAN DEFAULT TRUE,
                 semester INTEGER DEFAULT 4,
                 created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
+                updated_at TIMESTAMP DEFAULT NOW(),
+                last_modified_at TIMESTAMP DEFAULT NOW(),
+                modified_by TEXT DEFAULT 'app'
             );
         `);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_schedules_user ON schedules(user_id);`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_schedules_day ON schedules(day_of_week);`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_schedules_modified ON schedules(last_modified_at);`);
+        
+        // Migration: Add last_modified_at and modified_by if not exist (for existing tables)
+        try {
+            await db.execute(sql`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS last_modified_at TIMESTAMP DEFAULT NOW();`);
+            await db.execute(sql`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS modified_by TEXT DEFAULT 'app';`);
+        } catch (e) {
+            // Columns might already exist, ignore error
+        }
 
         // Create assignments table (for reminder-bot)
         await db.execute(sql`
