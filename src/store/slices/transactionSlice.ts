@@ -221,7 +221,7 @@ export const createTransactionSlice: StateCreator<
 
     // Auto-sync transactions ke backend (dengan debounce)
     autoSyncTransactionsToBackend: (() => {
-        let syncTimeout: NodeJS.Timeout | null = null;
+        let syncTimeout: ReturnType<typeof setTimeout> | null = null;
         return function(this: any) {
             if (syncTimeout) clearTimeout(syncTimeout);
             syncTimeout = setTimeout(() => {

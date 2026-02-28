@@ -338,7 +338,7 @@ export const createProjectSlice: StateCreator<
 
     // Auto-sync projects ke backend (dengan debounce)
     autoSyncProjectsToBackend: (() => {
-        let syncTimeout: NodeJS.Timeout | null = null;
+        let syncTimeout: ReturnType<typeof setTimeout> | null = null;
         return function(this: any) {
             if (syncTimeout) clearTimeout(syncTimeout);
             syncTimeout = setTimeout(() => {
@@ -356,7 +356,7 @@ export const createProjectSlice: StateCreator<
 
     // Auto-sync project sessions ke backend (dengan debounce)
     autoSyncProjectSessionsToBackend: (() => {
-        let syncTimeout: NodeJS.Timeout | null = null;
+        let syncTimeout: ReturnType<typeof setTimeout> | null = null;
         return function(this: any) {
             if (syncTimeout) clearTimeout(syncTimeout);
             syncTimeout = setTimeout(() => {

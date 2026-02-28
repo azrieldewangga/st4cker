@@ -356,7 +356,7 @@ export const createMiscSlice: StateCreator<
 
     // Auto-sync schedule ke backend (dengan debounce)
     autoSyncScheduleToBackend: (() => {
-        let syncTimeout: NodeJS.Timeout | null = null;
+        let syncTimeout: ReturnType<typeof setTimeout> | null = null;
         return () => {
             if (syncTimeout) clearTimeout(syncTimeout);
             syncTimeout = setTimeout(() => {

@@ -18,7 +18,7 @@ const SYNC_CHANNEL = 'st4cker-sync-channel';
 
 export function useSync() {
     const store = useStore();
-    const pollingRef = useRef<NodeJS.Timeout | null>(null);
+    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const channelRef = useRef<BroadcastChannel | null>(null);
     const isOnlineRef = useRef<boolean>(navigator.onLine);
 

@@ -24,6 +24,7 @@ export interface IElectronAPI {
     schedule: {
         getAll: () => Promise<any[]>;
         upsert: (data: any) => Promise<any>;
+        delete?: (id: string) => Promise<void>;
     };
     performance: {
         getSemesters: () => Promise<any[]>;
@@ -127,9 +128,13 @@ export interface IElectronAPI {
     offRefreshData: () => void;
     openWindow: (route: string, width?: number, height?: number) => void;
 
+    // Generic event listeners (for real-time sync)
     on: (channel: string, callback: (...args: any[]) => void) => void;
     off: (channel: string, callback: (...args: any[]) => void) => void;
     removeAllListeners: (channel: string) => void;
+    
+    // Event-specific listener (alias for on)
+    onEvent: (event: string, callback: (...args: any[]) => void) => void;
 }
 
 declare global {

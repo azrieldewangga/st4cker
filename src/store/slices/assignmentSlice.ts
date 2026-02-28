@@ -294,7 +294,7 @@ export const createAssignmentSlice: StateCreator<
 
     // Auto-sync assignments ke backend (dengan debounce)
     autoSyncAssignmentsToBackend: (() => {
-        let syncTimeout: NodeJS.Timeout | null = null;
+        let syncTimeout: ReturnType<typeof setTimeout> | null = null;
         return function(this: any) {
             if (syncTimeout) clearTimeout(syncTimeout);
             syncTimeout = setTimeout(() => {
