@@ -78,13 +78,28 @@ export const useStore = create<AppState>()((...a) => ({
                 console.error('[initApp] Fetch schedule from backend error:', err)
             );
         }
-        // Setup real-time schedule sync listener
+        // Setup real-time sync listeners
         if (state2.setupScheduleRealtimeSync) {
             state2.setupScheduleRealtimeSync();
         }
+        if (state2.setupAssignmentsRealtimeSync) {
+            state2.setupAssignmentsRealtimeSync();
+        }
+        if (state2.setupTransactionsRealtimeSync) {
+            state2.setupTransactionsRealtimeSync();
+        }
+        if (state2.setupProjectsRealtimeSync) {
+            state2.setupProjectsRealtimeSync();
+        }
+        
         if (state2.fetchTransactionsFromBackend) {
             state2.fetchTransactionsFromBackend().catch(err => 
                 console.error('[initApp] Fetch transactions from backend error:', err)
+            );
+        }
+        if (state2.fetchProjectsFromBackend) {
+            state2.fetchProjectsFromBackend().catch(err => 
+                console.error('[initApp] Fetch projects from backend error:', err)
             );
         }
 

@@ -270,6 +270,7 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
         }).where(eq(users.telegramUserId, telegramUserId));
 
         // 4. Sync Transactions (Upsert)
+        let txCount = 0;
         if (data.transactions && Array.isArray(data.transactions)) {
             const txOps = data.transactions.map(tx => {
                 // Map Desktop fields to DB fields
@@ -294,10 +295,12 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
                 });
             });
             if (txOps.length > 0) await Promise.all(txOps);
+            txCount = txOps.length;
             console.log(`[API] Synced ${txOps.length} transactions`);
         }
 
         // 5. Sync Projects (Upsert)
+        let projCount = 0;
         if (data.projects && Array.isArray(data.projects)) {
             const projOps = data.projects.map(p => {
                 return db.insert(projects).values({
@@ -322,6 +325,7 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
                 });
             });
             if (projOps.length > 0) await Promise.all(projOps);
+            projCount = projOps.length;
             console.log(`[API] Synced ${projOps.length} projects`);
         }
 
@@ -330,6 +334,7 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
         console.log(`[API] Sync: Preserving server-side tasks (deletion disabled)`);
 
         // Batched upsert using transaction
+        let assignCount = 0;
         if (incomingAssignments.length > 0) {
             await db.transaction(async (tx) => {
                 for (const t of incomingAssignments) {
@@ -358,9 +363,31 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
                     });
                 }
             });
+            assignCount = incomingAssignments.length;
             console.log(`[API] Synced ${incomingAssignments.length} assignments (Batched)`);
         } else {
             console.log(`[API] Synced 0 assignments`);
+        }
+
+        // 7. Broadcast sync event via WebSocket untuk real-time updates
+        try {
+            if (txCount > 0 || projCount > 0 || assignCount > 0) {
+                await broadcastEvent(telegramUserId, {
+                    eventType: 'data.synced',
+                    eventId: `sync_${Date.now()}`,
+                    payload: {
+                        source: 'desktop',
+                        transactions: txCount,
+                        projects: projCount,
+                        assignments: assignCount,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+                console.log(`[API] Broadcasted sync event to user ${telegramUserId}`);
+            }
+        } catch (broadcastErr) {
+            console.error('[API] Failed to broadcast sync event:', broadcastErr);
+            // Don't fail the sync if broadcast fails
         }
 
         res.json({

@@ -23,13 +23,17 @@ export interface ProjectSlice {
 
     // Master DB Sync
     syncProjectsToBackend: () => Promise<void>;
+    autoSyncProjectsToBackend: () => void;
     fetchProjectsFromBackend: () => Promise<void>;
     syncProjectSessionsToBackend: () => Promise<void>;
+    autoSyncProjectSessionsToBackend: () => void;
     fetchProjectSessionsFromBackend: () => Promise<void>;
+    setupProjectsRealtimeSync: () => void;
+    projectsLastSyncedAt: string | null;
 }
 
 export const createProjectSlice: StateCreator<
-    ProjectSlice & { undoStack: any[]; redoStack: any[] },
+    ProjectSlice & { undoStack: any[]; redoStack: any[]; userProfile: any },
     [],
     [],
     ProjectSlice
@@ -37,6 +41,7 @@ export const createProjectSlice: StateCreator<
     projects: [],
     projectSessions: {},
     projectAttachments: {},
+    projectsLastSyncedAt: null,
 
     fetchProjects: async () => {
         try {
@@ -64,12 +69,8 @@ export const createProjectSlice: StateCreator<
                 projects: [...state.projects, created]
             }));
             
-            // Auto-sync to backend
-            try {
-                await get().syncProjectsToBackend();
-            } catch (syncErr) {
-                console.error('[ProjectSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncProjectsToBackend();
             
             return created;
         } catch (error) {
@@ -86,12 +87,8 @@ export const createProjectSlice: StateCreator<
             }));
             get().fetchProjects();
             
-            // Auto-sync to backend
-            try {
-                await get().syncProjectsToBackend();
-            } catch (syncErr) {
-                console.error('[ProjectSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncProjectsToBackend();
         } catch (error) {
             console.error('[ProjectSlice] Update error:', error);
             throw error;
@@ -116,12 +113,8 @@ export const createProjectSlice: StateCreator<
             await window.electronAPI.projects.delete(id);
             get().fetchProjects();
             
-            // Auto-sync to backend
-            try {
-                await get().syncProjectsToBackend();
-            } catch (syncErr) {
-                console.error('[ProjectSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncProjectsToBackend();
         } catch (error) {
             console.error('[ProjectSlice] Delete error:', error);
             throw error;
@@ -145,12 +138,8 @@ export const createProjectSlice: StateCreator<
             get().fetchProjectSessions(data.projectId);
             get().fetchProjects();
             
-            // Auto-sync to backend
-            try {
-                await get().syncProjectSessionsToBackend();
-            } catch (syncErr) {
-                console.error('[ProjectSlice] Auto-sync sessions failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncProjectSessionsToBackend();
         } catch (error) {
             console.error('[ProjectSlice] Add session error:', error);
             throw error;
@@ -164,12 +153,8 @@ export const createProjectSlice: StateCreator<
                 get().fetchProjectSessions((data as any).projectId);
             }
             
-            // Auto-sync to backend
-            try {
-                await get().syncProjectSessionsToBackend();
-            } catch (syncErr) {
-                console.error('[ProjectSlice] Auto-sync sessions failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncProjectSessionsToBackend();
         } catch (error) {
             console.error('[ProjectSlice] Update session error:', error);
             throw error;
@@ -182,12 +167,8 @@ export const createProjectSlice: StateCreator<
             get().fetchProjectSessions(projectId);
             get().fetchProjects();
             
-            // Auto-sync to backend
-            try {
-                await get().syncProjectSessionsToBackend();
-            } catch (syncErr) {
-                console.error('[ProjectSlice] Auto-sync sessions failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncProjectSessionsToBackend();
         } catch (error) {
             console.error('[ProjectSlice] Delete session error:', error);
             throw error;
@@ -355,5 +336,77 @@ export const createProjectSlice: StateCreator<
         // Project sessions are fetched per-project via /api/v1/projects/:id/logs
         // For now, we'll rely on project fetch and local session storage
         console.log('[ProjectSlice] Project sessions are managed locally per project');
+    },
+
+    // Auto-sync projects ke backend (dengan debounce)
+    autoSyncProjectsToBackend: (() => {
+        let syncTimeout: NodeJS.Timeout | null = null;
+        return function(this: any) {
+            if (syncTimeout) clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                const state = get() as any;
+                if (state.syncProjectsToBackend) {
+                    state.syncProjectsToBackend().then(() => {
+                        set({ projectsLastSyncedAt: new Date().toISOString() } as any);
+                    }).catch((err: any) => {
+                        console.error('[ProjectSlice] Auto-sync failed:', err);
+                    });
+                }
+            }, 2000); // Debounce 2 detik
+        };
+    })(),
+
+    // Auto-sync project sessions ke backend (dengan debounce)
+    autoSyncProjectSessionsToBackend: (() => {
+        let syncTimeout: NodeJS.Timeout | null = null;
+        return function(this: any) {
+            if (syncTimeout) clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                const state = get() as any;
+                if (state.syncProjectSessionsToBackend) {
+                    state.syncProjectSessionsToBackend().catch((err: any) => {
+                        console.error('[ProjectSlice] Auto-sync sessions failed:', err);
+                    });
+                }
+            }, 2000); // Debounce 2 detik
+        };
+    })(),
+
+    // Setup real-time sync listener untuk projects
+    setupProjectsRealtimeSync: () => {
+        if (typeof window === 'undefined' || !window.electronAPI?.onEvent) return;
+
+        const handleProjectEvent = (event: any) => {
+            console.log('[ProjectSlice] Received real-time event:', event.eventType);
+            
+            // Handle berbagai event types
+            const relevantEventTypes = [
+                'project.created',
+                'project.updated', 
+                'project.deleted',
+                'data.synced'
+            ];
+            
+            if (relevantEventTypes.includes(event.eventType)) {
+                // Fetch latest data dari backend
+                const state = get() as any;
+                if (state.fetchProjectsFromBackend) {
+                    // Tambahkan delay kecil untuk batch processing
+                    setTimeout(() => {
+                        state.fetchProjectsFromBackend();
+                    }, 500);
+                }
+            }
+        };
+
+        // Listen untuk telegram-event (generic event dari backend)
+        window.electronAPI.onEvent('telegram-event', handleProjectEvent);
+        
+        // Listen untuk project-specific events
+        window.electronAPI.onEvent('project.created', handleProjectEvent);
+        window.electronAPI.onEvent('project.updated', handleProjectEvent);
+        window.electronAPI.onEvent('project.deleted', handleProjectEvent);
+        
+        console.log('[ProjectSlice] Real-time sync enabled');
     },
 });

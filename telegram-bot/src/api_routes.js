@@ -42,12 +42,12 @@ router.get('/schedules/public', async (req, res) => {
         if (usersList.length === 0) {
             return res.json({ success: true, data: [] });
         }
-        const defaultUserId = usersList[0].telegramUserId;
+        const userId = usersList[0].telegramUserId;
         
         const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
         const data = await db.select()
             .from(schedules)
-            .where(eq(schedules.userId, defaultUserId))
+            .where(eq(schedules.userId, userId))
             .orderBy(schedules.dayOfWeek, schedules.startTime);
         
         const formatted = data.map(s => ({
@@ -62,22 +62,60 @@ router.get('/schedules/public', async (req, res) => {
     }
 });
 
-// Middleware: API Key Auth
-const authenticateApiKey = (req, res, next) => {
+// Middleware: Session-based Auth (multi-user mode)
+// Priority: 1) Session Token 2) API Key (fallback to default user)
+import { sessions } from './db/schema.js';
+const authenticateSessionOrApiKey = async (req, res, next) => {
     const VALID_API_KEY = process.env.AGENT_API_KEY;
+    
+    // Try session token first (multi-user mode)
+    const sessionToken = req.header('x-session-token') || req.query.sessionToken;
+    
+    if (sessionToken) {
+        try {
+            const { eq, and, gt } = await import('drizzle-orm');
+            const session = await db.select().from(sessions)
+                .where(and(eq(sessions.sessionToken, sessionToken), gt(sessions.expiresAt, new Date())))
+                .limit(1);
+            
+            if (session.length > 0) {
+                req.userId = session[0].telegramUserId;
+                req.authMethod = 'session';
+                return next();
+            }
+        } catch (err) {
+            console.error('[AUTH] Session validation error:', err);
+        }
+    }
+    
+    // Fallback to API key (single-user mode)
     if (!VALID_API_KEY) {
-        console.error('[AUTH] FATAL: AGENT_API_KEY env var is not set. Rejecting all API requests.');
-        return res.status(503).json({ error: 'Server misconfigured: API key not set' });
+        console.error('[AUTH] FATAL: AGENT_API_KEY env var is not set.');
+        return res.status(503).json({ error: 'Server misconfigured' });
     }
 
     const apiKey = req.header('x-api-key');
     if (!apiKey || apiKey !== VALID_API_KEY) {
-        return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
+        return res.status(401).json({ error: 'Unauthorized: Invalid credentials' });
     }
-    next();
+    
+    // API key valid - use default user (first user in DB)
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) {
+            return res.status(404).json({ error: 'No users found' });
+        }
+        req.userId = usersList[0].telegramUserId;
+        req.authMethod = 'apikey';
+        next();
+    } catch (err) {
+        console.error('[AUTH] Error fetching default user:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
-router.use(authenticateApiKey);
+// Apply session-based auth untuk semua routes (kecuali public schedules)
+router.use(authenticateSessionOrApiKey);
 
 // Helper: Validation Error Handler
 const handleValidationErrors = (req, res, next) => {
@@ -183,9 +221,9 @@ router.get('/tasks', [
         // ideally, the API Key should map to a user, or we pass telegramUserId
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        const userId = usersList[0].telegramUserId;
 
-        conditions.push(eq(assignments.userId, defaultUserId));
+        conditions.push(eq(assignments.userId, userId));
 
         if (status) conditions.push(eq(assignments.status, status));
         if (course) conditions.push(like(assignments.course, `% ${course}% `));
@@ -207,7 +245,9 @@ router.get('/tasks/:id', [
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const task = await db.select().from(assignments).where(eq(assignments.id, req.params.id)).limit(1);
+        const task = await db.select().from(assignments)
+            .where(and(eq(assignments.id, req.params.id), eq(assignments.userId, req.userId)))
+            .limit(1);
         if (task.length === 0) return res.status(404).json({ error: 'Task not found' });
         res.json({ success: true, data: task[0] });
     } catch (error) {
@@ -230,7 +270,7 @@ router.post('/tasks', [
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        const userId = usersList[0].telegramUserId;
         const userSemester = usersList[0].semester || 4;
 
         // Get Entity Cache for normalization
@@ -266,7 +306,7 @@ router.post('/tasks', [
 
         const newTask = {
             id: clientId || crypto.randomUUID(),
-            userId: defaultUserId,
+            userId: userId || req.userId,
             title,
             course: normalizedCourse,
             deadline: toWIBEndOfDay(deadline),
@@ -281,7 +321,7 @@ router.post('/tasks', [
 
         // Broadcast Event (skip if from Desktop to prevent echo loop)
         if (req.header('x-source') !== 'desktop') {
-            await broadcastEvent(defaultUserId, {
+            await broadcastEvent(userId || req.userId, {
                 eventId: crypto.randomUUID(),
                 eventType: 'task.created',
                 payload: {
@@ -314,17 +354,26 @@ router.patch('/tasks/:id', [
         updates.updatedAt = new Date();
         if (updates.deadline) updates.deadline = toWIBEndOfDay(updates.deadline);
 
+        // Check if task exists and belongs to user
+        const existingTask = await db.select().from(assignments)
+            .where(and(eq(assignments.id, id), eq(assignments.userId, req.userId)))
+            .limit(1);
+        
+        if (existingTask.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
         await db.update(assignments)
             .set(updates)
-            .where(eq(assignments.id, id));
+            .where(and(eq(assignments.id, id), eq(assignments.userId, req.userId)));
 
         // Broadcast Event
         // We need to fetch the updated task or construct the payload. Ideally fetch.
         // For efficiency, just send ID and updates
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId, {
             eventId: crypto.randomUUID(),
             eventType: 'task.updated',
             payload: {
@@ -351,11 +400,21 @@ router.delete('/tasks/:id', [
 ], async (req, res) => {
     try {
         const { id } = req.params;
-        await db.delete(assignments).where(eq(assignments.id, id));
+        
+        // Check if task exists and belongs to user
+        const existingTask = await db.select().from(assignments)
+            .where(and(eq(assignments.id, id), eq(assignments.userId, req.userId)))
+            .limit(1);
+        
+        if (existingTask.length === 0) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        
+        await db.delete(assignments).where(and(eq(assignments.id, id), eq(assignments.userId, req.userId)));
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId, {
             eventId: crypto.randomUUID(),
             eventType: 'task.deleted',
             payload: { id }
@@ -383,9 +442,9 @@ router.get('/projects', [
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        const userId = usersList[0].telegramUserId;
 
-        conditions.push(eq(projects.userId, defaultUserId));
+        conditions.push(eq(projects.userId, userId));
         if (status) conditions.push(eq(projects.status, status));
 
         const data = await db.select().from(projects).where(and(...conditions));
@@ -402,7 +461,9 @@ router.get('/projects/:id', [
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const project = await db.select().from(projects).where(eq(projects.id, req.params.id)).limit(1);
+        const project = await db.select().from(projects)
+            .where(and(eq(projects.id, req.params.id), eq(projects.userId, req.userId)))
+            .limit(1);
         if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
         res.json({ success: true, data: project[0] });
     } catch (error) {
@@ -430,7 +491,7 @@ router.post('/projects', [
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
         // Normalize Course Name if provided
         let normalizedCourseName = courseName || null;
@@ -447,7 +508,7 @@ router.post('/projects', [
 
         const newProject = {
             id: clientId || crypto.randomUUID(),
-            userId: defaultUserId,
+            userId: userId || req.userId,
             title,
             description: description || '',
             status: status || 'active',
@@ -462,7 +523,7 @@ router.post('/projects', [
 
         await db.insert(projects).values(newProject);
         if (req.header('x-source') !== 'desktop') {
-            await broadcastEvent(defaultUserId, {
+            await broadcastEvent(userId || req.userId, {
                 eventId: crypto.randomUUID(),
                 eventType: 'project.created',
                 payload: {
@@ -503,14 +564,23 @@ router.patch('/projects/:id', [
         const updates = req.body;
         updates.updatedAt = new Date();
 
+        // Check if project exists and belongs to user
+        const existingProject = await db.select().from(projects)
+            .where(and(eq(projects.id, id), eq(projects.userId, req.userId)))
+            .limit(1);
+        
+        if (existingProject.length === 0) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
         await db.update(projects)
             .set(updates)
-            .where(eq(projects.id, id));
+            .where(and(eq(projects.id, id), eq(projects.userId, req.userId)));
 
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId, {
             eventId: crypto.randomUUID(),
             eventType: 'project.updated',
             payload: {
@@ -551,9 +621,9 @@ router.post('/projects/:id/logs', [
         // 2. (Opt) Insert into logs table if exists, for now just update project
 
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId, {
             eventId: crypto.randomUUID(),
             eventType: 'progress.logged',
             payload: {
@@ -579,11 +649,21 @@ router.delete('/projects/:id', [
 ], async (req, res) => {
     try {
         const { id } = req.params;
-        await db.delete(projects).where(eq(projects.id, id));
+        
+        // Check if project exists and belongs to user
+        const existingProject = await db.select().from(projects)
+            .where(and(eq(projects.id, id), eq(projects.userId, req.userId)))
+            .limit(1);
+        
+        if (existingProject.length === 0) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+        
+        await db.delete(projects).where(and(eq(projects.id, id), eq(projects.userId, req.userId)));
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId, {
             eventId: crypto.randomUUID(),
             eventType: 'project.deleted',
             payload: { id }
@@ -605,10 +685,10 @@ router.get('/transactions', async (req, res) => {
     try {
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        const userId = usersList[0].telegramUserId;
 
         const data = await db.select().from(transactions)
-            .where(eq(transactions.userId, defaultUserId))
+            .where(eq(transactions.userId, userId))
             .orderBy(desc(transactions.date))
             .limit(50); // Limit to last 50 for safety
 
@@ -625,7 +705,9 @@ router.get('/transactions/:id', [
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const tx = await db.select().from(transactions).where(eq(transactions.id, req.params.id)).limit(1);
+        const tx = await db.select().from(transactions)
+            .where(and(eq(transactions.id, req.params.id), eq(transactions.userId, req.userId)))
+            .limit(1);
         if (tx.length === 0) return res.status(404).json({ error: 'Transaction not found' });
         res.json({ success: true, data: tx[0] });
     } catch (error) {
@@ -647,11 +729,11 @@ router.post('/transactions', [
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
         const newTx = {
             id: clientId || crypto.randomUUID(),
-            userId: defaultUserId,
+            userId: req.userId,
             amount: parseFloat(amount),
             type,
             category,
@@ -664,17 +746,17 @@ router.post('/transactions', [
         await db.insert(transactions).values(newTx);
 
         // Update User Balance
-        const currentUser = await db.select().from(users).where(eq(users.telegramUserId, defaultUserId)).limit(1);
+        const currentUser = await db.select().from(users).where(eq(users.telegramUserId, req.userId)).limit(1);
         let newBalance = parseFloat(currentUser[0].currentBalance);
         if (type === 'income') newBalance += parseFloat(amount);
         else newBalance -= parseFloat(amount);
 
         await db.update(users)
             .set({ currentBalance: newBalance, updatedAt: new Date() })
-            .where(eq(users.telegramUserId, defaultUserId));
+            .where(eq(users.telegramUserId, req.userId));
 
         if (req.header('x-source') !== 'desktop') {
-            await broadcastEvent(defaultUserId, {
+            await broadcastEvent(userId, {
                 eventId: crypto.randomUUID(),
                 eventType: 'transaction.created',
                 payload: {
@@ -718,15 +800,24 @@ router.patch('/transactions/:id', [
         if (note !== undefined) updates.note = note;
         if (title !== undefined) updates.title = title;
 
+        // Check if transaction exists and belongs to user
+        const existingTx = await db.select().from(transactions)
+            .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId)))
+            .limit(1);
+        
+        if (existingTx.length === 0) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+
         await db.update(transactions)
             .set(updates)
-            .where(eq(transactions.id, id));
+            .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId)));
 
         // Broadcast update event
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId, {
             eventId: crypto.randomUUID(),
             eventType: 'transaction.updated',
             payload: {
@@ -753,17 +844,26 @@ router.delete('/transactions/:id', [
     try {
         const { id } = req.params;
 
+        // Check if transaction exists and belongs to user
+        const existingTx = await db.select().from(transactions)
+            .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId)))
+            .limit(1);
+        
+        if (existingTx.length === 0) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+
         // 1. Get Tx logic to revert balance? 
         // For simplicity API v1, just delete record. 
         // Ideally we revert the balance change.
 
-        await db.delete(transactions).where(eq(transactions.id, id));
+        await db.delete(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, req.userId)));
 
         // Broadcast delete event
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId, {
             eventId: crypto.randomUUID(),
             eventType: 'transaction.deleted',
             payload: { id }
@@ -803,9 +903,9 @@ router.get('/schedules', [
         
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        const userId = usersList[0].telegramUserId;
 
-        let conditions = [eq(schedules.userId, defaultUserId)];
+        let conditions = [eq(schedules.userId, userId)];
         
         if (day) {
             const dayNum = parseDay(day);
@@ -840,7 +940,7 @@ router.get('/schedules/:id', [
 ], async (req, res) => {
     try {
         const data = await db.select().from(schedules)
-            .where(eq(schedules.id, req.params.id))
+            .where(and(eq(schedules.id, req.params.id), eq(schedules.userId, req.userId)))
             .limit(1);
         if (data.length === 0) return res.status(404).json({ error: 'Schedule not found' });
         
@@ -868,7 +968,7 @@ router.post('/schedules', [
 
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        const userId = usersList[0].telegramUserId;
         const userSemester = usersList[0].semester || 4;
 
         const dayNum = parseDay(dayOfWeek);
@@ -882,7 +982,7 @@ router.post('/schedules', [
         
         const newSchedule = {
             id: crypto.randomUUID(),
-            userId: defaultUserId,
+            userId: userId || req.userId,
             courseName,
             courseCode: courseCode || null,
             dayOfWeek: dayNum,
@@ -901,7 +1001,7 @@ router.post('/schedules', [
         await db.insert(schedules).values(newSchedule);
 
         // Broadcast ke semua connected clients untuk real-time sync
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId || req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'schedule.created',
             payload: { 
@@ -910,7 +1010,7 @@ router.post('/schedules', [
             }
         });
 
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(userId || req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'schedule.created',
             payload: newSchedule
@@ -953,19 +1053,27 @@ router.patch('/schedules/:id', [
             updates.courseName = resolveCourseName(updates.courseName);
         }
 
+        // Check if schedule exists and belongs to user
+        const existingSchedule = await db.select().from(schedules)
+            .where(and(eq(schedules.id, id), eq(schedules.userId, req.userId)))
+            .limit(1);
+        
+        if (existingSchedule.length === 0) {
+            return res.status(404).json({ error: 'Schedule not found' });
+        }
+
         await db.update(schedules)
             .set(updates)
-            .where(eq(schedules.id, id));
+            .where(and(eq(schedules.id, id), eq(schedules.userId, req.userId)));
 
         // Fetch updated record
-        const updated = await db.select().from(schedules).where(eq(schedules.id, id)).limit(1);
+        const updated = await db.select().from(schedules)
+            .where(and(eq(schedules.id, id), eq(schedules.userId, req.userId)))
+            .limit(1);
         
-        const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
-
         // Broadcast dengan timestamp untuk real-time sync
         const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'schedule.updated',
             payload: { 
@@ -991,16 +1099,23 @@ router.delete('/schedules/:id', [
         const now = new Date();
         
         // Get schedule info before delete for broadcast
-        const scheduleToDelete = await db.select().from(schedules).where(eq(schedules.id, id)).limit(1);
+        const scheduleToDelete = await db.select().from(schedules)
+            .where(and(eq(schedules.id, id), eq(schedules.userId, req.userId)))
+            .limit(1);
+        
+        if (scheduleToDelete.length === 0) {
+            return res.status(404).json({ error: 'Schedule not found' });
+        }
+        
         const courseName = scheduleToDelete[0]?.courseName || 'Unknown';
         
-        await db.delete(schedules).where(eq(schedules.id, id));
+        await db.delete(schedules).where(and(eq(schedules.id, id), eq(schedules.userId, req.userId)));
         
         const usersList = await db.select().from(users).limit(1);
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
         // Broadcast dengan timestamp untuk real-time sync
-        await broadcastEvent(defaultUserId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'schedule.deleted',
             payload: { 
@@ -1027,7 +1142,7 @@ router.post('/schedules/sync', async (req, res) => {
             return res.status(400).json({ error: 'No users found' });
         }
         
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         const now = new Date();
         const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
         
@@ -1047,7 +1162,7 @@ router.post('/schedules/sync', async (req, res) => {
             
             const scheduleData = {
                 id: item.id || crypto.randomUUID(),
-                userId: defaultUserId,
+                userId: req.userId,
                 courseName: item.course,
                 courseCode: item.course?.substring(0, 3).toUpperCase(),
                 dayOfWeek: dayNum,
@@ -1089,7 +1204,7 @@ router.post('/schedules/sync', async (req, res) => {
         
         // Broadcast changes ke semua connected clients
         if (changedSchedules.length > 0) {
-            await broadcastEvent(defaultUserId, {
+            await broadcastEvent(userId, {
                 eventId: crypto.randomUUID(),
                 eventType: 'schedule.synced',
                 payload: {
@@ -1120,19 +1235,19 @@ router.get('/schedules/sync-status', async (req, res) => {
             return res.status(400).json({ error: 'No users found' });
         }
         
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         
         // Get last modified schedule
         const lastModified = await db.select()
             .from(schedules)
-            .where(eq(schedules.userId, defaultUserId))
+            .where(eq(schedules.userId, req.userId))
             .orderBy(desc(schedules.lastModifiedAt))
             .limit(1);
         
         // Get total count
         const count = await db.select({ count: sql`COUNT(*)` })
             .from(schedules)
-            .where(eq(schedules.userId, defaultUserId));
+            .where(eq(schedules.userId, req.userId));
         
         res.json({
             success: true,
@@ -1156,7 +1271,7 @@ router.get('/reminders/today', async (req, res) => {
     try {
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         
         const today = new Date().toISOString().split('T')[0];
         const dayOfWeek = new Date().getDay() || 7; // 1=Senin, 7=Minggu
@@ -1164,7 +1279,7 @@ router.get('/reminders/today', async (req, res) => {
         // Ambil jadwal hari ini
         const todaysSchedules = await db.select().from(schedules)
             .where(and(
-                eq(schedules.userId, defaultUserId),
+                eq(schedules.userId, req.userId),
                 eq(schedules.dayOfWeek, dayOfWeek),
                 eq(schedules.isActive, true)
             ))
@@ -1173,14 +1288,14 @@ router.get('/reminders/today', async (req, res) => {
         // Ambil log reminder hari ini
         const todayLogs = await db.select().from(reminderLogs)
             .where(and(
-                eq(reminderLogs.userId, defaultUserId),
+                eq(reminderLogs.userId, req.userId),
                 eq(reminderLogs.reminderDate, today)
             ));
         
         // Ambil active override hari ini
         const todayOverride = await db.select().from(reminderOverrides)
             .where(and(
-                eq(reminderOverrides.userId, defaultUserId),
+                eq(reminderOverrides.userId, req.userId),
                 eq(reminderOverrides.overrideDate, today),
                 eq(reminderOverrides.isActive, true)
             ))
@@ -1234,7 +1349,7 @@ router.get('/reminders/history', [
         const days = parseInt(req.query.days) || 7;
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         
         // Hitung tanggal dari X hari yang lalu
         const fromDate = new Date();
@@ -1243,7 +1358,7 @@ router.get('/reminders/history', [
         
         const logs = await db.select().from(reminderLogs)
             .where(and(
-                eq(reminderLogs.userId, defaultUserId),
+                eq(reminderLogs.userId, req.userId),
                 sql`${reminderLogs.reminderDate} >= ${fromDateStr}`
             ))
             .orderBy(sql`${reminderLogs.reminderDate} DESC`);
@@ -1292,20 +1407,20 @@ router.post('/reminders/override', [
         
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         
         // Nonaktifkan override lama untuk tanggal yang sama
         await db.update(reminderOverrides)
             .set({ isActive: false })
             .where(and(
-                eq(reminderOverrides.userId, defaultUserId),
+                eq(reminderOverrides.userId, req.userId),
                 eq(reminderOverrides.overrideDate, date)
             ));
         
         // Buat override baru
         const newOverride = {
             id: crypto.randomUUID(),
-            userId: defaultUserId,
+            userId: req.userId,
             overrideDate: date,
             action,
             reason: reason || null,
@@ -1334,13 +1449,13 @@ router.get('/reminders/overrides', async (req, res) => {
     try {
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         
         const today = new Date().toISOString().split('T')[0];
         
         const overrides = await db.select().from(reminderOverrides)
             .where(and(
-                eq(reminderOverrides.userId, defaultUserId),
+                eq(reminderOverrides.userId, req.userId),
                 eq(reminderOverrides.isActive, true),
                 sql`${reminderOverrides.overrideDate} >= ${today}`
             ))
@@ -1393,11 +1508,11 @@ router.post('/schedules/:id/cancel', [
         
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         
         // Cek apakah schedule ada
         const schedule = await db.select().from(schedules)
-            .where(and(eq(schedules.id, id), eq(schedules.userId, defaultUserId)))
+            .where(and(eq(schedules.id, id), eq(schedules.userId, req.userId)))
             .limit(1);
         
         if (schedule.length === 0) {
@@ -1425,7 +1540,7 @@ router.post('/schedules/:id/cancel', [
         const newCancellation = {
             id: crypto.randomUUID(),
             scheduleId: id,
-            userId: defaultUserId,
+            userId: req.userId,
             cancelDate,
             reason: reason || null,
             isActive: true,
@@ -1455,14 +1570,14 @@ router.get('/schedules/:id/cancellations', [
         
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
         
         const today = new Date().toISOString().split('T')[0];
         
         const cancellations = await db.select().from(scheduleCancellations)
             .where(and(
                 eq(scheduleCancellations.scheduleId, id),
-                eq(scheduleCancellations.userId, defaultUserId),
+                eq(scheduleCancellations.userId, req.userId),
                 eq(scheduleCancellations.isActive, true),
                 sql`${scheduleCancellations.cancelDate} >= ${today}`
             ))
@@ -1915,11 +2030,11 @@ router.get('/user/courses/names', async (req, res) => {
     try {
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
         const courseNames = await db.select()
             .from(userCourseNames)
-            .where(eq(userCourseNames.userId, defaultUserId));
+            .where(eq(userCourseNames.userId, req.userId));
 
         res.json({ success: true, count: courseNames.length, data: courseNames });
     } catch (error) {
@@ -1939,12 +2054,12 @@ router.post('/user/courses/names', [
         
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
         await db.insert(userCourseNames)
             .values({
                 id: crypto.randomUUID(),
-                userId: defaultUserId,
+                userId: req.userId,
                 courseId,
                 customName,
                 createdAt: new Date(),
@@ -1969,11 +2084,11 @@ router.delete('/user/courses/names/:courseId', async (req, res) => {
         
         const usersList = await db.select().from(users).limit(1);
         if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const defaultUserId = usersList[0].telegramUserId;
+        // Using req.userId from auth middleware
 
         await db.delete(userCourseNames)
             .where(and(
-                eq(userCourseNames.userId, defaultUserId),
+                eq(userCourseNames.userId, req.userId),
                 eq(userCourseNames.courseId, courseId)
             ));
 

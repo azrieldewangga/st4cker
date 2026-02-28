@@ -10,16 +10,20 @@ export interface TransactionSlice {
     deleteTransaction: (id: string) => Promise<void>;
     clearTransactions: () => Promise<void>;
     syncTransactionsToBackend: () => Promise<void>;
+    autoSyncTransactionsToBackend: () => void;
     fetchTransactionsFromBackend: () => Promise<void>;
+    setupTransactionsRealtimeSync: () => void;
+    transactionsLastSyncedAt: string | null;
 }
 
 export const createTransactionSlice: StateCreator<
-    TransactionSlice & { currency: string; undoStack: any[]; redoStack: any[] },
+    TransactionSlice & { currency: string; undoStack: any[]; redoStack: any[]; userProfile: any },
     [],
     [],
     TransactionSlice
 > = (set, get) => ({
     transactions: [],
+    transactionsLastSyncedAt: null,
 
     fetchTransactions: async () => {
         try {
@@ -59,12 +63,8 @@ export const createTransactionSlice: StateCreator<
 
             get().fetchTransactions();
             
-            // Auto-sync to backend
-            try {
-                await get().syncTransactionsToBackend();
-            } catch (syncErr) {
-                console.error('[TransactionSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncTransactionsToBackend();
         } catch (error) {
             console.error('[TransactionSlice] Add error:', error);
             throw error;
@@ -81,12 +81,8 @@ export const createTransactionSlice: StateCreator<
             }));
             get().fetchTransactions();
             
-            // Auto-sync to backend
-            try {
-                await get().syncTransactionsToBackend();
-            } catch (syncErr) {
-                console.error('[TransactionSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncTransactionsToBackend();
         } catch (error) {
             console.error('[TransactionSlice] Update error:', error);
             throw error;
@@ -109,12 +105,8 @@ export const createTransactionSlice: StateCreator<
             await window.electronAPI.transactions.delete(id);
             get().fetchTransactions();
             
-            // Auto-sync to backend
-            try {
-                await get().syncTransactionsToBackend();
-            } catch (syncErr) {
-                console.error('[TransactionSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncTransactionsToBackend();
         } catch (error) {
             console.error('[TransactionSlice] Delete error:', error);
             throw error;
@@ -226,5 +218,61 @@ export const createTransactionSlice: StateCreator<
         } catch (error) {
             console.error('[TransactionSlice] Fetch from backend error:', error);
         }
+    },
+
+    // Auto-sync transactions ke backend (dengan debounce)
+    autoSyncTransactionsToBackend: (() => {
+        let syncTimeout: NodeJS.Timeout | null = null;
+        return function(this: any) {
+            if (syncTimeout) clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                const state = get() as any;
+                if (state.syncTransactionsToBackend) {
+                    state.syncTransactionsToBackend().then(() => {
+                        set({ transactionsLastSyncedAt: new Date().toISOString() } as any);
+                    }).catch((err: any) => {
+                        console.error('[TransactionSlice] Auto-sync failed:', err);
+                    });
+                }
+            }, 2000); // Debounce 2 detik
+        };
+    })(),
+
+    // Setup real-time sync listener untuk transactions
+    setupTransactionsRealtimeSync: () => {
+        if (typeof window === 'undefined' || !window.electronAPI?.onEvent) return;
+
+        const handleTransactionEvent = (event: any) => {
+            console.log('[TransactionSlice] Received real-time event:', event.eventType);
+            
+            // Handle berbagai event types
+            const relevantEventTypes = [
+                'transaction.created',
+                'transaction.updated', 
+                'transaction.deleted',
+                'data.synced'
+            ];
+            
+            if (relevantEventTypes.includes(event.eventType)) {
+                // Fetch latest data dari backend
+                const state = get() as any;
+                if (state.fetchTransactionsFromBackend) {
+                    // Tambahkan delay kecil untuk batch processing
+                    setTimeout(() => {
+                        state.fetchTransactionsFromBackend();
+                    }, 500);
+                }
+            }
+        };
+
+        // Listen untuk telegram-event (generic event dari backend)
+        window.electronAPI.onEvent('telegram-event', handleTransactionEvent);
+        
+        // Listen untuk transaction-specific events
+        window.electronAPI.onEvent('transaction.created', handleTransactionEvent);
+        window.electronAPI.onEvent('transaction.updated', handleTransactionEvent);
+        window.electronAPI.onEvent('transaction.deleted', handleTransactionEvent);
+        
+        console.log('[TransactionSlice] Real-time sync enabled');
     },
 });

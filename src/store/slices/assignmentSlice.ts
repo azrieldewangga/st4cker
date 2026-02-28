@@ -12,7 +12,10 @@ export interface AssignmentSlice {
     duplicateAssignment: (id: string) => Promise<void>;
     reorderAssignments: (newOrder: Assignment[]) => Promise<void>;
     syncAssignmentsToBackend: () => Promise<void>;
+    autoSyncAssignmentsToBackend: () => void;
     fetchAssignmentsFromBackend: () => Promise<void>;
+    setupAssignmentsRealtimeSync: () => void;
+    assignmentsLastSyncedAt: string | null;
 }
 
 export const createAssignmentSlice: StateCreator<
@@ -22,6 +25,7 @@ export const createAssignmentSlice: StateCreator<
     AssignmentSlice
 > = (set, get) => ({
     assignments: [],
+    assignmentsLastSyncedAt: null,
 
     fetchAssignments: async () => {
         try {
@@ -80,12 +84,8 @@ export const createAssignmentSlice: StateCreator<
             }));
             get().fetchAssignments();
             
-            // Auto-sync to backend
-            try {
-                await get().syncAssignmentsToBackend();
-            } catch (syncErr) {
-                console.error('[AssignmentSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncAssignmentsToBackend();
         } catch (err: any) {
             console.error('[AssignmentSlice] Error adding assignment:', err);
             throw err;
@@ -110,12 +110,8 @@ export const createAssignmentSlice: StateCreator<
             }));
             get().fetchAssignments();
             
-            // Auto-sync to backend
-            try {
-                await get().syncAssignmentsToBackend();
-            } catch (syncErr) {
-                console.error('[AssignmentSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncAssignmentsToBackend();
         } catch (error) {
             console.error('[AssignmentSlice] Update error:', error);
             throw error;
@@ -140,12 +136,8 @@ export const createAssignmentSlice: StateCreator<
             await window.electronAPI.assignments.delete(id);
             get().fetchAssignments();
             
-            // Auto-sync to backend
-            try {
-                await get().syncAssignmentsToBackend();
-            } catch (syncErr) {
-                console.error('[AssignmentSlice] Auto-sync failed:', syncErr);
-            }
+            // Auto-sync to backend (debounced)
+            get().autoSyncAssignmentsToBackend();
         } catch (error) {
             console.error('[AssignmentSlice] Delete error:', error);
             throw error;
@@ -299,5 +291,64 @@ export const createAssignmentSlice: StateCreator<
         } finally {
             set({ isFetchingFromBackend: false } as any);
         }
+    },
+
+    // Auto-sync assignments ke backend (dengan debounce)
+    autoSyncAssignmentsToBackend: (() => {
+        let syncTimeout: NodeJS.Timeout | null = null;
+        return function(this: any) {
+            if (syncTimeout) clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                const state = get() as any;
+                if (state.syncAssignmentsToBackend) {
+                    state.syncAssignmentsToBackend().then(() => {
+                        set({ assignmentsLastSyncedAt: new Date().toISOString() } as any);
+                    }).catch((err: any) => {
+                        console.error('[AssignmentSlice] Auto-sync failed:', err);
+                    });
+                }
+            }, 2000); // Debounce 2 detik
+        };
+    })(),
+
+    // Setup real-time sync listener untuk assignments
+    setupAssignmentsRealtimeSync: () => {
+        if (typeof window === 'undefined' || !window.electronAPI?.onEvent) return;
+
+        const handleAssignmentEvent = (event: any) => {
+            console.log('[AssignmentSlice] Received real-time event:', event.eventType);
+            
+            // Handle berbagai event types
+            const relevantEventTypes = [
+                'task.created',
+                'task.updated', 
+                'task.deleted',
+                'assignment.created',
+                'assignment.updated',
+                'assignment.deleted',
+                'data.synced'
+            ];
+            
+            if (relevantEventTypes.includes(event.eventType)) {
+                // Fetch latest data dari backend
+                const state = get() as any;
+                if (state.fetchAssignmentsFromBackend) {
+                    // Tambahkan delay kecil untuk batch processing
+                    setTimeout(() => {
+                        state.fetchAssignmentsFromBackend();
+                    }, 500);
+                }
+            }
+        };
+
+        // Listen untuk telegram-event (generic event dari backend)
+        window.electronAPI.onEvent('telegram-event', handleAssignmentEvent);
+        
+        // Listen untuk assignment-specific events (jika ada)
+        window.electronAPI.onEvent('assignment.created', handleAssignmentEvent);
+        window.electronAPI.onEvent('assignment.updated', handleAssignmentEvent);
+        window.electronAPI.onEvent('assignment.deleted', handleAssignmentEvent);
+        
+        console.log('[AssignmentSlice] Real-time sync enabled');
     },
 });
