@@ -316,4 +316,4 @@ class CourseMappingService {
   }
 }
 
-module.exports = { CourseMappingService, curriculumData };
+export { CourseMappingService, curriculumData };

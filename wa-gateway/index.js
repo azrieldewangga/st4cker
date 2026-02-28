@@ -190,7 +190,8 @@ async function initWhatsApp() {
             if (!msg.fromMe && msg.from.includes(TARGET_PHONE)) {
                 const text = msg.body.toLowerCase().trim();
                 const originalText = msg.body.trim();
-                console.log(`[WA] Received message: "${msg.body}"`);
+                const msgId = msg.id ? msg.id.id : 'unknown';
+                console.log(`[WA] Received message [${msgId}]: "${msg.body}"`);
                 
                 const now = new Date();
                 
@@ -214,7 +215,7 @@ async function initWhatsApp() {
                             },
                             body: JSON.stringify({
                                 phone: TARGET_PHONE,
-                                userId: TARGET_USER_ID, // Use TARGET_USER_ID not phone
+                                user_id: TARGET_USER_ID, // Use TARGET_USER_ID not phone
                                 message: originalText,
                                 context: {
                                     event: 'task_reminder_reply',
@@ -274,7 +275,7 @@ async function initWhatsApp() {
                             },
                             body: JSON.stringify({
                                 phone: TARGET_PHONE,
-                                userId: TARGET_USER_ID,
+                                user_id: TARGET_USER_ID,
                                 message: originalText,
                                 context: {
                                     event: 'schedule_reminder_reply',
@@ -325,6 +326,45 @@ async function initWhatsApp() {
                     // Fallback: forward to OpenClaw conversational handler
                     // Old keyword matching removed - now handled by OpenClaw fully
                     console.log('[WA] OpenClaw unavailable for schedule reply, waiting for next reminder cycle');
+                }
+                
+                // ─── GENERAL CHAT HANDLER (Universal Conversational) ───
+                // Handle any message that wasn't caught by task/schedule windows
+                console.log(`[WA] General chat, forwarding to OpenClaw: "${originalText}"`);
+                
+                try {
+                    const response = await fetch(`${OPENCLAW_URL}/api/v1/st4cker/chat`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-API-Key': OPENCLAW_API_KEY
+                        },
+                        body: JSON.stringify({
+                            phone: TARGET_PHONE,
+                            user_id: TARGET_USER_ID,
+                            message: originalText,
+                            context: {}
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log(`[WA] OpenClaw replied: ${data.reply}`);
+                        
+                        // Send OpenClaw's reply back to user
+                        if (data.reply) {
+                            console.log(`[WA] Sending message to ${msg.from}: "${data.reply.substring(0, 50)}..."`);
+                            await client.sendMessage(msg.from, data.reply);
+                            console.log(`[WA] Message sent successfully`);
+                        }
+                    } else {
+                        console.error(`[WA] OpenClaw returned ${response.status}`);
+                        const errorText = await response.text();
+                        console.error(`[WA] Error details: ${errorText}`);
+                    }
+                } catch (e) {
+                    console.error('[WA] Failed to contact OpenClaw:', e.message);
+                    await client.sendMessage(msg.from, 'Aduh zril, ada masalah teknis pas mau proses pesanmu 😅 Coba lagi nanti ya!');
                 }
             }
         });
