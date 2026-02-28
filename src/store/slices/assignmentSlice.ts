@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { Assignment } from '@/types/models';
 import { validateData, AssignmentSchema } from '@/lib/validation';
 import { isDev } from '@/lib/constants';
+import { API_CONFIG, buildApiUrl } from '@/config/api';
 
 export interface AssignmentSlice {
     assignments: Assignment[];
@@ -160,7 +161,6 @@ export const createAssignmentSlice: StateCreator<
         try {
             const state = get() as any;
             const { assignments, userProfile } = state;
-            const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
             const assignmentsArray = assignments.map((a: any) => ({
@@ -174,7 +174,7 @@ export const createAssignmentSlice: StateCreator<
                 semester: userProfile?.semester || 1,
             }));
 
-            const response = await fetch(`${serverUrl}/api/sync-user-data`, {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -210,10 +210,9 @@ export const createAssignmentSlice: StateCreator<
             // Set flag to prevent duplicate fetches
             set({ isFetchingFromBackend: true } as any);
             
-            const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
-            const response = await fetch(`${serverUrl}/api/v1/tasks?userId=${userProfile?.telegramUserId}`, {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.TASKS, { userId: userProfile?.telegramUserId }), {
                 headers: {
                     'X-API-Key': apiKey,
                 },

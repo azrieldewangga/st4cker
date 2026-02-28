@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand';
 import { Transaction } from '@/types/models';
 import { validateData, TransactionSchema } from '@/lib/validation';
+import { API_CONFIG, buildApiUrl } from '@/config/api';
 
 export interface TransactionSlice {
     transactions: Transaction[];
@@ -127,10 +128,9 @@ export const createTransactionSlice: StateCreator<
         try {
             const state = get() as any;
             const { transactions, userProfile } = state;
-            const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
-            const response = await fetch(`${serverUrl}/api/sync-user-data`, {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -156,10 +156,9 @@ export const createTransactionSlice: StateCreator<
         try {
             const state = get() as any;
             const { userProfile, transactions: localTransactionsState } = state;
-            const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
-            const response = await fetch(`${serverUrl}/api/v1/cashflow/transactions?userId=${userProfile?.telegramUserId}`, {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.TRANSACTIONS, { userId: userProfile?.telegramUserId }), {
                 headers: {
                     'X-API-Key': apiKey,
                 },

@@ -3,6 +3,7 @@ import { CourseMaterial, Subscription, UserProfile } from '@/types/models';
 import { validateData, CourseMaterialSchema, SubscriptionSchema, UserProfileSchema } from '@/lib/validation';
 import { isDev } from '@/lib/constants';
 import { isSameMonth } from 'date-fns';
+import { API_CONFIG, buildApiUrl } from '@/config/api';
 
 export interface MiscSlice {
     // Schedule
@@ -158,8 +159,6 @@ export const createMiscSlice: StateCreator<
             const state = get() as any;
             const { schedule, userProfile } = state;
             // Use server URL from userProfile or env
-            // Use explicit server URL - MUST match VPS IP
-            const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
             
             const schedulesArray = Object.entries(schedule).map(([key, value]: [string, any]) => ({
@@ -174,7 +173,7 @@ export const createMiscSlice: StateCreator<
                 semester: userProfile?.semester || 1,
             }));
 
-            const response = await fetch(`${serverUrl}/api/v1/schedules/sync`, {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SCHEDULES_SYNC), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -195,12 +194,10 @@ export const createMiscSlice: StateCreator<
         try {
             const state = get() as any;
             const { userProfile, schedule: localScheduleState } = state;
-            // Use explicit server URL - MUST match VPS IP
-            const serverUrl = 'http://103.127.134.173:3000';
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
             
             // Get sync status untuk timestamp comparison
-            const syncStatusRes = await fetch(`${serverUrl}/api/v1/schedules/sync-status`, {
+            const syncStatusRes = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SCHEDULES_SYNC_STATUS), {
                 headers: { 'X-API-Key': apiKey },
             });
             
@@ -226,7 +223,7 @@ export const createMiscSlice: StateCreator<
                 return;
             }
             
-            const response = await fetch(`${serverUrl}/api/v1/schedules`, {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SCHEDULES), {
                 headers: {
                     'X-API-Key': apiKey,
                 },
