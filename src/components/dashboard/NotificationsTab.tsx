@@ -70,12 +70,20 @@ export function NotificationsTab() {
         const sub = confirmDialog.subscription;
         if (!sub) return;
 
+        // 1. Create transaction
         await addTransaction({
             type: 'expense',
             amount: sub.cost,
             category: 'Subscription',
             title: `Payment for ${sub.name}`,
             date: new Date().toISOString()
+        });
+
+        // 2. Update subscription lastPaidDate - BUG FIX!
+        // This prevents the subscription from showing in notifications again
+        const { updateSubscription } = useStore.getState();
+        await updateSubscription(sub.id, {
+            lastPaidDate: new Date().toISOString()
         });
 
         setConfirmDialog({ isOpen: false, subscription: null });
