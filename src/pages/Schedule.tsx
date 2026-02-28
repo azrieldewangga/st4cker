@@ -486,14 +486,14 @@ const Schedule = () => {
             </div>
 
             <Card className="flex-1 overflow-hidden flex flex-col">
-                <ScrollArea className="flex-1">
-                    <div className="min-w-[900px] p-2">
-                        <table className="w-full text-sm border-collapse">
+                <ScrollArea className="flex-1 w-full" type="auto">
+                    <div className="min-w-[1000px] p-2 overflow-x-auto">
+                        <table className="w-full text-sm border-collapse table-fixed">
                             <thead className="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
                                 <tr>
-                                    <th className="p-4 w-20 border-b font-medium text-muted-foreground">Time</th>
+                                    <th className="p-4 w-16 border-b font-medium text-muted-foreground sticky left-0 bg-muted/50 z-20">Time</th>
                                     {DAYS.map(day => (
-                                        <th key={day} className="p-4 border-b font-medium min-w-[150px]">{day}</th>
+                                        <th key={day} className="p-4 border-b font-medium w-[180px]">{day}</th>
                                     ))}
                                 </tr>
                             </thead>
