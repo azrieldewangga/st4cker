@@ -289,13 +289,14 @@ export const createAssignmentSlice: StateCreator<
             // HAPUS assignment lokal yang tidak ada di server (sudah dihapus user di device lain)
             // Tapi hanya hapus kalau assignment tersebut berasal dari server (bukan local-only)
             for (const localId of localStateIds) {
-                if (!serverIds.has(localId) && existingIds.has(localId)) {
+                const id = localId as string;
+                if (!serverIds.has(id) && existingIds.has(id)) {
                     // Assignment ada di local tapi tidak di server = sudah dihapus
                     try {
-                        await window.electronAPI.assignments.delete(localId);
-                        console.log(`[AssignmentSlice] Deleted local assignment not on server: ${localId}`);
+                        await window.electronAPI.assignments.delete(id);
+                        console.log(`[AssignmentSlice] Deleted local assignment not on server: ${id}`);
                     } catch (e) {
-                        console.warn(`[AssignmentSlice] Failed to delete local assignment: ${localId}`, e);
+                        console.warn(`[AssignmentSlice] Failed to delete local assignment: ${id}`, e);
                     }
                 }
             }
