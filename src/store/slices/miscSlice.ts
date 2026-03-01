@@ -9,7 +9,7 @@ export interface MiscSlice {
     // Schedule
     schedule: Record<string, any>;
     fetchSchedule: () => Promise<void>;
-    setScheduleItem: (day: string, time: string, courseId: string, color?: string, room?: string, lecturer?: string, skipLog?: boolean) => Promise<void>;
+    setScheduleItem: (day: string, time: string, courseId: string, color?: string, room?: string, lecturer?: string, skipLog?: boolean, endTime?: string) => Promise<void>;
     syncScheduleToBackend: () => Promise<void>;
     fetchScheduleFromBackend: () => Promise<void>;
     setupScheduleRealtimeSync: () => void;
@@ -98,7 +98,7 @@ export const createMiscSlice: StateCreator<
         }
     },
 
-    setScheduleItem: async (day, time, courseId, color = 'bg-primary', room = '', lecturer = '', skipLog = false) => {
+    setScheduleItem: async (day, time, courseId, color = 'bg-primary', room = '', lecturer = '', skipLog = false, endTime = '') => {
         try {
             const state = get() as any;
             const { schedule, userProfile, undoStack } = state;
@@ -134,11 +134,20 @@ export const createMiscSlice: StateCreator<
             const semester = profile?.semester || 1;
             const id = `${day}-${time}-${semester}`;
 
+            // Calculate endTime if not provided (default to 2 hours after start)
+            let calculatedEndTime = endTime;
+            if (!calculatedEndTime && time) {
+                const [hours, minutes] = time.split(':').map(Number);
+                const endDate = new Date();
+                endDate.setHours(hours, minutes + 120); // Add 2 hours
+                calculatedEndTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+            }
+
             await window.electronAPI.schedule.upsert({
                 id,
                 day,
                 startTime: time,
-                endTime: '',
+                endTime: calculatedEndTime,
                 course: courseId,
                 location: room,
                 lecturer: lecturer,
