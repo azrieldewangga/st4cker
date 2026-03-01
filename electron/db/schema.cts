@@ -178,6 +178,13 @@ export const initSchema = (db: Database.Database) => {
         if (!error.message.includes('duplicate column name')) console.error('Migration error (schedule_items):', error);
     }
 
+    // Migration: Add semester column to schedule_items if it doesn't exist
+    try {
+        db.prepare("ALTER TABLE schedule_items ADD COLUMN semester INTEGER DEFAULT 1").run();
+    } catch (error: any) {
+        if (!error.message.includes('duplicate column name')) console.error('Migration error (schedule_items semester):', error);
+    }
+
     // Migration: Add location and lecturer to performance_courses if it doesn't exist
     try {
         db.prepare("ALTER TABLE performance_courses ADD COLUMN location TEXT").run();

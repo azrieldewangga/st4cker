@@ -67,25 +67,30 @@ export const createMiscSlice: StateCreator<
             const profile = state.userProfile;
             const currentSem = profile?.semester || 1;
             const items = await window.electronAPI.schedule.getAll();
+            console.log(`[MiscSlice] fetchSchedule: Got ${items.length} items from SQLite, currentSem=${currentSem}`);
             const scheduleMap: Record<string, any> = {};
 
             items.forEach((item: any) => {
-                const parts = item.id.split('-');
-                let isMatch = false;
-                if (parts.length >= 3) {
-                    const itemSem = parseInt(parts[parts.length - 1]);
-                    if (itemSem === currentSem) {
-                        isMatch = true;
+                // Use semester field if available, otherwise fallback to ID parsing for legacy data
+                const itemSem = item.semester ?? (() => {
+                    const parts = item.id.split('-');
+                    if (parts.length >= 3) {
+                        return parseInt(parts[parts.length - 1]) || 1;
                     }
-                } else {
-                    isMatch = false;
-                }
-
-                if (isMatch) {
+                    return 1;
+                })();
+                
+                if (itemSem === currentSem) {
                     const key = `${item.day}-${item.startTime}`;
                     scheduleMap[key] = item;
                 }
             });
+
+            const matchedKeys = Object.keys(scheduleMap);
+            console.log(`[MiscSlice] fetchSchedule: Filtered to ${matchedKeys.length} items for semester ${currentSem}`);
+            if (matchedKeys.length > 0) {
+                console.log(`[MiscSlice] fetchSchedule: Keys = ${matchedKeys.join(', ')}`);
+            }
 
             set({ schedule: scheduleMap });
         } catch (error) {
@@ -137,6 +142,7 @@ export const createMiscSlice: StateCreator<
                 course: courseId,
                 location: room,
                 lecturer: lecturer,
+                semester: semester,
                 note: JSON.stringify({ color }),
                 updatedAt: now,
                 lastModifiedAt: now,
@@ -271,6 +277,8 @@ export const createMiscSlice: StateCreator<
                     };
                     
                     // Save to local SQLite
+                    const state = get() as any;
+                    const currentSem = state.userProfile?.semester || 1;
                     const scheduleData = {
                         id: item.id,
                         day: item.day,
@@ -279,6 +287,7 @@ export const createMiscSlice: StateCreator<
                         course: item.courseName || item.course,
                         location: item.room || item.location,
                         lecturer: item.lecturer,
+                        semester: item.semester || currentSem,
                         note: JSON.stringify({ color: 'bg-primary' }),
                         updatedAt: new Date().toISOString(),
                     };
@@ -298,7 +307,11 @@ export const createMiscSlice: StateCreator<
             });
             
             set({ schedule: scheduleMap });
-            console.log(`[MiscSlice] Schedule synced from backend: ${updatedCount} updated`);
+            const finalKeys = Object.keys(scheduleMap);
+            console.log(`[MiscSlice] fetchScheduleFromBackend: ${finalKeys.length} items in final state, ${updatedCount} updated from server`);
+            if (finalKeys.length > 0) {
+                console.log(`[MiscSlice] fetchScheduleFromBackend: Keys = ${finalKeys.join(', ')}`);
+            }
         } catch (error) {
             console.error('[MiscSlice] Fetch from backend error:', error);
             // Fallback to local

@@ -10,8 +10,8 @@ export const schedule = {
         const db = getDB();
         console.log('[DEBUG-DB] Upserting Schedule Item:', item);
         const stmt = db.prepare(`
-            INSERT INTO schedule_items (id, day, startTime, endTime, course, location, lecturer, note, updatedAt)
-            VALUES (@id, @day, @startTime, @endTime, @course, @location, @lecturer, @note, @updatedAt)
+            INSERT INTO schedule_items (id, day, startTime, endTime, course, location, lecturer, note, semester, updatedAt)
+            VALUES (@id, @day, @startTime, @endTime, @course, @location, @lecturer, @note, @semester, @updatedAt)
             ON CONFLICT(id) DO UPDATE SET
                 day = excluded.day,
                 startTime = excluded.startTime,
@@ -20,6 +20,7 @@ export const schedule = {
                 location = excluded.location,
                 lecturer = excluded.lecturer,
                 note = excluded.note,
+                semester = excluded.semester,
                 updatedAt = excluded.updatedAt
         `);
         stmt.run(item);

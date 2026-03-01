@@ -100,23 +100,29 @@ const Schedule = () => {
     }, [isEditingDetail, detailSlot]);
 
     useEffect(() => {
-        fetchCourses();
-        fetchSchedule();
-        // Auto-pull from backend (VPS) saat page dibuka
-        const pullFromServer = async () => {
+        const loadSchedule = async () => {
+            // Fetch courses first
+            await fetchCourses();
+            
+            // Try to fetch from backend first (if paired)
             try {
                 const state = useStore.getState() as any;
                 if (state.fetchScheduleFromBackend) {
                     await state.fetchScheduleFromBackend();
                     toast.success('Schedule loaded from server');
                 } else {
-                    toast.error('Sync function not available in store');
+                    // Fallback to local only if backend sync not available
+                    await fetchSchedule();
                 }
             } catch (e: any) {
-                toast.error('Failed to load from server: ' + (e.message || 'Check console'));
+                // On error, fallback to local SQLite
+                console.error('[Schedule] Failed to load from server:', e);
+                await fetchSchedule();
+                toast.error('Failed to load from server, showing local data');
             }
         };
-        pullFromServer();
+        
+        loadSchedule();
         
         const closeContextMenu = () => setContextMenu(null);
         window.addEventListener('click', closeContextMenu);
