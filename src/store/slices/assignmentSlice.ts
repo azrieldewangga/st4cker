@@ -86,7 +86,7 @@ export const createAssignmentSlice: StateCreator<
                 assignments: [...state.assignments, newItem]
             }));
             get().fetchAssignments();
-            
+
             // Auto-sync to backend (debounced)
             get().autoSyncAssignmentsToBackend();
         } catch (err: any) {
@@ -112,7 +112,7 @@ export const createAssignmentSlice: StateCreator<
                 assignments: state.assignments.map((item) => item.id === id ? { ...item, ...data } : item)
             }));
             get().fetchAssignments();
-            
+
             // Auto-sync to backend (debounced)
             get().autoSyncAssignmentsToBackend();
         } catch (error) {
@@ -120,9 +120,6 @@ export const createAssignmentSlice: StateCreator<
             throw error;
         }
     },
-
-    // Track deleted IDs untuk mencegah restore saat fetch
-    deletedAssignmentIds: new Set<string>(),
 
     deleteAssignment: async (id, skipLog = false) => {
         try {
@@ -143,20 +140,20 @@ export const createAssignmentSlice: StateCreator<
             const deletedIds = (get() as any).deletedAssignmentIds || new Set<string>();
             deletedIds.add(id);
             set({ deletedAssignmentIds: deletedIds } as any);
-            
+
             // Update state dulu (optimistic UI)
             set((state) => ({
                 assignments: state.assignments.filter(a => a.id !== id)
             }));
-            
+
             // Delete dari SQLite
             await window.electronAPI.assignments.delete(id);
-            
+
             // Sync ke backend - kirim ID yang dihapus
             const state = get() as any;
             const { userProfile } = state;
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
-            
+
             try {
                 // Call API delete langsung
                 const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/tasks/${id}`, {
@@ -172,7 +169,7 @@ export const createAssignmentSlice: StateCreator<
             } catch (e) {
                 console.warn('[AssignmentSlice] Failed to delete from backend:', e);
             }
-            
+
             // Tidak fetch dari backend setelah delete
         } catch (error) {
             console.error('[AssignmentSlice] Delete error:', error);
@@ -235,16 +232,16 @@ export const createAssignmentSlice: StateCreator<
         try {
             const state = get() as any;
             const { userProfile, assignments: localAssignmentsState } = state;
-            
+
             // Prevent multiple simultaneous fetches
             if ((state as any).isFetchingFromBackend) {
                 console.log('[AssignmentSlice] Already fetching from backend, skipping...');
                 return;
             }
-            
+
             // Set flag to prevent duplicate fetches
             set({ isFetchingFromBackend: true } as any);
-            
+
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
             const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.TASKS, { userId: userProfile?.telegramUserId }), {
@@ -264,27 +261,27 @@ export const createAssignmentSlice: StateCreator<
 
             // Convert and save to local SQLite
             const localAssignments = await window.electronAPI.assignments.list();
-            
+
             // IMPROVED DUPLICATE DETECTION:
             // 1. Track by ID (UUID) - exact match
             // 2. Track by content hash (title + deadline + course) - content match
             // 3. Track by ID yang ada di local state (biar ga double fetch)
-            
+
             const existingIds = new Set(localAssignments.map((a: any) => a.id));
             const existingKeys = new Set(localAssignments.map((a: any) => {
                 const course = a.course || a.courseId || '';
                 return `${(a.title || '').toLowerCase().trim()}_${a.deadline}_${course}`;
             }));
-            
+
             // Track local IDs yang sudah ada di state (prevent double create)
             const localStateIds = new Set(localAssignmentsState.map((a: Assignment) => a.id));
-            
+
             // Track server IDs untuk deteksi delete
             const serverIds = new Set(data.data.map((item: any) => item.id));
-            
+
             // Get deleted IDs yang sudah dihapus di session ini
             const deletedIds = (state as any).deletedAssignmentIds || new Set<string>();
-            
+
             for (const item of data.data) {
                 // SKIP kalau ID ini sudah dihapus di session ini
                 if (deletedIds.has(item.id)) {
@@ -293,15 +290,15 @@ export const createAssignmentSlice: StateCreator<
                 }
                 // Normalize course ID (bisa dari item.course atau item.courseId)
                 const courseId = item.course || item.courseId || '';
-                
+
                 // Check by ID first
                 const existsById = existingIds.has(item.id) || localStateIds.has(item.id);
-                
+
                 // Also check by content to prevent duplicates with different IDs
                 // Ini untuk handle tugas yang dibuat di telegram (UUID beda) vs app (UUID beda)
                 const itemKey = `${(item.title || '').toLowerCase().trim()}_${item.deadline}_${courseId}`;
                 const existsByContent = existingKeys.has(itemKey);
-                
+
                 const assignmentData = {
                     id: item.id,
                     title: item.title,
@@ -313,7 +310,7 @@ export const createAssignmentSlice: StateCreator<
                     semester: item.semester,
                     updatedAt: new Date().toISOString(),
                 };
-                
+
                 if (existsById) {
                     // Update existing by ID
                     await window.electronAPI.assignments.update(item.id, assignmentData);
@@ -328,7 +325,7 @@ export const createAssignmentSlice: StateCreator<
                     console.log(`[AssignmentSlice] Skipping duplicate assignment: ${item.title} (${itemKey})`);
                 }
             }
-            
+
             // HAPUS assignment lokal yang tidak ada di server (sudah dihapus user di device lain)
             // Tapi hanya hapus kalau assignment tersebut berasal dari server (bukan local-only)
             for (const localId of localStateIds) {
@@ -356,7 +353,7 @@ export const createAssignmentSlice: StateCreator<
     // Auto-sync assignments ke backend (dengan debounce)
     autoSyncAssignmentsToBackend: (() => {
         let syncTimeout: ReturnType<typeof setTimeout> | null = null;
-        return function(this: any) {
+        return function (this: any) {
             if (syncTimeout) clearTimeout(syncTimeout);
             syncTimeout = setTimeout(() => {
                 const state = get() as any;
@@ -377,18 +374,18 @@ export const createAssignmentSlice: StateCreator<
 
         const handleAssignmentEvent = (event: any) => {
             console.log('[AssignmentSlice] Received real-time event:', event.eventType);
-            
+
             // Handle berbagai event types
             const relevantEventTypes = [
                 'task.created',
-                'task.updated', 
+                'task.updated',
                 'task.deleted',
                 'assignment.created',
                 'assignment.updated',
                 'assignment.deleted',
                 'data.synced'
             ];
-            
+
             if (relevantEventTypes.includes(event.eventType)) {
                 // Fetch latest data dari backend
                 const state = get() as any;
@@ -403,12 +400,12 @@ export const createAssignmentSlice: StateCreator<
 
         // Listen untuk telegram-event (generic event dari backend)
         window.electronAPI.onEvent('telegram-event', handleAssignmentEvent);
-        
+
         // Listen untuk assignment-specific events (jika ada)
         window.electronAPI.onEvent('assignment.created', handleAssignmentEvent);
         window.electronAPI.onEvent('assignment.updated', handleAssignmentEvent);
         window.electronAPI.onEvent('assignment.deleted', handleAssignmentEvent);
-        
+
         console.log('[AssignmentSlice] Real-time sync enabled');
     },
 });
