@@ -255,6 +255,15 @@ export const createMiscSlice: StateCreator<
                 `${s.day}_${s.startTime}_${(s.course || '').toLowerCase().trim()}`
             ));
             
+            // Day mapping: dayOfWeek (number) -> day (string)
+            const dayMap: Record<number, string> = {
+                1: 'Senin',
+                2: 'Selasa', 
+                3: 'Rabu',
+                4: 'Kamis',
+                5: 'Jumat'
+            };
+            
             // Convert array to schedule map dengan timestamp-based conflict resolution
             const scheduleMap: Record<string, any> = { ...localScheduleState };
             let updatedCount = 0;
@@ -263,7 +272,9 @@ export const createMiscSlice: StateCreator<
             
             data.data?.forEach((item: any) => {
                 processedCount++;
-                const key = `${item.day}-${item.startTime}`;
+                // Map dayOfWeek to day string
+                const day = item.day || dayMap[item.dayOfWeek] || '';
+                const key = `${day}-${item.startTime}`;
                 const itemKey = `${item.day}_${item.startTime}_${(item.courseName || item.course || '').toLowerCase().trim()}`;
                 
                 // Check for existing local schedule
@@ -282,6 +293,7 @@ export const createMiscSlice: StateCreator<
                 if (!existingLocal || !recentlyModifiedLocally) {
                     scheduleMap[key] = {
                         ...item,
+                        day: day,  // Use mapped day
                         course: item.courseName || item.course,
                         location: item.room || item.location,
                     };
@@ -291,7 +303,7 @@ export const createMiscSlice: StateCreator<
                     const currentSem = state.userProfile?.semester || 1;
                     const scheduleData = {
                         id: item.id,
-                        day: item.day,
+                        day: day,  // Use mapped day
                         startTime: item.startTime,
                         endTime: item.endTime,
                         course: item.courseName || item.course,
