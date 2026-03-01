@@ -139,49 +139,108 @@ const Schedule = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [contextMenu]);
 
-    // Helper: Logic to resolve course from slot
-    const getCourseForSlot = (day: string, time: string) => {
-        const item = schedule[`${day}-${time}`];
-        if (!item || !item.course) return null;
+    // Helper: Parse time string to minutes for comparison
+    const timeToMinutes = (time: string): number => {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
+    };
 
-        let course = courses.find(c => c.id === item.course);
-        // Fallbacks logic (legacy/db mismatch)
-        if (!course && item.course) {
-            course = courses.find(c => c.name === item.course || (c.name && item.course && c.name.toLowerCase() === item.course.toLowerCase()));
-        }
-        if (!course && performanceRecords) {
-            course = performanceRecords.find(c => c.id === item.course);
-            if (!course && item.course) {
-                course = performanceRecords.find(c => c.name === item.course || (c.name && c.name.toLowerCase() === item.course.toLowerCase()));
+    // Helper: Check if a slot time falls within a course's time range
+    const getCourseForSlot = (day: string, time: string) => {
+        // First try exact match (for backward compatibility with single-slot courses)
+        const exactItem = schedule[`${day}-${time}`];
+        if (exactItem?.course) {
+            // Found exact match - use existing logic
+            let course = courses.find(c => c.id === exactItem.course);
+            if (!course && exactItem.course) {
+                course = courses.find(c => c.name === exactItem.course || (c.name && exactItem.course && c.name.toLowerCase() === exactItem.course.toLowerCase()));
             }
-        }
-        // Minimal fallback
-        if (!course && item.course) {
-            course = {
-                id: item.course,
-                name: item.course,
-                sks: 0,
-                semester: userProfile?.semester || 1,
-                grade: undefined,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+            if (!course && performanceRecords) {
+                course = performanceRecords.find(c => c.id === exactItem.course);
+                if (!course && exactItem.course) {
+                    course = performanceRecords.find(c => c.name === exactItem.course || (c.name && c.name.toLowerCase() === exactItem.course.toLowerCase()));
+                }
+            }
+            if (!course && exactItem.course) {
+                course = {
+                    id: exactItem.course,
+                    name: exactItem.course,
+                    sks: 0,
+                    semester: userProfile?.semester || 1,
+                    grade: undefined,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            }
+            
+            let className = "bg-muted text-muted-foreground border-border";
+            if (course) {
+                const hash = (course.id || course.name).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                className = COLOR_VARIANTS[hash % COLOR_VARIANTS.length];
+            }
+            
+            return {
+                ...exactItem,
+                course,
+                className,
+                room: exactItem.location || '',
+                lecturer: exactItem.lecturer || ''
             };
         }
-
-        // Color Logic
-        let className = "bg-muted text-muted-foreground border-border";
-        if (course) {
-            const hash = (course.id || course.name).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            className = COLOR_VARIANTS[hash % COLOR_VARIANTS.length];
+        
+        // Check for courses with time ranges (startTime to endTime)
+        const slotMinutes = timeToMinutes(time);
+        
+        // Find any schedule item that covers this day and time range
+        for (const [key, item] of Object.entries(schedule)) {
+            if (!item || !item.course || !item.day || !item.startTime || !item.endTime) continue;
+            if (item.day !== day) continue;
+            
+            const startMinutes = timeToMinutes(item.startTime);
+            const endMinutes = timeToMinutes(item.endTime);
+            
+            // Check if current slot falls within the course time range
+            if (slotMinutes >= startMinutes && slotMinutes < endMinutes) {
+                // Found a course that covers this slot
+                let course = courses.find(c => c.id === item.course);
+                if (!course && item.course) {
+                    course = courses.find(c => c.name === item.course || (c.name && item.course && c.name.toLowerCase() === item.course.toLowerCase()));
+                }
+                if (!course && performanceRecords) {
+                    course = performanceRecords.find(c => c.id === item.course);
+                    if (!course && item.course) {
+                        course = performanceRecords.find(c => c.name === item.course || (c.name && c.name.toLowerCase() === item.course.toLowerCase()));
+                    }
+                }
+                if (!course && item.course) {
+                    course = {
+                        id: item.course,
+                        name: item.course,
+                        sks: 0,
+                        semester: userProfile?.semester || 1,
+                        grade: undefined,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                }
+                
+                let className = "bg-muted text-muted-foreground border-border";
+                if (course) {
+                    const hash = (course.id || course.name).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                    className = COLOR_VARIANTS[hash % COLOR_VARIANTS.length];
+                }
+                
+                return {
+                    ...item,
+                    course,
+                    className,
+                    room: item.location || '',
+                    lecturer: item.lecturer || ''
+                };
+            }
         }
-
-        return {
-            ...item,
-            course,
-            className,
-            room: item.location || '',
-            lecturer: item.lecturer || ''
-        };
+        
+        return null;
     };
 
     // Handlers
