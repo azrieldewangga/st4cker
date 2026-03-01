@@ -681,8 +681,6 @@ app.on('ready', async () => {
                 fetch(`${WEBSOCKET_URL}/api/v1/transactions`, { headers })
             ]);
 
-            const db = getDB();
-
             if (tasksRes.ok) {
                 const { data: vpsTasks } = await tasksRes.json() as any;
                 if (vpsTasks && Array.isArray(vpsTasks)) {
