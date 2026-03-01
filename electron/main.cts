@@ -642,8 +642,38 @@ app.on('ready', async () => {
         db.prepare('DELETE FROM sync_queue WHERE synced = 1 AND id NOT IN (SELECT id FROM sync_queue WHERE synced = 1 ORDER BY created_at DESC LIMIT 100)').run();
     }
 
+    // Flag untuk mencegah racing condition saat sync
+    let isSyncing = false;
+    let lastSyncTime = 0;
+    const SYNC_COOLDOWN = 5000; // 5 detik cooldown antar sync
+
     async function pullFromVPS() {
+        // Cegah racing condition
+        if (isSyncing) {
+            console.log('[VPS Pull] ⚠️ Sync already in progress, skipping...');
+            return;
+        }
+        
+        // Cegah sync terlalu sering
+        const now = Date.now();
+        if (now - lastSyncTime < SYNC_COOLDOWN) {
+            console.log('[VPS Pull] ⚠️ Sync cooldown active, skipping...');
+            return;
+        }
+        
+        isSyncing = true;
+        lastSyncTime = now;
+        
         try {
+            console.log('[VPS Pull] 🔄 Starting sync from VPS...');
+            
+            // Clear sync queue untuk mencegah konflik (VPS dianggap sumber kebenaran)
+            const db = getDB();
+            const clearedQueue = db.prepare('DELETE FROM sync_queue WHERE synced = 0').run();
+            if (clearedQueue.changes > 0) {
+                console.log(`[VPS Pull] 🧹 Cleared ${clearedQueue.changes} pending local changes (VPS is master)`);
+            }
+            
             const headers: any = { 'x-api-key': API_KEY };
             const [tasksRes, projectsRes, txRes] = await Promise.all([
                 fetch(`${WEBSOCKET_URL}/api/v1/tasks`, { headers }),
@@ -696,8 +726,12 @@ app.on('ready', async () => {
             BrowserWindow.getAllWindows().forEach(win => {
                 if (!win.isDestroyed()) win.webContents.send('refresh-data');
             });
+            
+            console.log('[VPS Pull] ✅ Sync completed successfully');
         } catch (e) {
             console.error('[VPS Pull] Error:', e);
+        } finally {
+            isSyncing = false;
         }
     }
 
