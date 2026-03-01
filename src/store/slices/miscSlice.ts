@@ -238,6 +238,11 @@ export const createMiscSlice: StateCreator<
             if (!response.ok) throw new Error('Failed to fetch');
             const data = await response.json();
             
+            console.log(`[MiscSlice] fetchScheduleFromBackend: Got ${data.data?.length || 0} items from server`);
+            if (data.data?.length > 0) {
+                console.log('[MiscSlice] First item from server:', JSON.stringify(data.data[0]));
+            }
+            
             // Jangan overwrite kalau server kosong tapi lokal ada data
             if (!data.data?.length) {
                 console.log('[MiscSlice] Server has no schedules, keeping local data');
@@ -253,8 +258,11 @@ export const createMiscSlice: StateCreator<
             // Convert array to schedule map dengan timestamp-based conflict resolution
             const scheduleMap: Record<string, any> = { ...localScheduleState };
             let updatedCount = 0;
+            let skippedCount = 0;
+            let processedCount = 0;
             
             data.data?.forEach((item: any) => {
+                processedCount++;
                 const key = `${item.day}-${item.startTime}`;
                 const itemKey = `${item.day}_${item.startTime}_${(item.courseName || item.course || '').toLowerCase().trim()}`;
                 
@@ -264,12 +272,14 @@ export const createMiscSlice: StateCreator<
                     (`${s.day}-${s.startTime}` === key && (s.course || '').toLowerCase() === (item.courseName || item.course || '').toLowerCase())
                 );
                 
-                // Timestamp-based conflict resolution
-                const serverModified = new Date(item.lastModifiedAt || item.updatedAt || 0);
-                const localModified = existingLocal ? new Date(existingLocal.updatedAt || existingLocal.createdAt || 0) : new Date(0);
+                // Conflict resolution: Prioritize server data when explicitly fetching from backend
+                // Only skip if local data was recently modified by user (within last 5 minutes)
+                const FIVE_MINUTES = 5 * 60 * 1000;
+                const localModified = existingLocal ? new Date(existingLocal.updatedAt || existingLocal.createdAt || 0).getTime() : 0;
+                const recentlyModifiedLocally = existingLocal && (Date.now() - localModified < FIVE_MINUTES);
                 
-                // Only update if server data is newer or local doesn't exist
-                if (!existingLocal || serverModified >= localModified) {
+                // Update if: no local data, or local not recently modified, or server has different data
+                if (!existingLocal || !recentlyModifiedLocally) {
                     scheduleMap[key] = {
                         ...item,
                         course: item.courseName || item.course,
@@ -302,9 +312,12 @@ export const createMiscSlice: StateCreator<
                         updatedCount++;
                     }
                 } else {
-                    console.log(`[MiscSlice] Keeping local schedule (newer): ${item.courseName || item.course}`);
+                    skippedCount++;
+                    console.log(`[MiscSlice] Keeping local schedule (recently modified): ${item.courseName || item.course}`);
                 }
             });
+            
+            console.log(`[MiscSlice] Processed: ${processedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);
             
             set({ schedule: scheduleMap });
             const finalKeys = Object.keys(scheduleMap);
