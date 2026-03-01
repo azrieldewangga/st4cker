@@ -25,10 +25,14 @@ export const createAssignmentSlice: StateCreator<
     [],
     [],
     AssignmentSlice
-> = (set, get) => ({
+> = (set, get) => {
+    // Inisialisasi Set di luar object literal untuk menghindari TS error
+    const deletedIdsSet = new Set<string>();
+    
+    return {
     assignments: [],
     assignmentsLastSyncedAt: null,
-    deletedAssignmentIds: new Set<string>(),
+    deletedAssignmentIds: deletedIdsSet,
 
     fetchAssignments: async () => {
         try {
@@ -408,4 +412,5 @@ export const createAssignmentSlice: StateCreator<
 
         console.log('[AssignmentSlice] Real-time sync enabled');
     },
-});
+};
+};
