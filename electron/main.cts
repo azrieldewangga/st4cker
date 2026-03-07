@@ -345,7 +345,7 @@ app.on('ready', async () => {
         if (telegramStore && telegramStore.get('paired') && c.id && c.name) {
             try {
                 const token = telegramStore.get('sessionToken');
-                const serverUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
+                const serverUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'http://178.128.215.237:3000';
                 const apiKey = process.env.AGENT_API_KEY || '';
                 
                 // Kirim custom course name ke API
@@ -575,7 +575,7 @@ app.on('ready', async () => {
     let telegramStore: any = null;
     let telegramSocket: any = null;
     let initTelegramWebSocket: (token: string) => void; // Defined outer scope
-    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://103.127.134.173:3000';
+    const WEBSOCKET_URL = process.env.TELEGRAM_WEBSOCKET_URL || 'http://178.128.215.237:3000';
     const API_KEY = process.env.AGENT_API_KEY;
     if (!API_KEY) {
         console.warn('[Telegram] WARNING: AGENT_API_KEY env var is not set. VPS sync will fail.');
