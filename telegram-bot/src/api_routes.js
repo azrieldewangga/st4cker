@@ -2,7 +2,7 @@ import express from 'express';
 import { body, query, param, validationResult } from 'express-validator';
 import { db } from './db/index.js';
 import { assignments, projects, transactions, users, schedules, reminderLogs, reminderOverrides, scheduleCancellations, userCourseNames } from './db/schema.js';
-import { eq, and, desc, like } from 'drizzle-orm';
+import { eq, and, desc, like, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { broadcastEvent } from './server.js';
 
@@ -932,6 +932,135 @@ router.get('/schedules', [
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+// POST /api/v1/schedules/sync - Bulk sync schedules from desktop app with timestamp-based conflict resolution
+router.post('/schedules/sync', async (req, res) => {
+    try {
+        const { schedules: schedulesData, clientTimestamp, modifiedBy = 'app' } = req.body;
+        const usersList = await db.select().from(users).limit(1);
+        
+        if (usersList.length === 0) {
+            return res.status(400).json({ error: 'No users found' });
+        }
+        
+        // Using req.userId from auth middleware
+        const now = new Date();
+        const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        
+        let created = 0, updated = 0, skipped = 0;
+        const changedSchedules = [];
+        
+        // Upsert each schedule dengan timestamp comparison
+        for (const item of schedulesData) {
+            const dayNum = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].indexOf(item.day) + 1;
+            if (dayNum === 0) continue; // Skip invalid day
+            
+            // Check if schedule exists
+            const existing = await db.select()
+                .from(schedules)
+                .where(eq(schedules.id, item.id))
+                .limit(1);
+            
+            const scheduleData = {
+                id: item.id || crypto.randomUUID(),
+                userId: req.userId,
+                courseName: item.course,
+                courseCode: item.course?.substring(0, 3).toUpperCase(),
+                dayOfWeek: dayNum,
+                startTime: item.startTime,
+                endTime: item.endTime || '',
+                room: item.location || '',
+                lecturer: item.lecturer || '',
+                isActive: item.isActive ?? true,
+                semester: item.semester || 1,
+                createdAt: now,
+                updatedAt: now,
+                lastModifiedAt: now,
+                modifiedBy: modifiedBy
+            };
+            
+            if (existing.length === 0) {
+                // New schedule - create
+                await db.insert(schedules).values(scheduleData);
+                created++;
+                changedSchedules.push({ ...scheduleData, dayName: dayNames[dayNum], action: 'created' });
+            } else {
+                // Existing schedule - check timestamp for conflict resolution
+                const serverLastModified = new Date(existing[0].lastModifiedAt || existing[0].updatedAt);
+                const clientLastModified = new Date(item.lastModifiedAt || clientTimestamp || now);
+                
+                // Only update if client data is newer (or same time but different content)
+                if (clientLastModified >= serverLastModified) {
+                    await db.update(schedules)
+                        .set(scheduleData)
+                        .where(eq(schedules.id, item.id));
+                    updated++;
+                    changedSchedules.push({ ...scheduleData, dayName: dayNames[dayNum], action: 'updated' });
+                } else {
+                    // Server has newer data, skip this item
+                    skipped++;
+                }
+            }
+        }
+        
+        // Broadcast changes ke semua connected clients
+        if (changedSchedules.length > 0) {
+            await broadcastEvent(req.userId, {
+                eventId: crypto.randomUUID(),
+                eventType: 'schedule.synced',
+                payload: {
+                    schedules: changedSchedules,
+                    timestamp: now.toISOString(),
+                    summary: { created, updated, skipped }
+                }
+            });
+        }
+        
+        res.json({ 
+            success: true, 
+            count: schedulesData.length,
+            summary: { created, updated, skipped },
+            serverTimestamp: now.toISOString()
+        });
+    } catch (error) {
+        console.error('[API] Sync Schedules Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// GET /api/v1/schedules/sync-status - Get last modified timestamp for sync detection
+router.get('/schedules/sync-status', async (req, res) => {
+    try {
+        const usersList = await db.select().from(users).limit(1);
+        if (usersList.length === 0) {
+            return res.status(400).json({ error: 'No users found' });
+        }
+        
+        // Using req.userId from auth middleware
+        
+        // Get last modified schedule
+        const lastModified = await db.select()
+            .from(schedules)
+            .where(eq(schedules.userId, req.userId))
+            .orderBy(desc(schedules.lastModifiedAt))
+            .limit(1);
+        
+        // Get total count
+        const count = await db.select({ count: sql`COUNT(*)` })
+            .from(schedules)
+            .where(eq(schedules.userId, req.userId));
+        
+        res.json({
+            success: true,
+            lastModifiedAt: lastModified[0]?.lastModifiedAt || null,
+            lastModifiedBy: lastModified[0]?.modifiedBy || null,
+            totalCount: count[0]?.count || 0,
+            serverTimestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('[API] Sync Status Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 // GET /api/v1/schedules/:id
 router.get('/schedules/:id', [
@@ -1129,136 +1258,6 @@ router.delete('/schedules/:id', [
     } catch (error) {
         console.error('[API] Delete Schedule Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-// POST /api/v1/schedules/sync - Bulk sync schedules from desktop app with timestamp-based conflict resolution
-router.post('/schedules/sync', async (req, res) => {
-    try {
-        const { schedules: schedulesData, clientTimestamp, modifiedBy = 'app' } = req.body;
-        const usersList = await db.select().from(users).limit(1);
-        
-        if (usersList.length === 0) {
-            return res.status(400).json({ error: 'No users found' });
-        }
-        
-        // Using req.userId from auth middleware
-        const now = new Date();
-        const dayNames = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-        
-        let created = 0, updated = 0, skipped = 0;
-        const changedSchedules = [];
-        
-        // Upsert each schedule dengan timestamp comparison
-        for (const item of schedulesData) {
-            const dayNum = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].indexOf(item.day) + 1;
-            if (dayNum === 0) continue; // Skip invalid day
-            
-            // Check if schedule exists
-            const existing = await db.select()
-                .from(schedules)
-                .where(eq(schedules.id, item.id))
-                .limit(1);
-            
-            const scheduleData = {
-                id: item.id || crypto.randomUUID(),
-                userId: req.userId,
-                courseName: item.course,
-                courseCode: item.course?.substring(0, 3).toUpperCase(),
-                dayOfWeek: dayNum,
-                startTime: item.startTime,
-                endTime: item.endTime || '',
-                room: item.location || '',
-                lecturer: item.lecturer || '',
-                isActive: item.isActive ?? true,
-                semester: item.semester || 1,
-                createdAt: now,
-                updatedAt: now,
-                lastModifiedAt: now,
-                modifiedBy: modifiedBy
-            };
-            
-            if (existing.length === 0) {
-                // New schedule - create
-                await db.insert(schedules).values(scheduleData);
-                created++;
-                changedSchedules.push({ ...scheduleData, dayName: dayNames[dayNum], action: 'created' });
-            } else {
-                // Existing schedule - check timestamp for conflict resolution
-                const serverLastModified = new Date(existing[0].lastModifiedAt || existing[0].updatedAt);
-                const clientLastModified = new Date(item.lastModifiedAt || clientTimestamp || now);
-                
-                // Only update if client data is newer (or same time but different content)
-                if (clientLastModified >= serverLastModified) {
-                    await db.update(schedules)
-                        .set(scheduleData)
-                        .where(eq(schedules.id, item.id));
-                    updated++;
-                    changedSchedules.push({ ...scheduleData, dayName: dayNames[dayNum], action: 'updated' });
-                } else {
-                    // Server has newer data, skip this item
-                    skipped++;
-                }
-            }
-        }
-        
-        // Broadcast changes ke semua connected clients
-        if (changedSchedules.length > 0) {
-            await broadcastEvent(req.userId, {
-                eventId: crypto.randomUUID(),
-                eventType: 'schedule.synced',
-                payload: {
-                    schedules: changedSchedules,
-                    timestamp: now.toISOString(),
-                    summary: { created, updated, skipped }
-                }
-            });
-        }
-        
-        res.json({ 
-            success: true, 
-            count: schedulesData.length,
-            summary: { created, updated, skipped },
-            serverTimestamp: now.toISOString()
-        });
-    } catch (error) {
-        console.error('[API] Sync Schedules Error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// GET /api/v1/schedules/sync-status - Get last modified timestamp for sync detection
-router.get('/schedules/sync-status', async (req, res) => {
-    try {
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) {
-            return res.status(400).json({ error: 'No users found' });
-        }
-        
-        // Using req.userId from auth middleware
-        
-        // Get last modified schedule
-        const lastModified = await db.select()
-            .from(schedules)
-            .where(eq(schedules.userId, req.userId))
-            .orderBy(desc(schedules.lastModifiedAt))
-            .limit(1);
-        
-        // Get total count
-        const count = await db.select({ count: sql`COUNT(*)` })
-            .from(schedules)
-            .where(eq(schedules.userId, req.userId));
-        
-        res.json({
-            success: true,
-            lastModifiedAt: lastModified[0]?.lastModifiedAt || null,
-            lastModifiedBy: lastModified[0]?.modifiedBy || null,
-            totalCount: count[0]?.count || 0,
-            serverTimestamp: new Date().toISOString()
-        });
-    } catch (error) {
-        console.error('[API] Sync Status Error:', error);
-        res.status(500).json({ error: error.message });
     }
 });
 
