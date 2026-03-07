@@ -4,7 +4,7 @@ info:
   description: API for AI Agents (OpenClaw) to control St4cker (Tasks, Projects, Transactions).
   version: 1.1.0
 servers:
-  - url: http://103.127.134.173:3000/api/v1
+  - url: http://178.128.215.237:3000/api/v1
     description: Production Server (VPS)
 components:
   securitySchemes:

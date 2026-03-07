@@ -373,7 +373,7 @@ router.patch('/tasks/:id', [
         const usersList = await db.select().from(users).limit(1);
         // Using req.userId from auth middleware
 
-        await broadcastEvent(userId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'task.updated',
             payload: {
@@ -414,7 +414,7 @@ router.delete('/tasks/:id', [
         const usersList = await db.select().from(users).limit(1);
         // Using req.userId from auth middleware
 
-        await broadcastEvent(userId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'task.deleted',
             payload: { id }
@@ -580,7 +580,7 @@ router.patch('/projects/:id', [
         const usersList = await db.select().from(users).limit(1);
         // Using req.userId from auth middleware
 
-        await broadcastEvent(userId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'project.updated',
             payload: {
@@ -623,7 +623,7 @@ router.post('/projects/:id/logs', [
         const usersList = await db.select().from(users).limit(1);
         // Using req.userId from auth middleware
 
-        await broadcastEvent(userId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'progress.logged',
             payload: {
@@ -663,7 +663,7 @@ router.delete('/projects/:id', [
         const usersList = await db.select().from(users).limit(1);
         // Using req.userId from auth middleware
 
-        await broadcastEvent(userId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'project.deleted',
             payload: { id }
@@ -756,7 +756,7 @@ router.post('/transactions', [
             .where(eq(users.telegramUserId, req.userId));
 
         if (req.header('x-source') !== 'desktop') {
-            await broadcastEvent(userId, {
+            await broadcastEvent(req.userId, {
                 eventId: crypto.randomUUID(),
                 eventType: 'transaction.created',
                 payload: {
@@ -817,7 +817,7 @@ router.patch('/transactions/:id', [
         const usersList = await db.select().from(users).limit(1);
         // Using req.userId from auth middleware
 
-        await broadcastEvent(userId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'transaction.updated',
             payload: {
@@ -863,7 +863,7 @@ router.delete('/transactions/:id', [
         const usersList = await db.select().from(users).limit(1);
         // Using req.userId from auth middleware
 
-        await broadcastEvent(userId, {
+        await broadcastEvent(req.userId, {
             eventId: crypto.randomUUID(),
             eventType: 'transaction.deleted',
             payload: { id }
@@ -1204,7 +1204,7 @@ router.post('/schedules/sync', async (req, res) => {
         
         // Broadcast changes ke semua connected clients
         if (changedSchedules.length > 0) {
-            await broadcastEvent(userId, {
+            await broadcastEvent(req.userId, {
                 eventId: crypto.randomUUID(),
                 eventType: 'schedule.synced',
                 payload: {
