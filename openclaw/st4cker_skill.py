@@ -14,7 +14,7 @@ from typing import Optional, List, Dict, Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, Header, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, AliasChoices
 
 # Import modules
 from nlu import NLU  # Legacy, will phase out
@@ -24,12 +24,40 @@ from memory import get_user_memory, get_memory_store
 from message_gen import MessageGenerator
 from context import ContextStore
 from tools import St4ckerTools
-from attendance_nlu import detect_attendance_intent
-from course_manager_nlu import parse_course_management
-from smart_reminder_client import send_attendance_intent_sync, send_course_management_sync
+# NOTE: All attendance detection now goes through LLM NLU (OpenClaw), not pattern-based
+# from attendance_nlu import detect_attendance_intent
+# NOTE: All intent parsing goes through LLM NLU (OpenClaw), not pattern-based
+# from course_manager_nlu import parse_course_management
+# NOTE: Pattern-based NLU imports removed - all detection via OpenClaw LLM now
+# from attendance_nlu import detect_attendance_intent
+# from course_manager_nlu import parse_course_management
+
+from course_mapping import get_course_name, parse_course_id
+from smart_reminder_client import send_course_management_sync
+
+# =============================================================================
+# NEW: SmartReminder Subagent Integration (No Cron!)
+# =============================================================================
+from smart_reminder_subagent import SmartReminderSubagent, subagent as smart_reminder
+from reminder_scheduler import ReminderScheduler
+
+# Initialize SmartReminder components
+reminder_scheduler = ReminderScheduler(check_interval=60)
+smart_reminder_subagent = SmartReminderSubagent()
+
+# Track if scheduler is running
+_scheduler_started = False
+
+async def ensure_scheduler_started():
+    """Ensure reminder scheduler is running (called on first request)"""
+    global _scheduler_started
+    if not _scheduler_started:
+        await reminder_scheduler.start()
+        _scheduler_started = True
+        print("[SmartReminder] Scheduler started (no cron job!)")
 
 # Configuration
-ST4CKER_API_URL = os.getenv("ST4CKER_API_URL", "http://103.127.134.173:3000")
+ST4CKER_API_URL = os.getenv("ST4CKER_API_URL", "http://st4cker-bot:3000")
 ST4CKER_API_KEY = os.getenv("ST4CKER_API_KEY", "")
 OPENCLAW_API_KEY = os.getenv("OPENCLAW_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -90,9 +118,11 @@ class ReminderTrigger(BaseModel):
 
 class ChatRequest(BaseModel):
     phone: str
-    user_id: str
+    user_id: str = Field(..., validation_alias=AliasChoices('user_id', 'userId'))
     message: str
     context: Optional[Dict[str, Any]] = None
+    
+    model_config = {'populate_by_name': True}
 
 class OpenClawResponse(BaseModel):
     reply: str
@@ -102,10 +132,27 @@ class OpenClawResponse(BaseModel):
     done: bool = False
 
 # FastAPI App
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _scheduler_started
+    # Startup: Start reminder scheduler
+    print("[Startup] Starting reminder scheduler...")
+    await reminder_scheduler.start()
+    _scheduler_started = True
+    print("[Startup] Reminder scheduler started!")
+    yield
+    # Shutdown: Stop scheduler
+    print("[Shutdown] Stopping reminder scheduler...")
+    await reminder_scheduler.stop()
+    _scheduler_started = False
+
 app = FastAPI(
     title="OpenClaw St4cker Brain",
     description="Conversational AI for St4cker - Persona: Azriel (Zril)",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 def verify_api_key(x_api_key: Optional[str] = Header(None)):
@@ -142,7 +189,34 @@ async def handle_reminder_trigger(
         )
     
     # Generate message with persona Azriel
-    message = await msg_gen.generate(data.trigger_type, data.data, user_ctx)
+    # For schedule reminders, generate proper readable message
+    if data.trigger_type == "schedule" and data.data:
+        course_name = data.data.get("course_name", "Kuliah")
+        start_time = data.data.get("start_time", "")
+        end_time = data.data.get("end_time", "")
+        room = data.data.get("room", "N/A")
+        lecturer = data.data.get("lecturer", "")
+        
+        # Build readable reminder message
+        lines = [f"📚 *{course_name}*"]
+        if start_time:
+            time_str = f"🕐 {start_time}"
+            if end_time:
+                time_str += f" - {end_time}"
+            lines.append(time_str)
+        if room and room != "N/A":
+            lines.append(f"📍 {room}")
+        if lecturer:
+            lines.append(f"👨‍🏫 {lecturer}")
+        
+        lines.append("")
+        lines.append("Jangan lupa siapin perlengkapannya ya! 📚")
+        lines.append("")
+        lines.append("_Balas 'otw' kalau berangkat, atau 'skip' kalau ga jadi_ 😊")
+        
+        message = "\n".join(lines)
+    else:
+        message = await msg_gen.generate(data.trigger_type, data.data, user_ctx)
     
     # LOG THE REMINDER - This is crucial for followup-bot to know if initial reminder was sent
     # Determine the log type based on trigger_type
@@ -227,8 +301,11 @@ async def handle_chat(
     """
     Universal chat handler - semua reply user masuk sini.
     NOW WITH LLM-BASED NLU for truly AI understanding!
+    PLUS SmartReminder subagent integration!
     """
-    print(f"[Chat] {data.user_id}: {data.message}")
+    import uuid
+    request_id = str(uuid.uuid4())[:8]
+    print(f"[Chat:{request_id}] {data.user_id}: {data.message}")
     
     # Get user context dan memory
     user_ctx = context_store.get_context(data.user_id)
@@ -237,6 +314,11 @@ async def handle_chat(
     # Merge context dari request
     if data.context:
         user_ctx.update(data.context)
+    
+    # =============================================================================
+    # OPENCLAW LLM: All intent parsing goes through LLM (no pattern-based detection!)
+    # =============================================================================
+    await ensure_scheduler_started()
     
     # Check if we're awaiting clarification
     if user_ctx.get("awaiting_clarification"):
@@ -253,7 +335,19 @@ async def handle_chat(
         return await ask_clarification_v2(parsed, user_ctx, user_memory)
     
     # Handle clear intent dengan LLM-based response
-    return await handle_intent_v2(parsed, data, user_ctx, user_memory)
+    print(f"[DEBUG:{request_id}] About to call handle_intent_v2 with intent: {parsed.get('intent')}")
+    try:
+        result = await handle_intent_v2(parsed, data, user_ctx, user_memory)
+        print(f"[DEBUG:{request_id}] handle_intent_v2 returned: {result.reply[:50]}...")
+        return result
+    except Exception as e:
+        print(f"[ERROR:{request_id}] handle_intent_v2 failed: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to legacy
+        result = await handle_clear_intent_legacy(parsed, data, user_ctx)
+        print(f"[DEBUG:{request_id}] Fallback to legacy returned: {result.reply[:50]}...")
+        return result
 
 async def handle_clarification_response(data: ChatRequest, user_ctx: Dict) -> OpenClawResponse:
     """
@@ -512,15 +606,8 @@ async def handle_clear_intent(intent: Dict, data: ChatRequest, user_ctx: Dict) -
     """
     intent_type = intent.get("intent")
     
-    # Check for course management intent FIRST
-    course_result = parse_course_management(data.message)
-    if course_result["confidence"] >= 0.5:
-        return await handle_course_management_intent(course_result, data, user_ctx)
-    
-    # Check for attendance intent (priority untuk reminder responses)
-    attendance_result = detect_attendance_intent(data.message, user_ctx)
-    if attendance_result["confidence"] >= 0.5:
-        return await handle_attendance_intent(attendance_result, data, user_ctx)
+    # ALL intent detection now goes through LLM NLU (OpenClaw)
+    # Pattern-based detection removed!
     
     if intent_type == "cancel":
         return await handle_cancel_intent(intent, data, user_ctx)
@@ -691,6 +778,7 @@ async def handle_intent_v2(
     """Handle intent dengan AI-generated responses."""
     
     intent = parsed.get("intent")
+    print(f"[handle_intent_v2] Routing intent: {intent}")
     fields = parsed.get("fields", {})
     patterns = parsed.get("detected_patterns", {})
     
@@ -728,8 +816,87 @@ async def handle_intent_v2(
         )
         return OpenClawResponse(reply=reply, action="send", done=True)
     
-    # Fallback to legacy handlers
-    return await handle_clear_intent_legacy(parsed, data, user_ctx)
+    elif intent == "need_help":
+        # Legacy intent - treat as general chat
+        print(f"[OpenClaw] Legacy 'need_help' intent -> general_chat")
+        reply = await responder.generate(
+            context="general_chat",
+            data={"message": data.message, "reason": "user_seeking_advice"},
+            user_memory=user_memory
+        )
+        return OpenClawResponse(reply=reply, action="send", done=True)
+    
+    elif intent == "attendance_reply":
+        # Handle attendance reply via LLM detection
+        attendance_intent = fields.get("attendance_intent", "confirmed")
+        delay_minutes = fields.get("delay_minutes")
+        
+        # Update SmartReminder
+        await smart_reminder_subagent.update_attendance(attendance_intent, {
+            "delay_minutes": delay_minutes,
+            "original_message": data.message
+        })
+        
+        # Generate contextual response
+        response_message = await responder.generate(
+            context=f"attendance_{attendance_intent}",
+            data={
+                "intent": attendance_intent,
+                "delay_minutes": delay_minutes,
+                "course": user_ctx.get("last_course", "")
+            },
+            user_memory=user_memory
+        )
+        
+        print(f"[OpenClaw LLM] Attendance intent: {attendance_intent}")
+        
+        return OpenClawResponse(
+            reply=response_message,
+            action="send",
+            context_update={"awaiting_attendance_reply": False},
+            done=True
+        )
+    
+    elif intent == "course_management":
+        # Handle course management via LLM detection
+        course = fields.get("course", "")
+        action = fields.get("action", "skip")  # skip/online/reschedule
+        date = fields.get("date", "today")
+        
+        # Send to SmartReminder
+        try:
+            await smart_reminder_subagent.skip_course(course, reason=action)
+            print(f"[OpenClaw LLM] Course management: {action} for {course}")
+        except Exception as e:
+            print(f"[OpenClaw LLM] Course mgmt error: {e}")
+        
+        # Generate AI response
+        reply = await responder.generate(
+            context="course_management",
+            data={
+                "intent": action,
+                "course": course,
+                "date": date,
+                "user_message": data.message
+            },
+            user_memory=user_memory
+        )
+        
+        return OpenClawResponse(
+            reply=reply,
+            action="send",
+            context_update={"awaiting_clarification": False},
+            done=True
+        )
+    
+    # Unknown or legacy intents - treat as general chat (OpenClaw decides, not pattern-based!)
+    print(f"[OpenClaw] Intent '{intent}' handled as general_chat")
+    reply = await responder.generate(
+        context="general_chat",
+        data={"message": data.message, "original_intent": intent},
+        user_memory=user_memory
+    )
+    return OpenClawResponse(reply=reply, action="send", done=True)
 
 
 # =============================================================================
@@ -932,6 +1099,7 @@ async def handle_list_tasks_v2(
     user_memory: Any
 ) -> OpenClawResponse:
     """List tasks dengan AI response."""
+    print(f"[handle_list_tasks_v2] Called!")
     
     result = await tools.get_tasks(
         status=fields.get("status_filter"),
@@ -949,15 +1117,54 @@ async def handle_list_tasks_v2(
         )
         return OpenClawResponse(reply=reply, action="send", done=True)
     
-    # Format tasks
+    # Format tasks dengan deadline yang sudah dihitung
+    from datetime import datetime
+    now = datetime.now()
     task_list = []
     for t in tasks[:10]:
+        deadline_str = t.get("deadline", "")
+        deadline_display = "deadline TBD"
+        days_left = None
+        
+        if deadline_str:
+            try:
+                # Handle both +HH:MM and Z formats
+                if deadline_str.endswith('Z'):
+                    deadline = datetime.fromisoformat(deadline_str.replace("Z", "+00:00"))
+                else:
+                    deadline = datetime.fromisoformat(deadline_str)
+                # Ensure both have timezone info
+                if now.tzinfo is None and deadline.tzinfo is not None:
+                    now = now.replace(tzinfo=deadline.tzinfo.__class__(timedelta(hours=7)))  # Asia/Jakarta
+                days_left = (deadline - now).days
+                if days_left < 0:
+                    deadline_display = f"telat {abs(days_left)} hari"
+                elif days_left == 0:
+                    deadline_display = "hari ini"
+                elif days_left == 1:
+                    deadline_display = "besok"
+                else:
+                    deadline_display = f"{days_left} hari lagi"
+            except Exception as e:
+                print(f"[ERROR] Deadline parsing failed: {e}, value: {deadline_str}")
+                deadline_display = deadline_str[:10]  # fallback to date only
+        
+        # Map course ID to readable name
+        course_id = t.get("course", "")
+        course_name = get_course_name(course_id) if course_id else ""
+        
         task_list.append({
             "title": t.get("title"),
-            "course": t.get("course"),
-            "deadline": t.get("deadline"),
+            "course_id": course_id,
+            "course_name": course_name,
+            "deadline": deadline_display,  # Pre-formatted: "telat 3 hari", "besok", etc
+            "days_left": days_left,
+            "is_overdue": days_left is not None and days_left < 0,
             "status": t.get("status")
         })
+    
+    # Debug: print task list data
+    print(f"[handle_list_tasks_v2] Task list: {task_list}")
     
     reply = await responder.generate(
         context="list_tasks",
@@ -2629,16 +2836,73 @@ async def _handle_confirmation_consult(request: ConsultRequest, user_ctx: Dict) 
 
 
 # =============================================================================
+# NEW: SmartReminder Subagent Endpoints
+# =============================================================================
+
+@app.get("/api/v1/smart-reminder/poll")
+async def poll_reminders(_: bool = Depends(verify_api_key)):
+    """
+    Poll for pending reminder messages from SmartReminder subagent.
+    Called periodically by WhatsApp gateway or other message sender.
+    NO CRON JOB NEEDED - Internal timer loop handles checking!
+    """
+    await ensure_scheduler_started()
+    
+    messages = reminder_scheduler.get_pending_reminders()
+    
+    # Format for WhatsApp gateway
+    formatted_messages = []
+    for msg in messages:
+        formatted_messages.append({
+            "type": "course_reminder",
+            "course": msg.get("course"),
+            "message": msg.get("message"),
+            "timestamp": msg.get("timestamp"),
+            "phone": msg.get("target", "+6281311417727")
+        })
+    
+    return {
+        "has_messages": len(formatted_messages) > 0,
+        "messages": formatted_messages,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/v1/smart-reminder/schedule-today")
+async def get_today_schedule(_: bool = Depends(verify_api_key)):
+    """
+    Get today's schedule from SmartReminder subagent.
+    """
+    schedule = await smart_reminder_subagent.get_today_schedule()
+    return schedule
+
+
+@app.post("/api/v1/smart-reminder/reset-daily")
+async def reset_daily(_: bool = Depends(verify_api_key)):
+    """
+    Reset attendance for new day (called at 4 AM).
+    """
+    success = await smart_reminder_subagent.reset_daily()
+    return {"success": success, "message": "Daily reset completed"}
+
+
+# =============================================================================
 # HEALTH CHECK
 # =============================================================================
 
 @app.get("/health")
 async def health_check():
+    scheduler_status = "running" if _scheduler_started else "stopped"
+    
     return {
         "status": "ok",
         "service": "openclaw-brain",
         "version": "2.0.0",
         "persona": "Azriel (Zril)",
+        "smart_reminder": {
+            "scheduler": scheduler_status,
+            "subagent_url": smart_reminder_subagent.base_url
+        },
         "timestamp": datetime.now().isoformat()
     }
 
