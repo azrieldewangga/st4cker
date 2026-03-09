@@ -199,15 +199,27 @@ export const createAssignmentSlice: StateCreator<
             const { assignments, userProfile } = state;
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
+            // Map frontend status to backend status
+            const mapStatusToBackend = (status: string) => {
+                switch (status) {
+                    case 'done': return 'completed';
+                    case 'to-do':
+                    case 'progress':
+                    case 'pending': return 'pending';
+                    default: return 'pending';
+                }
+            };
+
             const assignmentsArray = assignments.map((a: any) => ({
                 id: a.id,
                 title: a.title,
                 course: a.course || a.courseId,
                 type: a.type || 'Tugas',
-                status: a.status || 'to-do',
+                status: mapStatusToBackend(a.status),
                 deadline: a.deadline,
                 note: a.note || '',
                 semester: userProfile?.semester || 1,
+                updatedAt: a.updatedAt || new Date().toISOString(),
             }));
 
             const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
@@ -306,16 +318,26 @@ export const createAssignmentSlice: StateCreator<
                 const itemKey = `${(item.title || '').toLowerCase().trim()}_${item.deadline}_${courseId}`;
                 const existsByContent = existingKeys.has(itemKey);
 
+                // Map backend status to frontend status
+                const mapStatusToFrontend = (status: string) => {
+                    switch (status) {
+                        case 'completed': return 'done';
+                        case 'pending': return 'to-do';
+                        case 'missed': return 'to-do'; // Treat missed as to-do
+                        default: return status; // 'to-do', 'progress', 'done' pass through
+                    }
+                };
+
                 const assignmentData = {
                     id: item.id,
                     title: item.title,
                     course: courseId, // Simpan course ID (format course-X-Y)
                     type: item.type,
-                    status: item.status === 'pending' ? 'to-do' : item.status,
+                    status: mapStatusToFrontend(item.status),
                     deadline: item.deadline,
                     note: item.note || '',
                     semester: item.semester,
-                    updatedAt: new Date().toISOString(),
+                    updatedAt: item.updatedAt || new Date().toISOString(),
                 };
 
                 if (existsById) {

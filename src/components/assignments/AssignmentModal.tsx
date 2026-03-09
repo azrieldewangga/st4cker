@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStoreNew';
 import { format } from 'date-fns';
 import { AssignmentType } from '@/types/models';
+
+// Helper: Convert local date to UTC midnight to preserve calendar date
+// Prevents timezone shift when saving (e.g., 2 Mar WIB becoming 1 Mar UTC)
+function toUtcMidnight(localDate: Date): string {
+    const year = localDate.getFullYear();
+    const month = localDate.getMonth();
+    const day = localDate.getDate();
+    // Create UTC date at midnight for the same calendar day
+    const utcDate = new Date(Date.UTC(year, month, day, 0, 0, 0));
+    return utcDate.toISOString();
+}
 import {
     Dialog,
     DialogContent,
@@ -97,7 +108,7 @@ const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) =
                     courseId: formData.courseName,
                     title: finalTitle,
                     type: formData.type,
-                    deadline: formData.deadline.toISOString(),
+                    deadline: toUtcMidnight(formData.deadline),
                     note: formData.note
                 });
                 toast.success("Assignment Updated", {
@@ -108,7 +119,7 @@ const AssignmentModal = ({ isOpen, onClose, editingId }: AssignmentModalProps) =
                     courseId: formData.courseName,
                     title: finalTitle,
                     type: formData.type,
-                    deadline: formData.deadline.toISOString(),
+                    deadline: toUtcMidnight(formData.deadline),
                     status: 'to-do',
                     note: formData.note
                 });
