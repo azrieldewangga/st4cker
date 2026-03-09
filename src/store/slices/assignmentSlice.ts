@@ -105,7 +105,8 @@ export const createAssignmentSlice: StateCreator<
             throw new Error(validation.errors[0]);
         }
         try {
-            const updatePayload = { ...data };
+            const now = new Date().toISOString();
+            const updatePayload = { ...data, updatedAt: now };
             if ((updatePayload as any).courseId) {
                 (updatePayload as any).course = (updatePayload as any).courseId;
                 delete (updatePayload as any).courseId;
@@ -113,7 +114,7 @@ export const createAssignmentSlice: StateCreator<
 
             await window.electronAPI.assignments.update(id, updatePayload);
             set((state) => ({
-                assignments: state.assignments.map((item) => item.id === id ? { ...item, ...data } : item)
+                assignments: state.assignments.map((item) => item.id === id ? { ...item, ...data, updatedAt: now } : item)
             }));
             get().fetchAssignments();
 

@@ -162,11 +162,15 @@ export async function unpairSession(sessionToken) {
 }
 
 /**
- * Get sessions for a telegram user
+ * Get sessions for a telegram user (only active/non-expired)
  */
 export async function getUserSessions(telegramUserId) {
+    const now = new Date();
     return await db.select().from(sessions)
-        .where(eq(sessions.telegramUserId, telegramUserId.toString()))
+        .where(and(
+            eq(sessions.telegramUserId, telegramUserId.toString()),
+            gt(sessions.expiresAt, now)
+        ))
         .orderBy(desc(sessions.lastActivity));
 }
 
