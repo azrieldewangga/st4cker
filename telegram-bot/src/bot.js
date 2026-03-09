@@ -287,7 +287,7 @@ if (!token) {
         if (query.data === 'confirm_unpair') {
             const sessions = await getUserSessions(telegramUserId);
             if (sessions.length > 0) {
-                sessions.forEach(s => revokeSession(s.session_token));
+                sessions.forEach(s => revokeSession(s.sessionToken));
             }
 
             bot.answerCallbackQuery(query.id, { text: 'Device disconnected.' });
