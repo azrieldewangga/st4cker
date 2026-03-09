@@ -70,7 +70,7 @@ if (!token) {
 
             if (sessions.length > 0) {
                 // Already paired
-                const timeAgo = Math.floor((Date.now() - sessions[0].last_activity) / 1000 / 60);
+                const timeAgo = Math.floor((Date.now() - new Date(sessions[0].lastActivity).getTime()) / 1000 / 60);
 
                 bot.sendMessage(chatId, `✅ *Already Connected!*\n\n💻 Desktop: Active\n📡 Last sync: ${timeAgo} mins ago\n\nType /help to see available commands\n\nTo unpair: /unpair`, {
                     parse_mode: 'Markdown'
@@ -109,10 +109,10 @@ if (!token) {
             }
 
             const session = sessions[0];
-            const timeAgo = Math.floor((Date.now() - session.last_activity) / 1000 / 60);
-            const deviceInfo = session.device_id ? `\n📱 Device: ${session.device_id.slice(0, 8)}...` : '';
+            const timeAgo = Math.floor((Date.now() - new Date(session.lastActivity).getTime()) / 1000 / 60);
+            const deviceInfo = session.deviceId ? `\n📱 Device: ${session.deviceId.slice(0, 8)}...` : '';
 
-            bot.sendMessage(chatId, `✅ *Connection Status*\n\n💻 Desktop: Connected${deviceInfo}\n📡 Last sync: ${timeAgo} mins ago\n📅 Paired since: ${new Date(session.created_at).toLocaleDateString()}\n\nTo disconnect: /unpair`, {
+            bot.sendMessage(chatId, `✅ *Connection Status*\n\n💻 Desktop: Connected${deviceInfo}\n📡 Last sync: ${timeAgo} mins ago\n📅 Paired since: ${new Date(session.createdAt).toLocaleDateString()}\n\nTo disconnect: /unpair`, {
                 parse_mode: 'Markdown'
             });
         } catch (error) {
