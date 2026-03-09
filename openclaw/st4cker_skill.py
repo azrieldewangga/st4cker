@@ -42,17 +42,17 @@ from smart_reminder_subagent import SmartReminderSubagent, subagent as smart_rem
 from reminder_scheduler import ReminderScheduler
 
 # Initialize SmartReminder components
-reminder_scheduler = ReminderScheduler(check_interval=60)
+reminder_scheduler = ReminderScheduler()
 smart_reminder_subagent = SmartReminderSubagent()
 
 # Track if scheduler is running
 _scheduler_started = False
 
-async def ensure_scheduler_started():
+def ensure_scheduler_started():
     """Ensure reminder scheduler is running (called on first request)"""
     global _scheduler_started
     if not _scheduler_started:
-        await reminder_scheduler.start()
+        reminder_scheduler.start()
         _scheduler_started = True
         print("[SmartReminder] Scheduler started (no cron job!)")
 
@@ -2921,3 +2921,104 @@ if __name__ == "__main__":
     print("  POST /api/v1/st4cker/chat")
     print("=" * 60)
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# =============================================================================
+# SMART REMINDER REPLY HANDLER
+# =============================================================================
+
+@app.post("/api/v1/smart-reminder/reply")
+async def handle_smart_reminder_reply(
+    data: Dict[str, Any],
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Handle user reply to a reminder notification.
+    Called by WhatsApp gateway when user replies to reminder.
+    
+    Request:
+        {
+            "user_id": "1168825716",
+            "message": "iya gas",
+            "context": {"awaiting_reply": true, "last_course": "Komputasi Bergerak"}
+        }
+    
+    Response:
+        {
+            "reply": "Oke siap! Ditunggu ya...",
+            "attendance_status": "confirmed"
+        }
+    """
+    user_id = data.get("user_id", "1168825716")
+    message = data.get("message", "")
+    context = data.get("context", {})
+    
+    print(f"[SmartReminder Reply] {user_id}: {message}")
+    
+    # Simple pattern-based intent detection with word boundaries
+    import re
+    msg_lower = message.lower().strip()
+    
+    # Ragu patterns (check first - more specific)
+    ragu_patterns = [r'\bragu\b', r'\bbelum tau\b', r'\bmaybe\b', r'\bmungkin\b', r'\bliat dulu\b', r'\blihat dulu\b', r'\bntar\b', r'\bnanti\b']
+    # Tidak hadir patterns (check second) - avoid matching partial words
+    tidak_patterns = [r'\btidak\b', r'\bnggak\b', r'\bga\b', r'\bgak\b', r'\bno\b', r'\bskip\b', r'\babsen\b', r'\bkosong\b']
+    # Hadir patterns (check last)
+    hadir_patterns = [r'\bhadir\b', r'\biya\b', r'\byes\b', r'\byoi\b', r'\bsiap\b', r'\boke\b', r'\bgas\b', r'\bmantap\b', r'\botw\b', r'\bjalan\b']
+    
+    intent = 'unknown'
+    confidence = 0.0
+    
+    if any(re.search(p, msg_lower) for p in ragu_patterns):
+        intent = 'ragu'
+        confidence = 0.8
+    elif any(re.search(p, msg_lower) for p in tidak_patterns):
+        intent = 'tidak'
+        confidence = 0.9
+    elif any(re.search(p, msg_lower) for p in hadir_patterns):
+        intent = 'hadir'
+        confidence = 0.9
+    
+    # Map intent to attendance status
+    attendance_map = {
+        'hadir': 'confirmed',
+        'tidak': 'declined',
+        'ragu': 'uncertain',
+        'unknown': 'uncertain'
+    }
+    attendance_status = attendance_map.get(intent, 'uncertain')
+    
+    # Update SmartReminder attendance
+    course_name = context.get('course', 'Unknown')
+    try:
+        await smart_reminder.update_attendance(
+            status=attendance_status, 
+            details={'course': course_name, 'intent': intent}
+        )
+        print(f"[SmartReminder] Updated attendance for {course_name}: {attendance_status}")
+    except Exception as e:
+        print(f"[SmartReminder] Failed to update attendance: {e}")
+    
+    # Generate response
+    responses = {
+        'hadir': f'Oke zril, dicatat hadir untuk {course_name} 👍',
+        'tidak': f'Oke zril, dicatat tidak hadir untuk {course_name}. Semoga besok bisa hadir ya',
+        'ragu': f'Oke zril, dicatat ragu-ragu untuk {course_name}. Kabari aja nanti ya',
+        'unknown': f'Oke zril, dicatat untuk {course_name}'
+    }
+    
+    return {
+        "reply": responses.get(intent, responses['unknown']),
+        "attendance_status": attendance_status,
+        "intent": intent,
+        "confidence": confidence
+    }
+
+
+@app.get("/api/v1/smart-reminder/status")
+async def get_smart_reminder_status(
+    _: bool = Depends(verify_api_key)
+):
+    """Get reminder scheduler status."""
+    # Ensure scheduler is started
+    ensure_scheduler_started()
+    return reminder_scheduler.get_status()

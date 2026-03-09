@@ -277,6 +277,9 @@ export const createAssignmentSlice: StateCreator<
                 return `${(a.title || '').toLowerCase().trim()}_${a.deadline}_${course}`;
             }));
 
+            // Create a map of local assignments by ID for quick lookup
+            const localAssignmentsMap = new Map(localAssignments.map((a: any) => [a.id, a]));
+
             // Track local IDs yang sudah ada di state (prevent double create)
             const localStateIds = new Set(localAssignmentsState.map((a: Assignment) => a.id));
 
@@ -316,9 +319,18 @@ export const createAssignmentSlice: StateCreator<
                 };
 
                 if (existsById) {
-                    // Update existing by ID
-                    await window.electronAPI.assignments.update(item.id, assignmentData);
-                    console.log(`[AssignmentSlice] Updated existing assignment by ID: ${item.id}`);
+                    // Check if local data is newer than server data
+                    const localItem = localAssignmentsMap.get(item.id);
+                    const serverUpdatedAt = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                    const localUpdatedAt = localItem?.updatedAt ? new Date(localItem.updatedAt).getTime() : 0;
+                    
+                    // Only update if server data is newer or local doesn't have updatedAt
+                    if (!localUpdatedAt || serverUpdatedAt >= localUpdatedAt) {
+                        await window.electronAPI.assignments.update(item.id, assignmentData);
+                        console.log(`[AssignmentSlice] Updated existing assignment by ID: ${item.id} (server is newer)`);
+                    } else {
+                        console.log(`[AssignmentSlice] Skipping update for ${item.id} - local data is newer`);
+                    }
                 } else if (!existsByContent) {
                     // Only create if no duplicate by content
                     await window.electronAPI.assignments.create(assignmentData);

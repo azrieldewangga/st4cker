@@ -67,7 +67,20 @@ export const useStore = create<AppState>()((...a) => ({
         await Promise.all(promises);
         
         // Sync from backend after local data loaded
+        // First push local changes, then fetch from backend
         const state2 = a[1]();
+        
+        // Push local assignments to backend first
+        if (state2.syncAssignmentsToBackend) {
+            try {
+                await state2.syncAssignmentsToBackend();
+                console.log('[initApp] Local assignments synced to backend');
+            } catch (err) {
+                console.error('[initApp] Failed to sync assignments to backend:', err);
+            }
+        }
+        
+        // Then fetch from backend (with timestamp comparison to prevent overwriting newer local data)
         if (state2.fetchAssignmentsFromBackend) {
             state2.fetchAssignmentsFromBackend().catch(err => 
                 console.error('[initApp] Fetch assignments from backend error:', err)
@@ -92,10 +105,29 @@ export const useStore = create<AppState>()((...a) => ({
             state2.setupProjectsRealtimeSync();
         }
         
+        // Push local transactions to backend first, then fetch
+        if (state2.syncTransactionsToBackend) {
+            try {
+                await state2.syncTransactionsToBackend();
+                console.log('[initApp] Local transactions synced to backend');
+            } catch (err) {
+                console.error('[initApp] Failed to sync transactions to backend:', err);
+            }
+        }
         if (state2.fetchTransactionsFromBackend) {
             state2.fetchTransactionsFromBackend().catch(err => 
                 console.error('[initApp] Fetch transactions from backend error:', err)
             );
+        }
+        
+        // Push local projects to backend first, then fetch
+        if (state2.syncProjectsToBackend) {
+            try {
+                await state2.syncProjectsToBackend();
+                console.log('[initApp] Local projects synced to backend');
+            } catch (err) {
+                console.error('[initApp] Failed to sync projects to backend:', err);
+            }
         }
         if (state2.fetchProjectsFromBackend) {
             state2.fetchProjectsFromBackend().catch(err => 

@@ -261,6 +261,7 @@ export const createProjectSlice: StateCreator<
             const existingKeys = new Set(localProjects.map((p: any) => 
                 `${(p.title || '').toLowerCase().trim()}_${p.deadline}_${p.courseId || 'personal'}`
             ));
+            const localProjectsMap = new Map(localProjects.map((p: any) => [p.id, p]));
             const localStateIds = new Set(localProjectsState.map((p: any) => p.id));
 
             for (const item of data.data) {
@@ -282,8 +283,18 @@ export const createProjectSlice: StateCreator<
                 };
 
                 if (existsById) {
-                    await window.electronAPI.projects.update(item.id, projectData);
-                    console.log(`[ProjectSlice] Updated existing project by ID: ${item.id}`);
+                    // Check if local data is newer than server data
+                    const localItem = localProjectsMap.get(item.id);
+                    const serverUpdatedAt = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                    const localUpdatedAt = localItem?.updatedAt ? new Date(localItem.updatedAt).getTime() : 0;
+                    
+                    // Only update if server data is newer or local doesn't have updatedAt
+                    if (!localUpdatedAt || serverUpdatedAt >= localUpdatedAt) {
+                        await window.electronAPI.projects.update(item.id, projectData);
+                        console.log(`[ProjectSlice] Updated existing project by ID: ${item.id} (server is newer)`);
+                    } else {
+                        console.log(`[ProjectSlice] Skipping update for ${item.id} - local data is newer`);
+                    }
                 } else if (!existsByContent) {
                     await window.electronAPI.projects.create(projectData);
                     existingIds.add(item.id);

@@ -178,6 +178,7 @@ export const createTransactionSlice: StateCreator<
             const existingKeys = new Set(localTx.map((t: any) => 
                 `${(t.title || '').toLowerCase().trim()}_${t.date}_${t.amount}_${t.type}`
             ));
+            const localTxMap = new Map(localTx.map((t: any) => [t.id, t]));
             const localStateIds = new Set(localTransactionsState.map((t: any) => t.id));
 
             for (const item of data.data) {
@@ -200,8 +201,18 @@ export const createTransactionSlice: StateCreator<
                 };
                 
                 if (existsById) {
-                    await window.electronAPI.transactions.update(item.id, txData);
-                    console.log(`[TransactionSlice] Updated existing transaction by ID: ${item.id}`);
+                    // Check if local data is newer than server data
+                    const localItem = localTxMap.get(item.id);
+                    const serverUpdatedAt = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                    const localUpdatedAt = localItem?.updatedAt ? new Date(localItem.updatedAt).getTime() : 0;
+                    
+                    // Only update if server data is newer or local doesn't have updatedAt
+                    if (!localUpdatedAt || serverUpdatedAt >= localUpdatedAt) {
+                        await window.electronAPI.transactions.update(item.id, txData);
+                        console.log(`[TransactionSlice] Updated existing transaction by ID: ${item.id} (server is newer)`);
+                    } else {
+                        console.log(`[TransactionSlice] Skipping update for ${item.id} - local data is newer`);
+                    }
                 } else if (!existsByContent) {
                     await window.electronAPI.transactions.create(txData);
                     existingIds.add(item.id);
