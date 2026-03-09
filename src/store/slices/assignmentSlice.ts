@@ -198,6 +198,10 @@ export const createAssignmentSlice: StateCreator<
         try {
             const state = get() as any;
             const { assignments, userProfile } = state;
+            
+            console.log('[AssignmentSlice] Syncing assignments to backend. Count:', assignments?.length || 0);
+            console.log('[AssignmentSlice] First assignment:', assignments?.[0] ? JSON.stringify(assignments[0]) : 'none');
+            
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
             // Map frontend status to backend status
@@ -211,7 +215,7 @@ export const createAssignmentSlice: StateCreator<
                 }
             };
 
-            const assignmentsArray = assignments.map((a: any) => ({
+            const assignmentsArray = (assignments || []).map((a: any) => ({
                 id: a.id,
                 title: a.title,
                 course: a.course || a.courseId,
@@ -222,6 +226,8 @@ export const createAssignmentSlice: StateCreator<
                 semester: userProfile?.semester || 1,
                 updatedAt: a.updatedAt || new Date().toISOString(),
             }));
+            
+            console.log('[AssignmentSlice] Mapped assignments array length:', assignmentsArray.length);
 
             const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
                 method: 'POST',

@@ -40,6 +40,11 @@ let taskReminderState = {
     tasks: [] // Store task details from OpenClaw
 };
 
+// Message deduplication - prevent double processing
+const processedMessages = new Set();
+const DEDUP_WINDOW_MS = 30000; // 30 seconds window
+let lastProcessedTime = 0;
+
 // OpenClaw configuration
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://openclaw:8000';
 const OPENCLAW_API_KEY = process.env.OPENCLAW_API_KEY || '';
@@ -191,7 +196,25 @@ async function initWhatsApp() {
                 const text = msg.body.toLowerCase().trim();
                 const originalText = msg.body.trim();
                 const msgId = msg.id ? msg.id.id : 'unknown';
-                console.log(`[WA] Received message [${msgId}]: "${msg.body}"`);
+                
+                // Deduplication: skip if we already processed this message
+                const dedupKey = `${msgId}_${originalText}`;
+                if (processedMessages.has(dedupKey)) {
+                    console.log(`[WA] Skipping duplicate message [${msgId}]: "${msg.body.substring(0, 30)}..."`);
+                    return;
+                }
+                
+                // Add to processed set and cleanup old entries
+                processedMessages.add(dedupKey);
+                const dedupNow = Date.now();
+                if (dedupNow - lastProcessedTime > DEDUP_WINDOW_MS) {
+                    // Clear old entries every 30 seconds
+                    processedMessages.clear();
+                    lastProcessedTime = dedupNow;
+                }
+                
+                const receiveTime = new Date().toISOString();
+                console.log(`[WA] [${receiveTime}] Received message [${msgId}]: "${msg.body}"`);
                 
                 const now = new Date();
                 
@@ -232,7 +255,9 @@ async function initWhatsApp() {
                             
                             // Send OpenClaw's reply back to user
                             if (data.reply) {
-                                await client.sendMessage(msg.from, data.reply);
+                                const sendTime = new Date().toISOString();
+                            console.log(`[WA] [${sendTime}] Sending response to ${msg.from}`);
+                            await client.sendMessage(msg.from, data.reply);
                             }
                             
                             // If OpenClaw says done/cancelled, clear the state
@@ -288,11 +313,14 @@ async function initWhatsApp() {
                         
                         if (response.ok) {
                             const data = await response.json();
-                            console.log(`[WA] OpenClaw replied: ${data.reply}`);
+                            const replyTime = new Date().toISOString();
+                        console.log(`[WA] [${replyTime}] OpenClaw replied: ${data.reply}`);
                             
                             // Send OpenClaw's reply back to user
                             if (data.reply) {
-                                await client.sendMessage(msg.from, data.reply);
+                                const sendTime = new Date().toISOString();
+                            console.log(`[WA] [${sendTime}] Sending response to ${msg.from}`);
+                            await client.sendMessage(msg.from, data.reply);
                             }
                             
                             // Update local confirmation state if confirmed
@@ -333,6 +361,9 @@ async function initWhatsApp() {
                 console.log(`[WA] General chat, forwarding to OpenClaw: "${originalText}"`);
                 
                 try {
+                    const fetchStartTime = new Date().toISOString();
+                    console.log(`[WA] [${fetchStartTime}] Starting fetch to OpenClaw for msg [${msgId}]`);
+                    
                     const response = await fetch(`${OPENCLAW_URL}/api/v1/st4cker/chat`, {
                         method: 'POST',
                         headers: { 
@@ -349,11 +380,14 @@ async function initWhatsApp() {
                     
                     if (response.ok) {
                         const data = await response.json();
-                        console.log(`[WA] OpenClaw replied: ${data.reply}`);
+                        const replyTime = new Date().toISOString();
+                        console.log(`[WA] [${replyTime}] OpenClaw replied: ${data.reply}`);
                         
                         // Send OpenClaw's reply back to user
                         if (data.reply) {
                             console.log(`[WA] Sending message to ${msg.from}: "${data.reply.substring(0, 50)}..."`);
+                            const sendTime = new Date().toISOString();
+                            console.log(`[WA] [${sendTime}] Sending response to ${msg.from}`);
                             await client.sendMessage(msg.from, data.reply);
                             console.log(`[WA] Message sent successfully`);
                         }

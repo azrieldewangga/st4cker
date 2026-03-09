@@ -1,0 +1,18 @@
+FROM openclaw-st4cker:v6
+
+# Install Node.js 22.x (required by OpenClaw 2026.3.7)
+RUN apt-get update && apt-get install -y curl gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy OpenClaw to proper location
+COPY openclaw-node /opt/openclaw
+
+# Create wrapper script
+RUN ln -s /opt/openclaw/dist/entry.js /usr/local/bin/openclaw-entry \
+    && echo '#!/bin/sh\nnode /opt/openclaw/dist/entry.js "$@"' > /usr/local/bin/openclaw \
+    && chmod +x /usr/local/bin/openclaw
+
+# Verify Node.js
+RUN node --version

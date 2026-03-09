@@ -94,15 +94,16 @@ Message: "{message}"
 Context:{context_str}
 
 Available intents:
-- create_task: User wants to add a new assignment/task
+- create_task: User EXPLICITLY wants to add a new assignment/task (contains words like "tugas", "ada tugas", "buat tugas", "tambah tugas", "deadline")
   Fields: course (matkul), deadline, type (Tugas/LP/LS/LR/tugas), title
+  IMPORTANT: Casual conversation about topics (parfum, makanan, liburan, etc) is NOT create_task!
 - create_project: User wants to create a new project
   Fields: title, deadline, priority (low/medium/high), description
-- create_transaction: User wants to record expense/income
+- create_transaction: User wants to record expense/income (contains nominal/amount like "15rb", "100k", "Rp 50000")
   Fields: amount, type (expense/income), category, title, date
 - log_progress: User wants to update project progress
   Fields: project_name, progress_percentage, note
-- list_tasks: User wants to see their tasks
+- list_tasks: User wants to see their tasks ("list tugas", "tugas apa aja", "ada tugas")
   Fields: status_filter, course_filter
 - list_projects: User wants to see their projects
 - list_transactions: User wants to see recent transactions
@@ -110,7 +111,14 @@ Available intents:
 - list_schedules: User wants to see class schedule
 - cancel/skip: User wants to skip/cancel something
 - confirm: User confirming attendance or action
-- general_chat: Casual conversation
+- attendance_reply: User is replying to a course reminder ("iya", "ok", "otw", "skip", "ga jadi", "berangkat", etc)
+  Fields: attendance_intent (confirmed/declined/rescheduled), delay_minutes
+- course_management: User wants to skip/reschedule/mark online a course ("skip KJK", "KJK online", "pindahin Sister ke besok")
+  Fields: course, action (skip/online/reschedule), date
+- general_chat: Casual conversation, asking for advice, discussing topics like parfum, lebaran, makanan, liburan, life decisions, etc
+  This is the DEFAULT when user is just chatting without specific task/transaction intent
+  IMPORTANT: "bingung", "gatau", "pengen", "mau" about personal life topics (parfum, liburan, dll) = general_chat, NOT need_help!
+  Only use other intents for EXPLICIT task/finance/schedule management commands.
 
 Respond in JSON format:
 {{

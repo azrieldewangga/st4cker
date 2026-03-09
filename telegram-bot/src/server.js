@@ -330,7 +330,12 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
         }
 
         // 6. Sync Assignments (Tasks) - Batched Upsert
+        console.log(`[API] Sync: Full data keys:`, Object.keys(data));
+        console.log(`[API] Sync: activeAssignments type:`, typeof data.activeAssignments);
+        console.log(`[API] Sync: activeAssignments isArray:`, Array.isArray(data.activeAssignments));
         const incomingAssignments = data.activeAssignments || [];
+        console.log(`[API] Sync: Received ${incomingAssignments.length} assignments from desktop`);
+        console.log(`[API] Sync: First assignment sample:`, incomingAssignments[0] ? JSON.stringify(incomingAssignments[0]) : 'none');
         console.log(`[API] Sync: Preserving server-side tasks (deletion disabled)`);
 
         // Batched upsert using transaction

@@ -28,8 +28,8 @@ if ! grep -q "GEMINI_API_KEY" openclaw/.env 2>/dev/null; then
 fi
 
 # Rebuild and restart OpenClaw container
-echo "🐳 Rebuilding OpenClaw container..."
-docker-compose build openclaw
+echo "🐳 Rebuilding OpenClaw container (no cache)..."
+docker-compose build --no-cache openclaw
 
 echo "🔄 Restarting OpenClaw..."
 docker-compose up -d openclaw
