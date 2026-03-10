@@ -202,24 +202,23 @@ export const createAssignmentSlice: StateCreator<
     syncAssignmentsToBackend: async () => {
         try {
             const state = get() as any;
-            const { assignments, userProfile } = state;
+            const { userProfile } = state;
             
             const sessionToken = localStorage.getItem('sessionToken');
-            console.log('[AssignmentSlice] ===== SYNC START =====');
-            console.log('[AssignmentSlice] Session token:', sessionToken ? 'present' : 'MISSING!');
-            console.log('[AssignmentSlice] Assignments count:', assignments?.length || 0);
             
             if (!sessionToken) {
                 console.error('[AssignmentSlice] No session token - cannot sync');
                 return;
             }
             
-            if (!assignments || assignments.length === 0) {
-                console.warn('[AssignmentSlice] No assignments in state - nothing to sync');
+            // FIX PERMANEN: Baca langsung dari SQLite (source of truth), bukan dari React state
+            // React state bisa stale, tapi SQLite selalu up-to-date
+            const dbAssignments = await window.electronAPI.assignments.list();
+            
+            if (!dbAssignments || dbAssignments.length === 0) {
+                console.warn('[AssignmentSlice] No assignments in SQLite - nothing to sync');
                 return;
             }
-            
-            console.log('[AssignmentSlice] First assignment:', JSON.stringify(assignments[0]));
             
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
@@ -234,10 +233,11 @@ export const createAssignmentSlice: StateCreator<
                 }
             };
 
-            const assignmentsArray = assignments.map((a: any) => ({
+            // Map dari SQLite data (field-nya beda dengan React state)
+            const assignmentsArray = dbAssignments.map((a: any) => ({
                 id: a.id,
                 title: a.title,
-                course: a.course || a.courseId,
+                course: a.course || a.courseId || '',
                 type: a.type || 'Tugas',
                 status: mapStatusToBackend(a.status),
                 deadline: a.deadline,
@@ -245,9 +245,6 @@ export const createAssignmentSlice: StateCreator<
                 semester: userProfile?.semester || 1,
                 updatedAt: a.updatedAt || new Date().toISOString(),
             }));
-            
-            console.log('[AssignmentSlice] Mapped array length:', assignmentsArray.length);
-            console.log('[AssignmentSlice] Mapped first item:', JSON.stringify(assignmentsArray[0]));
 
             const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
                 method: 'POST',
@@ -269,9 +266,7 @@ export const createAssignmentSlice: StateCreator<
                 throw new Error(`Failed to sync assignments: ${response.status}`);
             }
             
-            const result = await response.json();
-            console.log('[AssignmentSlice] Sync successful:', result);
-            console.log('[AssignmentSlice] ===== SYNC END =====');
+            console.log(`[AssignmentSlice] Synced ${assignmentsArray.length} assignments to backend`);
         } catch (error) {
             console.error('[AssignmentSlice] Sync error:', error);
             throw error;
