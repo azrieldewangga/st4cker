@@ -23,7 +23,9 @@ class SmartReminderSubagent:
         if base_url is None:
             base_url = os.getenv("SMARTREMINDER_URL", "http://smartreminder:5001")
         self.base_url = base_url
+        self.api_key = os.getenv("SMARTREMINDER_API_KEY", "smartreminder_secure_key_2024")
         self.timeout = 10.0
+        self.headers = {"X-API-Key": self.api_key}
     
     async def get_today_schedule(self) -> Dict[str, Any]:
         """
@@ -51,6 +53,7 @@ class SmartReminderSubagent:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{self.base_url}/api/v1/schedules/today",
+                    headers=self.headers,
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -87,6 +90,7 @@ class SmartReminderSubagent:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{self.base_url}/api/v1/reminders/next",
+                    headers=self.headers,
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -117,6 +121,7 @@ class SmartReminderSubagent:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.base_url}/api/v1/attendance/update",
+                    headers=self.headers,
                     json={
                         'course': course_name,
                         'status': status,
