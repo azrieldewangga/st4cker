@@ -210,18 +210,22 @@ router.get('/tasks', [
     query('status').optional().isIn(['pending', 'completed', 'missed']),
     query('course').optional().isString(),
     query('priority').optional().isIn(['low', 'medium', 'high']),
+    query('userId').optional().isString(), // Accept userId from query
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { status, course } = req.query;
+        const { status, course, userId: queryUserId } = req.query;
         let conditions = [];
 
-        // For now, assuming single user or taking user_id from query/header if multi-tenant
-        // defaulting to the first user found or specific ID if needed.
-        // ideally, the API Key should map to a user, or we pass telegramUserId
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const userId = usersList[0].telegramUserId;
+        // Use userId from query param if provided, otherwise fallback to first user
+        let userId;
+        if (queryUserId) {
+            userId = queryUserId;
+        } else {
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            userId = usersList[0].telegramUserId;
+        }
 
         conditions.push(eq(assignments.userId, userId));
 
@@ -434,15 +438,21 @@ router.delete('/tasks/:id', [
 // GET /api/v1/projects
 router.get('/projects', [
     query('status').optional().isIn(['active', 'completed', 'archived']),
+    query('userId').optional().isString(),
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { status } = req.query;
+        const { status, userId: queryUserId } = req.query;
         let conditions = [];
 
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const userId = usersList[0].telegramUserId;
+        let userId;
+        if (queryUserId) {
+            userId = queryUserId;
+        } else {
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            userId = usersList[0].telegramUserId;
+        }
 
         conditions.push(eq(projects.userId, userId));
         if (status) conditions.push(eq(projects.status, status));
@@ -681,11 +691,21 @@ router.delete('/projects/:id', [
 // ==========================================
 
 // GET /api/v1/transactions
-router.get('/transactions', async (req, res) => {
+router.get('/transactions', [
+    query('userId').optional().isString(),
+    handleValidationErrors
+], async (req, res) => {
     try {
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const userId = usersList[0].telegramUserId;
+        const { userId: queryUserId } = req.query;
+        
+        let userId;
+        if (queryUserId) {
+            userId = queryUserId;
+        } else {
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            userId = usersList[0].telegramUserId;
+        }
 
         const data = await db.select().from(transactions)
             .where(eq(transactions.userId, userId))
@@ -896,14 +916,20 @@ function parseDay(dayInput) {
 router.get('/schedules', [
     query('day').optional().isString(),
     query('active').optional().isBoolean(),
+    query('userId').optional().isString(),
     handleValidationErrors
 ], async (req, res) => {
     try {
-        const { day, active } = req.query;
+        const { day, active, userId: queryUserId } = req.query;
         
-        const usersList = await db.select().from(users).limit(1);
-        if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
-        const userId = usersList[0].telegramUserId;
+        let userId;
+        if (queryUserId) {
+            userId = queryUserId;
+        } else {
+            const usersList = await db.select().from(users).limit(1);
+            if (usersList.length === 0) return res.status(404).json({ error: 'No users found' });
+            userId = usersList[0].telegramUserId;
+        }
 
         let conditions = [eq(schedules.userId, userId)];
         
