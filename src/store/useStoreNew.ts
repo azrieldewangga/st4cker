@@ -31,8 +31,13 @@ export const useStore = create<AppState>()((...a) => ({
 
 
     initApp: async (skipDelay = false) => {
+        console.log('[initApp] Starting initialization...');
         const store = a[0];
         store({ isAppReady: false });
+        
+        const initialState = a[1]();
+        console.log('[initApp] Has syncAssignmentsToBackend:', !!initialState.syncAssignmentsToBackend);
+        console.log('[initApp] Assignments count:', initialState.assignments?.length || 0);
 
         const state = a[1]();
         const {
@@ -66,18 +71,23 @@ export const useStore = create<AppState>()((...a) => ({
 
         await Promise.all(promises);
         
+        console.log('[initApp] Local data loaded. Assignments count:', a[1]().assignments?.length || 0);
+        
         // Sync from backend after local data loaded
         // First push local changes, then fetch from backend
         const state2 = a[1]();
         
         // Push local assignments to backend first
         if (state2.syncAssignmentsToBackend) {
+            console.log('[initApp] Pushing local assignments to backend...');
             try {
                 await state2.syncAssignmentsToBackend();
-                console.log('[initApp] Local assignments synced to backend');
+                console.log('[initApp] ✅ Local assignments synced to backend');
             } catch (err) {
-                console.error('[initApp] Failed to sync assignments to backend:', err);
+                console.error('[initApp] ❌ Failed to sync assignments to backend:', err);
             }
+        } else {
+            console.warn('[initApp] syncAssignmentsToBackend not available');
         }
         
         // Then fetch from backend (with timestamp comparison to prevent overwriting newer local data)

@@ -70,9 +70,18 @@ if (!token) {
 
             if (sessions.length > 0) {
                 // Already paired
-                const timeAgo = Math.floor((Date.now() - new Date(sessions[0].lastActivity).getTime()) / 1000 / 60);
+                const formatTimeAgo = (dateStr) => {
+                    if (!dateStr) return 'Unknown';
+                    const date = new Date(dateStr);
+                    if (isNaN(date.getTime())) return 'Unknown';
+                    const mins = Math.floor((Date.now() - date.getTime()) / 1000 / 60);
+                    if (mins < 1) return 'Just now';
+                    if (mins < 60) return `${mins} mins ago`;
+                    return `${Math.floor(mins / 60)} hours ago`;
+                };
+                const timeAgo = formatTimeAgo(sessions[0].lastActivity);
 
-                bot.sendMessage(chatId, `✅ *Already Connected!*\n\n💻 Desktop: Active\n📡 Last sync: ${timeAgo} mins ago\n\nType /help to see available commands\n\nTo unpair: /unpair`, {
+                bot.sendMessage(chatId, `✅ *Already Connected!*\n\n💻 Desktop: Active\n📡 Last sync: ${timeAgo}\n\nType /help to see available commands\n\nTo unpair: /unpair`, {
                     parse_mode: 'Markdown'
                 });
                 return;
@@ -109,10 +118,33 @@ if (!token) {
             }
 
             const session = sessions[0];
-            const timeAgo = Math.floor((Date.now() - new Date(session.lastActivity).getTime()) / 1000 / 60);
+            
+            // Helper to format time ago safely
+            const formatTimeAgo = (dateStr) => {
+                if (!dateStr) return 'Unknown';
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return 'Unknown';
+                const mins = Math.floor((Date.now() - date.getTime()) / 1000 / 60);
+                if (mins < 1) return 'Just now';
+                if (mins < 60) return `${mins} mins ago`;
+                const hours = Math.floor(mins / 60);
+                if (hours < 24) return `${hours} hours ago`;
+                return `${Math.floor(hours / 24)} days ago`;
+            };
+            
+            // Helper to format date safely
+            const formatDate = (dateStr) => {
+                if (!dateStr) return 'Unknown';
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return 'Unknown';
+                return date.toLocaleDateString('id-ID');
+            };
+            
+            const timeAgo = formatTimeAgo(session.lastActivity);
+            const pairedDate = formatDate(session.createdAt);
             const deviceInfo = session.deviceId ? `\n📱 Device: ${session.deviceId.slice(0, 8)}...` : '';
 
-            bot.sendMessage(chatId, `✅ *Connection Status*\n\n💻 Desktop: Connected${deviceInfo}\n📡 Last sync: ${timeAgo} mins ago\n📅 Paired since: ${new Date(session.createdAt).toLocaleDateString()}\n\nTo disconnect: /unpair`, {
+            bot.sendMessage(chatId, `✅ *Connection Status*\n\n💻 Desktop: Connected${deviceInfo}\n📡 Last sync: ${timeAgo}\n📅 Paired since: ${pairedDate}\n\nTo disconnect: /unpair`, {
                 parse_mode: 'Markdown'
             });
         } catch (error) {

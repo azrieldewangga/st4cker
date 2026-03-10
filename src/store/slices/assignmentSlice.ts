@@ -112,13 +112,18 @@ export const createAssignmentSlice: StateCreator<
                 delete (updatePayload as any).courseId;
             }
 
+            // Update SQLite first
             await window.electronAPI.assignments.update(id, updatePayload);
+            
+            // Update state immediately with new data
             set((state) => ({
                 assignments: state.assignments.map((item) => item.id === id ? { ...item, ...data, updatedAt: now } : item)
             }));
-            get().fetchAssignments();
+            
+            console.log(`[AssignmentSlice] Updated assignment ${id}, status: ${data.status || 'unchanged'}`);
+            console.log(`[AssignmentSlice] Current assignments count: ${get().assignments.length}`);
 
-            // Auto-sync to backend (debounced)
+            // Auto-sync to backend (debounced) - AFTER state is updated
             get().autoSyncAssignmentsToBackend();
         } catch (error) {
             console.error('[AssignmentSlice] Update error:', error);
@@ -199,8 +204,22 @@ export const createAssignmentSlice: StateCreator<
             const state = get() as any;
             const { assignments, userProfile } = state;
             
-            console.log('[AssignmentSlice] Syncing assignments to backend. Count:', assignments?.length || 0);
-            console.log('[AssignmentSlice] First assignment:', assignments?.[0] ? JSON.stringify(assignments[0]) : 'none');
+            const sessionToken = localStorage.getItem('sessionToken');
+            console.log('[AssignmentSlice] ===== SYNC START =====');
+            console.log('[AssignmentSlice] Session token:', sessionToken ? 'present' : 'MISSING!');
+            console.log('[AssignmentSlice] Assignments count:', assignments?.length || 0);
+            
+            if (!sessionToken) {
+                console.error('[AssignmentSlice] No session token - cannot sync');
+                return;
+            }
+            
+            if (!assignments || assignments.length === 0) {
+                console.warn('[AssignmentSlice] No assignments in state - nothing to sync');
+                return;
+            }
+            
+            console.log('[AssignmentSlice] First assignment:', JSON.stringify(assignments[0]));
             
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
@@ -215,7 +234,7 @@ export const createAssignmentSlice: StateCreator<
                 }
             };
 
-            const assignmentsArray = (assignments || []).map((a: any) => ({
+            const assignmentsArray = assignments.map((a: any) => ({
                 id: a.id,
                 title: a.title,
                 course: a.course || a.courseId,
@@ -227,7 +246,8 @@ export const createAssignmentSlice: StateCreator<
                 updatedAt: a.updatedAt || new Date().toISOString(),
             }));
             
-            console.log('[AssignmentSlice] Mapped assignments array length:', assignmentsArray.length);
+            console.log('[AssignmentSlice] Mapped array length:', assignmentsArray.length);
+            console.log('[AssignmentSlice] Mapped first item:', JSON.stringify(assignmentsArray[0]));
 
             const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
                 method: 'POST',
@@ -236,17 +256,24 @@ export const createAssignmentSlice: StateCreator<
                     'X-API-Key': apiKey,
                 },
                 body: JSON.stringify({
-                    sessionToken: localStorage.getItem('sessionToken'),
+                    sessionToken: sessionToken,
                     data: {
                         activeAssignments: assignmentsArray
                     }
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to sync assignments');
-            console.log('[AssignmentSlice] Assignments synced to backend');
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[AssignmentSlice] Sync failed:', response.status, errorText);
+                throw new Error(`Failed to sync assignments: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            console.log('[AssignmentSlice] Sync successful:', result);
+            console.log('[AssignmentSlice] ===== SYNC END =====');
         } catch (error) {
-            console.error('[AssignmentSlice] Sync to backend error:', error);
+            console.error('[AssignmentSlice] Sync error:', error);
             throw error;
         }
     },

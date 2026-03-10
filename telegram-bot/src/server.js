@@ -333,26 +333,44 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
         console.log(`[API] Sync: Full data keys:`, Object.keys(data));
         console.log(`[API] Sync: activeAssignments type:`, typeof data.activeAssignments);
         console.log(`[API] Sync: activeAssignments isArray:`, Array.isArray(data.activeAssignments));
-        const incomingAssignments = data.activeAssignments || [];
+        
+        // Handle various edge cases for activeAssignments
+        let incomingAssignments = [];
+        if (data.activeAssignments === null || data.activeAssignments === undefined) {
+            console.log(`[API] Sync: WARNING - activeAssignments is null/undefined`);
+        } else if (!Array.isArray(data.activeAssignments)) {
+            console.log(`[API] Sync: WARNING - activeAssignments is not an array:`, typeof data.activeAssignments);
+        } else {
+            incomingAssignments = data.activeAssignments;
+        }
+        
         console.log(`[API] Sync: Received ${incomingAssignments.length} assignments from desktop`);
-        console.log(`[API] Sync: First assignment sample:`, incomingAssignments[0] ? JSON.stringify(incomingAssignments[0]) : 'none');
-        console.log(`[API] Sync: Preserving server-side tasks (deletion disabled)`);
-
+        if (incomingAssignments.length > 0) {
+            console.log(`[API] Sync: First assignment sample:`, JSON.stringify(incomingAssignments[0]));
+            console.log(`[API] Sync: All assignment IDs:`, incomingAssignments.map(a => a.id).join(', '));
+        }
+        
         // Batched upsert using transaction
         let assignCount = 0;
         if (incomingAssignments.length > 0) {
             await db.transaction(async (tx) => {
                 for (const t of incomingAssignments) {
+                    // Validate required fields
+                    if (!t.id || !t.title) {
+                        console.log(`[API] Sync: Skipping invalid assignment (missing id or title):`, t);
+                        continue;
+                    }
+                    
                     await tx.insert(assignments).values({
                         id: t.id,
                         userId: telegramUserId,
                         title: t.title,
-                        course: t.course,
-                        type: t.type,
+                        course: t.course || '',
+                        type: t.type || 'Tugas',
                         status: t.status || 'pending',
                         deadline: t.deadline,
-                        note: t.note,
-                        semester: t.semester,
+                        note: t.note || '',
+                        semester: t.semester || 1,
                         createdAt: new Date(),
                         updatedAt: new Date()
                     }).onConflictDoUpdate({
@@ -371,7 +389,11 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
             assignCount = incomingAssignments.length;
             console.log(`[API] Synced ${incomingAssignments.length} assignments (Batched)`);
         } else {
-            console.log(`[API] Synced 0 assignments`);
+            console.log(`[API] Sync: WARNING - No assignments received from desktop. Local data may not be syncing.`);
+            // Check existing assignments in DB for debugging
+            const existingAssigns = await db.select({count: sql`count(*)`}).from(assignments)
+                .where(eq(assignments.userId, telegramUserId));
+            console.log(`[API] Sync: Current assignments in DB:`, existingAssigns[0]?.count || 0);
         }
 
         // 7. Broadcast sync event via WebSocket untuk real-time updates
