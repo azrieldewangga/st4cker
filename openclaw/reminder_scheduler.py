@@ -12,54 +12,44 @@ from smart_reminder_subagent import SmartReminderSubagent, subagent as smart_rem
 logger = logging.getLogger(__name__)
 
 class ReminderScheduler:
-    def __init__(self, check_interval=60):
+    def __init__(self):
         self.smart_reminder = smart_reminder
         self.target_phone = os.getenv("REMINDER_TARGET_PHONE", "6281311417727")
-        self.check_interval = check_interval
+        self.check_interval = 60
         self._running = False
         self._task = None
         self.last_check = None
         self.notified_today = set()
         self.pending_retry = {}
     
-    async def start(self):
+    def start(self):
         if self._running:
             return
         self._running = True
         self._task = asyncio.create_task(self._scheduler_loop())
         logger.info("[SmartReminder] Scheduler started")
     
-    async def stop(self):
+    def stop(self):
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
     
     async def _scheduler_loop(self):
         await asyncio.sleep(5)
-        print("[SmartReminder] Scheduler loop started", flush=True)
         while self._running:
             try:
-                print(f"[SmartReminder] Checking at {datetime.now()}", flush=True)
                 await self._check_and_notify()
                 self.last_check = datetime.now()
             except Exception as e:
-                print(f"[SmartReminder] Error: {e}", flush=True)
                 logger.error(f"[SmartReminder] Error: {e}")
             await asyncio.sleep(self.check_interval)
     
     async def _check_and_notify(self):
         try:
-            logger.info("[SmartReminder] Checking for reminders...")
             reminder = await self.smart_reminder.get_next_reminder()
             if not reminder:
-                logger.info("[SmartReminder] No reminder due")
                 return
-            logger.info(f"[SmartReminder] Got reminder: {reminder}")
             
             course_name = reminder.get('course_name', 'Unknown')
             start_time = reminder.get('start_time', '')
@@ -99,32 +89,25 @@ class ReminderScheduler:
         )
     
     async def _send_via_openclaw(self, message, phone=None):
-        """Send message via st4cker-bot Telegram API"""
         try:
-            import httpx
-            
             target = phone or self.target_phone
-            st4cker_api = os.getenv("ST4CKER_API_URL", "http://st4cker-bot:3000")
-            reminder_secret = os.getenv("REMINDER_SECRET", "r3m1nd3r_s3cr3t")
+            cmd = ["openclaw", "message", "send", "--channel", "whatsapp", "--target", target, "--message", message]
             
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{st4cker_api}/send-message",
-                    headers={"x-reminder-secret": reminder_secret},
-                    json={
-                        "chatId": target,
-                        "message": message
-                    },
-                    timeout=30.0
-                )
-                
-                if response.status_code == 200:
-                    return True
-                else:
-                    logger.error(f"Send message error: {response.status_code} - {response.text[:200]}")
-                    return False
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+            
+            if proc.returncode == 0:
+                return True
+            else:
+                logger.error(f"OpenClaw error: {stderr.decode()[:200]}")
+                return False
         except Exception as e:
-            logger.error(f"Exception sending message: {e}")
+            logger.error(f"Exception: {e}")
             return False
     
     def get_status(self):
