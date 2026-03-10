@@ -213,8 +213,21 @@ export const createProjectSlice: StateCreator<
 
     syncProjectsToBackend: async () => {
         try {
-            const state = get() as any;
-            const { projects, userProfile } = state;
+            const sessionToken = localStorage.getItem('sessionToken');
+            
+            if (!sessionToken) {
+                console.error('[ProjectSlice] No session token - cannot sync');
+                return;
+            }
+            
+            // FIX PERMANEN: Baca langsung dari SQLite (source of truth)
+            const dbProjects = await window.electronAPI.projects.list();
+            
+            if (!dbProjects || dbProjects.length === 0) {
+                console.warn('[ProjectSlice] No projects in SQLite - nothing to sync');
+                return;
+            }
+            
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
             const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
@@ -224,13 +237,18 @@ export const createProjectSlice: StateCreator<
                     'X-API-Key': apiKey,
                 },
                 body: JSON.stringify({
-                    sessionToken: localStorage.getItem('sessionToken'),
-                    data: { projects }
+                    sessionToken: sessionToken,
+                    data: { projects: dbProjects }
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to sync projects');
-            console.log('[ProjectSlice] Projects synced to backend');
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[ProjectSlice] Sync failed:', response.status, errorText);
+                throw new Error(`Failed to sync projects: ${response.status}`);
+            }
+            
+            console.log(`[ProjectSlice] Synced ${dbProjects.length} projects to backend`);
         } catch (error) {
             console.error('[ProjectSlice] Sync to backend error:', error);
             throw error;

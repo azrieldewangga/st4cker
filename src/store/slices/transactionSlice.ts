@@ -126,8 +126,21 @@ export const createTransactionSlice: StateCreator<
 
     syncTransactionsToBackend: async () => {
         try {
-            const state = get() as any;
-            const { transactions, userProfile } = state;
+            const sessionToken = localStorage.getItem('sessionToken');
+            
+            if (!sessionToken) {
+                console.error('[TransactionSlice] No session token - cannot sync');
+                return;
+            }
+            
+            // FIX PERMANEN: Baca langsung dari SQLite (source of truth)
+            const dbTransactions = await window.electronAPI.transactions.list();
+            
+            if (!dbTransactions || dbTransactions.length === 0) {
+                console.warn('[TransactionSlice] No transactions in SQLite - nothing to sync');
+                return;
+            }
+            
             const apiKey = import.meta.env.VITE_AGENT_API_KEY || 'ef8c66e5cd6e10d60258c9e63101e330c1d058b3e64d98b25ca3fe98c3c8bb62';
 
             const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SYNC_USER_DATA), {
@@ -137,15 +150,20 @@ export const createTransactionSlice: StateCreator<
                     'X-API-Key': apiKey,
                 },
                 body: JSON.stringify({
-                    sessionToken: localStorage.getItem('sessionToken'),
+                    sessionToken: sessionToken,
                     data: {
-                        transactions: transactions
+                        transactions: dbTransactions
                     }
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to sync transactions');
-            console.log('[TransactionSlice] Transactions synced to backend');
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[TransactionSlice] Sync failed:', response.status, errorText);
+                throw new Error(`Failed to sync transactions: ${response.status}`);
+            }
+            
+            console.log(`[TransactionSlice] Synced ${dbTransactions.length} transactions to backend`);
         } catch (error) {
             console.error('[TransactionSlice] Sync to backend error:', error);
             throw error;
