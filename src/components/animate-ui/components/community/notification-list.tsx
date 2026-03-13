@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { RotateCcw, ArrowUpRight, X } from 'lucide-react';
-import { motion, type Transition, AnimatePresence } from 'motion/react';
+import { motion, type Transition, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const initialNotifications = [

@@ -68,6 +68,7 @@ let gotTheLock = true;
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
 let driveService: any; // Dynamically loaded
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
 const createSplashWindow = () => {
     splashWindow = new BrowserWindow({
@@ -112,6 +113,8 @@ const createWindow = () => {
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: true,
+            spellcheck: false, // Disable spellchecker to save memory
+            v8CacheOptions: 'code', // Cache compiled JS bytecode
         },
     });
 
@@ -363,14 +366,14 @@ app.on('ready', async () => {
     ipcMain.handle('performance:getCourses', (_, sem) => performance.getCourses(sem));
     ipcMain.handle('performance:upsertCourse', async (_, c) => {
         const result = performance.upsertCourse(c);
-        
+
         // Sync custom course name ke Master DB via API
         if (telegramStore && telegramStore.get('paired') && c.id && c.name) {
             try {
                 const token = telegramStore.get('sessionToken');
                 const serverUrl = process.env.TELEGRAM_WEBSOCKET_URL || 'http://178.128.215.237:3000';
                 const apiKey = process.env.AGENT_API_KEY || '';
-                
+
                 // Kirim custom course name ke API
                 const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
@@ -379,7 +382,7 @@ app.on('ready', async () => {
                 if (token) {
                     headers['Authorization'] = `Bearer ${token}`;
                 }
-                
+
                 await fetch(`${serverUrl}/api/v1/user/courses/names`, {
                     method: 'POST',
                     headers,
@@ -393,7 +396,7 @@ app.on('ready', async () => {
                 console.error('[Main] Failed to sync course name:', e);
             }
         }
-        
+
         if (telegramStore && telegramStore.get('paired')) syncUserDataToBackend(telegramStore, telegramSocket).catch(console.error);
         return result;
     });
@@ -715,27 +718,27 @@ app.on('ready', async () => {
             console.log('[VPS Pull] ⚠️ Sync already in progress, skipping...');
             return;
         }
-        
+
         // Cegah sync terlalu sering
         const now = Date.now();
         if (now - lastSyncTime < SYNC_COOLDOWN) {
             console.log('[VPS Pull] ⚠️ Sync cooldown active, skipping...');
             return;
         }
-        
+
         isSyncing = true;
         lastSyncTime = now;
-        
+
         try {
             console.log('[VPS Pull] 🔄 Starting sync from VPS...');
-            
+
             // Clear sync queue untuk mencegah konflik (VPS dianggap sumber kebenaran)
             const db = getDB();
             const clearedQueue = db.prepare('DELETE FROM sync_queue WHERE synced = 0').run();
             if (clearedQueue.changes > 0) {
                 console.log(`[VPS Pull] 🧹 Cleared ${clearedQueue.changes} pending local changes (VPS is master)`);
             }
-            
+
             const headers: any = { 'x-api-key': API_KEY };
             const [tasksRes, projectsRes, txRes] = await Promise.all([
                 fetch(`${WEBSOCKET_URL}/api/v1/tasks`, { headers }),
@@ -786,7 +789,7 @@ app.on('ready', async () => {
             BrowserWindow.getAllWindows().forEach(win => {
                 if (!win.isDestroyed()) win.webContents.send('refresh-data');
             });
-            
+
             console.log('[VPS Pull] ✅ Sync completed successfully');
         } catch (e) {
             console.error('[VPS Pull] Error:', e);
@@ -861,8 +864,9 @@ app.on('ready', async () => {
                         win.webContents.send('telegram:status-change', 'connected');
                     });
 
-                    // Heartbeat Logger
-                    setInterval(() => {
+                    // Heartbeat Logger (clear previous to prevent leaks)
+                    if (heartbeatInterval) clearInterval(heartbeatInterval);
+                    heartbeatInterval = setInterval(() => {
                         if (telegramSocket) {
                             // console.log(`[Telegram Heartbeat] Connected: ${telegramSocket.connected}, ID: ${telegramSocket.id}`);
                         }
@@ -888,6 +892,7 @@ app.on('ready', async () => {
 
                 telegramSocket.on('disconnect', () => {
                     console.log('[Telegram] WebSocket disconnected');
+                    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
                     BrowserWindow.getAllWindows().forEach((win: BrowserWindow) => {
                         win.webContents.send('telegram:status-change', 'disconnected');
                     });

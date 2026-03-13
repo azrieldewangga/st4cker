@@ -121,36 +121,42 @@ const SortableRow = ({
             )}
         >
             {/* Drag Grip & Checkbox */}
-            <TableCell className="w-[50px] p-2 pl-4">
-                <div className="flex items-center justify-center h-4">
+            <TableCell className="w-[70px] p-2 pl-4 overflow-visible">
+                <div className="flex items-center gap-2 h-4">
                     <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => {
-                            // Event handling for row selection
                             onToggleSelect(assignment.id);
                         }}
-                        onClick={(e: React.MouseEvent) => e.stopPropagation()} // Prevent row click
-                        className="scale-75"
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        className="scale-75 shrink-0"
                     />
-                    {!isFiltered && (
-                        <div
-                            {...attributes}
-                            {...listeners}
-                            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded opacity-0 group-hover:opacity-100 transition-opacity flex justify-center absolute left-8"
-                        >
-                            <GripVertical size={16} className="text-muted-foreground" />
-                        </div>
-                    )}
+                    <div
+                        {...(isFiltered ? {} : { ...attributes, ...listeners })}
+                        className={cn(
+                            "p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center",
+                            isFiltered
+                                ? "cursor-default text-muted-foreground/30"
+                                : "cursor-grab active:cursor-grabbing hover:bg-muted"
+                        )}
+                    >
+                        <GripVertical size={18} className="text-muted-foreground" />
+                    </div>
                 </div>
             </TableCell>
 
             {/* Deadline */}
             <TableCell className="font-medium whitespace-nowrap">
                 <div className="flex flex-col">
-                    <span>{format(new Date(assignment.deadline), 'MMMM d, yyyy')}</span>
-                    <span className="text-xs text-muted-foreground">
-                        {format(new Date(assignment.deadline), 'HH:mm')}
-                    </span>
+                    <span>{format(new Date(assignment.deadline), 'MMM d, yyyy')}</span>
+                    {(() => {
+                        const d = new Date(assignment.deadline);
+                        return (d.getHours() !== 0 || d.getMinutes() !== 0) ? (
+                            <span className="text-xs text-muted-foreground">
+                                {format(d, 'HH:mm')}
+                            </span>
+                        ) : null;
+                    })()}
                 </div>
             </TableCell>
 
@@ -510,7 +516,8 @@ const Assignments = () => {
         return result;
     }, [assignments, search, statusFilter, courseFilter, sortBy, userProfile]);
 
-    const isFiltered = assignments.length !== filteredAssignments.length || (search !== '' || statusFilter !== 'all' || courseFilter !== 'all');
+
+    const isFiltered = search !== '' || statusFilter !== 'all' || courseFilter !== 'all';
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -574,7 +581,7 @@ const Assignments = () => {
                         </div>
                     </div>
 
-                    <TabsContent value="tasks" className="space-y-4">
+                    <TabsContent value="tasks" forceMount className={cn("space-y-4", activeTab !== 'tasks' && 'hidden')}>
 
                         {/* Toolbar */}
                         <div className="flex items-center justify-between space-x-2">
@@ -661,8 +668,8 @@ const Assignments = () => {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[50px] p-2 pl-4">
-                                                <div className="flex items-center justify-center h-4">
+                                            <TableHead className="w-[70px] p-2 pl-4">
+                                                <div className="flex items-center h-4">
                                                     <Checkbox
                                                         checked={filteredAssignments.length > 0 && selectedIds.size === filteredAssignments.length}
                                                         onCheckedChange={toggleSelectAll}
@@ -770,7 +777,7 @@ const Assignments = () => {
                         />
                     </TabsContent>
 
-                    <TabsContent value="projects">
+                    <TabsContent value="projects" forceMount className={cn(activeTab !== 'projects' && 'hidden')}>
                         <ProjectsTab
                             isModalOpen={isProjectModalOpen}
                             setIsModalOpen={setIsProjectModalOpen}

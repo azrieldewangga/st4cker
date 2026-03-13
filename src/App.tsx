@@ -1,31 +1,23 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ErrorFallback } from '@/components/common/ErrorFallback';
 import SidebarLayout from './components/layout/SidebarLayout';
-// import LoadingScreen from './components/shared/LoadingScreen';
 import { useStore } from './store/useStoreNew';
-import Dashboard from './pages/Dashboard';
-
-import Assignments from './pages/Assignments';
-import Onboarding from './pages/Onboarding';
-
-// Placeholder components
-import Settings from './pages/Settings';
-import Performance from './pages/Performance';
-import Schedule from './pages/Schedule';
-import ProjectDetail from './pages/ProjectDetail';
-
-import Cashflow from './pages/Cashflow';
-import TransactionHistoryModal from './components/modals/TransactionHistoryModal'; // Now acting as a page
-
-
-
-
 import { useTheme } from "@/components/theme-provider";
 import { CommandPalette } from "@/components/ui/command-palette";
-import { useState } from 'react';
 import { useSync } from "@/hooks/useSync";
+
+// Lazy-loaded pages — only loaded when navigated to
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Assignments = lazy(() => import('./pages/Assignments'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Performance = lazy(() => import('./pages/Performance'));
+const Schedule = lazy(() => import('./pages/Schedule'));
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const Cashflow = lazy(() => import('./pages/Cashflow'));
+const Onboarding = lazy(() => import('./pages/Onboarding'));
+const TransactionHistoryModal = lazy(() => import('./components/modals/TransactionHistoryModal'));
 
 
 const StandaloneRoutes = () => {
@@ -158,14 +150,18 @@ const StandaloneRoutes = () => {
           {/* Secondary Windows */}
           <Route path="/history" element={
             <ErrorBoundary context="History Window" fallback={<ErrorFallback context="History" error={new Error("History Window Error")} />}>
-              <TransactionHistoryModal />
+              <Suspense fallback={null}>
+                <TransactionHistoryModal />
+              </Suspense>
             </ErrorBoundary>
           } />
 
           {/* Onboarding Route */}
           <Route path="/onboarding" element={
             <ErrorBoundary context="Onboarding">
-              <Onboarding />
+              <Suspense fallback={null}>
+                <Onboarding />
+              </Suspense>
             </ErrorBoundary>
           } />
 
@@ -176,15 +172,17 @@ const StandaloneRoutes = () => {
               <Navigate to="/onboarding" replace />
             ) : (
               <SidebarLayout>
-                <Routes>
-                  <Route path="/" element={<ErrorBoundary context="Dashboard" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Dashboard" />}><Dashboard /></ErrorBoundary>} />
-                  <Route path="/assignments" element={<ErrorBoundary context="Assignments" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Assignments" />}><Assignments /></ErrorBoundary>} />
-                  <Route path="/performance" element={<ErrorBoundary context="Performance" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Performance" />}><Performance /></ErrorBoundary>} />
-                  <Route path="/schedule" element={<ErrorBoundary context="Schedule" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Schedule" />}><Schedule /></ErrorBoundary>} />
-                  <Route path="/cashflow" element={<ErrorBoundary context="Cashflow" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Cashflow" />}><Cashflow /></ErrorBoundary>} />
-                  <Route path="/settings" element={<ErrorBoundary context="Settings" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Settings" />}><Settings /></ErrorBoundary>} />
-                  <Route path="/projects/:id" element={<ErrorBoundary context="ProjectDetail" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="ProjectDetail" />}><ProjectDetail /></ErrorBoundary>} />
-                </Routes>
+                <Suspense fallback={null}>
+                  <Routes>
+                    <Route path="/" element={<ErrorBoundary context="Dashboard" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Dashboard" />}><Dashboard /></ErrorBoundary>} />
+                    <Route path="/assignments" element={<ErrorBoundary context="Assignments" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Assignments" />}><Assignments /></ErrorBoundary>} />
+                    <Route path="/performance" element={<ErrorBoundary context="Performance" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Performance" />}><Performance /></ErrorBoundary>} />
+                    <Route path="/schedule" element={<ErrorBoundary context="Schedule" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Schedule" />}><Schedule /></ErrorBoundary>} />
+                    <Route path="/cashflow" element={<ErrorBoundary context="Cashflow" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Cashflow" />}><Cashflow /></ErrorBoundary>} />
+                    <Route path="/settings" element={<ErrorBoundary context="Settings" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="Settings" />}><Settings /></ErrorBoundary>} />
+                    <Route path="/projects/:id" element={<ErrorBoundary context="ProjectDetail" fallback={({ error, resetErrorBoundary }) => <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} context="ProjectDetail" />}><ProjectDetail /></ErrorBoundary>} />
+                  </Routes>
+                </Suspense>
               </SidebarLayout>
             )
           } />

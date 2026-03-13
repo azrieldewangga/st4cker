@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { motion, type HTMLMotionProps } from 'motion/react';
+import { motion, type HTMLMotionProps } from 'framer-motion';
 
 import { Slot, type WithAsChild } from '@/components/animate-ui/primitives/animate/slot';
 
