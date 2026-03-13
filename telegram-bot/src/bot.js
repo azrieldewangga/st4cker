@@ -10,7 +10,7 @@ import { handleNaturalLanguage, handleNLPCallback } from './nlp/index.js';
 import { NLPTester } from './nlp/nlp-tester.js';
 import { initScheduler } from './scheduler.js';
 
-import { broadcastEvent } from './server.js';
+import { broadcastEvent, disconnectBySessionTokens } from './server.js';
 import crypto from 'crypto';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -317,9 +317,12 @@ if (!token) {
 
         // Handle unpair confirmation
         if (query.data === 'confirm_unpair') {
-            const sessions = await getUserSessions(telegramUserId);
-            if (sessions.length > 0) {
-                sessions.forEach(s => revokeSession(s.sessionToken));
+            const activeSessions = await getUserSessions(telegramUserId);
+            if (activeSessions.length > 0) {
+                const sessionTokens = activeSessions.map(s => s.sessionToken);
+                await Promise.all(sessionTokens.map(token => revokeSession(token)));
+                const disconnected = disconnectBySessionTokens(sessionTokens, 'telegram_unpair');
+                console.log(`[Bot] Unpaired user ${telegramUserId}: revoked ${sessionTokens.length} session(s), disconnected ${disconnected} socket(s)`);
             }
 
             bot.answerCallbackQuery(query.id, { text: 'Device disconnected.' });

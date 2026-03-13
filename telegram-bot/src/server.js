@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit';
 
 // Drizzle Imports
 import { db } from './db/index.js';
-import { users, sessions, devices, pendingEvents, transactions, projects, assignments } from './db/schema.js';
+import { users, sessions, devices, pendingEvents, pairingCodes, transactions, projects, assignments } from './db/schema.js';
 import { eq, and, gt, sql } from 'drizzle-orm';
 import { DbService } from './services/dbService.js'; // Use DbService for data fetch
 
@@ -17,6 +17,15 @@ import { createPairingCode, verifyPairingCode, validateSession, unpairSession } 
 
 const app = express();
 const httpServer = createServer(app);
+
+function normalizeAssignmentStatus(input) {
+    if (typeof input !== 'string') return 'pending';
+    const normalized = input.trim().toLowerCase();
+    if (['pending', 'to-do', 'todo', 'to_do'].includes(normalized)) return 'pending';
+    if (['in-progress', 'in progress', 'progress', 'in_progress'].includes(normalized)) return 'in-progress';
+    if (['completed', 'done'].includes(normalized)) return 'completed';
+    return 'pending';
+}
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
@@ -152,13 +161,29 @@ app.post('/api/verify-pairing', pairingLimiter, async (req, res) => {
     }
 });
 
+function disconnectSessionSockets(sessionTokens, reason = 'session_revoked') {
+    const tokenSet = new Set((sessionTokens || []).filter(Boolean));
+    if (tokenSet.size === 0) return 0;
+
+    let disconnected = 0;
+    for (const socket of io.sockets.sockets.values()) {
+        const socketToken = socket.handshake?.auth?.token;
+        if (!socketToken || !tokenSet.has(socketToken)) continue;
+        socket.emit('session-revoked', { reason });
+        socket.disconnect(true);
+        disconnected++;
+    }
+    return disconnected;
+}
+
 app.post('/api/unpair', async (req, res) => {
     try {
         const { sessionToken } = req.body;
         if (!sessionToken) return res.status(400).json({ error: 'sessionToken required' });
 
         const success = await unpairSession(sessionToken);
-        res.json({ success });
+        const disconnected = disconnectSessionSockets([sessionToken], 'desktop_unpair');
+        res.json({ success, disconnected });
     } catch (error) {
         console.error('[API] Unpair error:', error);
         res.status(500).json({ error: error.message });
@@ -360,6 +385,7 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
                         console.log(`[API] Sync: Skipping invalid assignment (missing id or title):`, t);
                         continue;
                     }
+                    const normalizedStatus = normalizeAssignmentStatus(t.status);
                     
                     await tx.insert(assignments).values({
                         id: t.id,
@@ -367,7 +393,7 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
                         title: t.title,
                         course: t.course || '',
                         type: t.type || 'Tugas',
-                        status: t.status || 'pending',
+                        status: normalizedStatus,
                         deadline: t.deadline,
                         note: t.note || '',
                         semester: t.semester || 1,
@@ -376,7 +402,7 @@ app.post('/api/sync-user-data', syncLimiter, async (req, res) => {
                     }).onConflictDoUpdate({
                         target: assignments.id,
                         set: {
-                            status: t.status,
+                            status: normalizedStatus,
                             title: t.title,
                             course: t.course,
                             note: t.note,
@@ -553,6 +579,10 @@ export function isUserOnline(telegramUserId) {
     return !!(room && room.size > 0);
 }
 
+export function disconnectBySessionTokens(sessionTokens, reason = 'session_revoked') {
+    return disconnectSessionSockets(sessionTokens, reason);
+}
+
 export async function broadcastEvent(telegramUserId, event) {
     // 1. Persist
     try {
@@ -578,9 +608,13 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 setInterval(async () => {
     try {
         const cutoff = new Date(Date.now() - THIRTY_DAYS_MS);
-        const deleted = await db.delete(pendingEvents)
+        await db.delete(pendingEvents)
             .where(sql`${pendingEvents.createdAt} < ${cutoff}`);
-        console.log(`[Cleanup] Pending events cleanup completed`);
+        await db.delete(sessions)
+            .where(sql`${sessions.expiresAt} < ${new Date()}`);
+        await db.delete(pairingCodes)
+            .where(sql`${pairingCodes.expiresAt} < ${new Date()}`);
+        console.log(`[Cleanup] Pending events, sessions, and pairing codes cleanup completed`);
     } catch (e) {
         console.error('[Cleanup] Error:', e);
     }

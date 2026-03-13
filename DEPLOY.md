@@ -14,8 +14,8 @@ POSTGRES_DB=st4cker_db
 ST4CKER_API_KEY=your_api_key_here                   # ⭐ Ganti!
 OPENCLAW_API_KEY=your_openclaw_key_here             # ⭐ Ganti!
 
-# WhatsApp Target Number
-TARGET_PHONE=6281311417727                         # ⭐ Ganti nomor kamu
+# WhatsApp chat sekarang pakai bawaan OpenClaw (tanpa wa-gateway terpisah)
+# Tidak perlu TARGET_PHONE untuk service wa-gateway.
 ```
 
 ### 2. Validasi `.env` tidak di-push ke Git
@@ -27,11 +27,11 @@ cat .gitignore | grep "\.env"
 # Harus muncul: .env
 ```
 
-### 3. Pastikan Port 3000, 4000, 8000 tidak terpakai
+### 3. Pastikan Port 3000 dan 8000 tidak terpakai
 
 ```bash
 # Cek port yang terpakai
-netstat -tlnp | grep -E ':(3000|4000|8000)'
+netstat -tlnp | grep -E ':(3000|8000)'
 
 # Kalau ada yang terpakai, kill dulu:
 # sudo kill -9 <PID>
@@ -51,7 +51,7 @@ docker compose down
 
 ```bash
 # Hapus volume lama (WARNING: akan hapus data persistent)
-docker volume rm st4cker_postgres_data st4cker_wa_auth st4cker_wa_data st4cker_reminder_data st4cker_followup_data 2>/dev/null || true
+docker volume rm st4cker_postgres_data st4cker_reminder_data st4cker_followup_data 2>/dev/null || true
 
 # Clean build semua services
 docker compose build --no-cache
@@ -66,7 +66,6 @@ docker compose up -d
 # Atau start satu per satu untuk debug:
 docker compose up -d postgres
 docker compose up -d st4cker-bot
-docker compose up -d wa-gateway
 docker compose up -d openclaw
 docker compose up -d reminder-bot
 docker compose up -d followup-bot
@@ -82,7 +81,6 @@ docker compose ps
 docker logs openclaw -f
 docker logs reminder-bot -f
 docker logs followup-bot -f
-docker logs wa-gateway -f
 ```
 
 ### Step 5: Test OpenClaw API
@@ -95,13 +93,11 @@ curl http://localhost:8000/health
 # {"status": "ok", "service": "openclaw-brain", "version": "2.0.0", ...}
 ```
 
-### Step 6: Setup WhatsApp Gateway
+### Step 6: Setup WhatsApp di OpenClaw (Native)
 
 ```bash
-# Scan QR code
-docker logs wa-gateway -f
-
-# Tunggu sampai muncul QR code, scan dengan WhatsApp kamu
+# Validasi OpenClaw sudah menerima chat WhatsApp native
+docker logs openclaw -f
 ```
 
 ### Step 7: Test End-to-End
@@ -140,17 +136,12 @@ curl -X POST http://localhost:8000/webhook/st4cker-reminder-trigger \
 │                            │                    │            │
 │                            │            ┌───────┴──────┐     │
 │                            │            │              │     │
-│                     ┌──────▼──────┐    ┌▼────────────┐│     │
-│                     │  wa-gateway │    │ reminder-bot││     │
-│                     │   (4000)    │    │  (trigger)  ││     │
-│                     └──────┬──────┘    └─────────────┘│     │
-│                            │            ┌─────────────┐│     │
-│                            │            │followup-bot ││     │
-│                            │            │  (trigger)  ││     │
-│                     ┌──────▼──────┘    └─────────────┘│     │
-│                     │   WhatsApp    │                  │     │
-│                     │   (Zril)      │                  │     │
-│                     └───────────────┘                  │     │
+│                     ┌─────────────┐    ┌─────────────┐│     │
+│                     │ reminder-bot│    │followup-bot ││     │
+│                     │  (trigger)  │    │  (trigger)  ││     │
+│                     └─────────────┘    └─────────────┘│     │
+│                                                        │     │
+│               WhatsApp chat handled natively by OpenClaw     │
 │                                                        │     │
 └────────────────────────────────────────────────────────┴─────┘
 ```
@@ -175,19 +166,18 @@ docker exec openclaw env | grep API_KEY
 # Cek error
 docker logs reminder-bot
 
-# Pastikan DB_PASSWORD dan TARGET_PHONE ter-set
-docker exec reminder-bot env | grep -E '(DB_PASSWORD|TARGET_PHONE)'
+# Pastikan DB_PASSWORD ter-set
+docker exec reminder-bot env | grep DB_PASSWORD
 ```
 
-### Issue: WA Gateway QR code gak muncul
+### Issue: Chat WhatsApp tidak masuk ke OpenClaw
 
 ```bash
-# Restart service
-docker compose restart wa-gateway
+# Cek log OpenClaw
+docker logs openclaw -f
 
-# Hapus auth state
-docker volume rm st4cker_wa_auth
-docker compose up -d wa-gateway
+# Restart OpenClaw
+docker compose restart openclaw
 ```
 
 ### Issue: Database connection failed
@@ -238,7 +228,7 @@ Kalau deploy berhasil:
 
 1. ✅ `docker compose ps` → semua status `healthy` atau `up`
 2. ✅ `curl localhost:8000/health` → return JSON
-3. ✅ WhatsApp ter-connect (wa-gateway logs: "Client is ready!")
+3. ✅ WhatsApp ter-connect (cek log OpenClaw native chat channel)
 4. ✅ Pesan reminder masuk ke WhatsApp sesuai jadwal
 
 ---

@@ -167,7 +167,7 @@ export class DbService {
             .from(assignments)
             .where(and(
                 eq(assignments.userId, userId.toString()),
-                sql`${assignments.status} != 'completed'`
+                sql`COALESCE(LOWER(${assignments.status}), 'pending') NOT IN ('completed', 'done')`
             ))
             .orderBy(desc(assignments.deadline));
     }
@@ -206,7 +206,7 @@ export class DbService {
             .from(assignments)
             .where(and(
                 eq(assignments.deadline, dateStr),
-                sql`${assignments.status} != 'completed'`
+                sql`COALESCE(LOWER(${assignments.status}), 'pending') NOT IN ('completed', 'done')`
             ));
     }
 

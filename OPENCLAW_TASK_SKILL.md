@@ -43,7 +43,7 @@ Dipanggil oleh reminder-bot saat reminder tugas dikirim (jam 15:00).
 ```
 POST /api/v1/st4cker/task-reply
 ```
-Dipanggil oleh wa-gateway saat user reply dalam window 30 menit.
+Dipanggil oleh channel chat WhatsApp OpenClaw (atau bridge legacy) saat user reply dalam window 30 menit.
 
 **Request Body:**
 ```json
@@ -111,7 +111,7 @@ Dipanggil oleh reminder-bot saat reminder matkul dikirim.
 ```
 POST /api/v1/st4cker/schedule-reply
 ```
-Dipanggil oleh wa-gateway saat user reply dalam window 30 menit.
+Dipanggil oleh channel chat WhatsApp OpenClaw (atau bridge legacy) saat user reply dalam window 30 menit.
 
 **Request Body:**
 ```json
@@ -261,7 +261,7 @@ X-API-Key: {AGENT_API_KEY}
 
 ## ENVIRONMENT VARIABLES
 
-**wa-gateway:**
+**OpenClaw chat channel (native / legacy bridge):**
 ```env
 OPENCLAW_URL=http://openclaw:8000
 OPENCLAW_API_KEY=your_openclaw_api_key

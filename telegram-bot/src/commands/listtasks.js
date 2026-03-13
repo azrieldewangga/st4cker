@@ -98,7 +98,9 @@ export async function processListTasks(bot, chatId, userId, page = 0, mode = 'vi
     pageItems.forEach((task, index) => {
         const globalIndex = start + index + 1;
         const deadlineDate = new Date(task.deadline);
-        const isOverdue = deadlineDate < now && (task.status !== 'completed' && task.status !== 'Done');
+        const statusLower = (task.status || '').toLowerCase();
+        const isDone = ['completed', 'done'].includes(statusLower);
+        const isOverdue = deadlineDate < now && !isDone;
 
         // Days Left calc
         const diffTime = deadlineDate - now;
@@ -111,8 +113,8 @@ export async function processListTasks(bot, chatId, userId, page = 0, mode = 'vi
         });
 
         let statusIcon = '⬜';
-        if (task.status === 'in-progress' || task.status === 'In Progress') statusIcon = '⏳';
-        else if (task.status === 'completed' || task.status === 'Done') statusIcon = '✅';
+        if (['in-progress', 'in_progress', 'in progress', 'progress'].includes(statusLower)) statusIcon = '⏳';
+        else if (isDone) statusIcon = '✅';
         if (isOverdue) statusIcon = '⚠️';
 
         let timeStatus = '';

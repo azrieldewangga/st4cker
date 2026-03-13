@@ -157,7 +157,26 @@ export async function validateSession(sessionToken) {
  * Unpair (delete session)
  */
 export async function unpairSession(sessionToken) {
-    await db.delete(sessions).where(eq(sessions.sessionToken, sessionToken));
+    const sessionRes = await db.select()
+        .from(sessions)
+        .where(eq(sessions.sessionToken, sessionToken))
+        .limit(1);
+
+    if (sessionRes.length === 0) {
+        return false;
+    }
+
+    const session = sessionRes[0];
+    await db.transaction(async (tx) => {
+        await tx.delete(sessions).where(eq(sessions.sessionToken, sessionToken));
+        await tx.update(devices)
+            .set({ enabled: false, lastSeen: new Date() })
+            .where(and(
+                eq(devices.deviceId, session.deviceId),
+                eq(devices.telegramUserId, session.telegramUserId)
+            ));
+    });
+
     return true;
 }
 

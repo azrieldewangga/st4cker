@@ -64,7 +64,6 @@ class ReminderScheduler:
             if success:
                 self.notified_today.add(reminder_key)
                 logger.info(f"✅ [OpenClaw] Sent: {course_name}")
-                await self.smart_reminder.update_attendance(course_name, 'reminded')
             else:
                 logger.error(f"❌ [OpenClaw] Failed: {course_name}")
         except Exception as e:

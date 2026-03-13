@@ -33,6 +33,15 @@ function resolveCourseName(input) {
     return input;
 }
 
+function normalizeAssignmentStatus(input) {
+    if (typeof input !== 'string') return null;
+    const normalized = input.trim().toLowerCase();
+    if (['pending', 'to-do', 'todo', 'to_do'].includes(normalized)) return 'pending';
+    if (['in-progress', 'in progress', 'progress', 'in_progress'].includes(normalized)) return 'in-progress';
+    if (['completed', 'done'].includes(normalized)) return 'completed';
+    return null;
+}
+
 const router = express.Router();
 
 // Public endpoint for OpenClaw to get schedules (used for AI responses)
@@ -348,13 +357,23 @@ router.post('/tasks', [
 // PATCH /api/v1/tasks/:id
 router.patch('/tasks/:id', [
     param('id').isUUID(),
-    body('status').optional().isIn(['pending', 'completed']),
+    body('status').optional().isString(),
     body('deadline').optional().isISO8601(),
     handleValidationErrors
 ], async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
+        if (updates.status !== undefined) {
+            const normalizedStatus = normalizeAssignmentStatus(updates.status);
+            if (!normalizedStatus) {
+                return res.status(400).json({
+                    error: 'Invalid task status',
+                    accepted: ['pending', 'in-progress', 'completed']
+                });
+            }
+            updates.status = normalizedStatus;
+        }
         updates.updatedAt = new Date();
         if (updates.deadline) updates.deadline = toWIBEndOfDay(updates.deadline);
 
@@ -1639,7 +1658,7 @@ router.delete('/schedules/cancellations/:id', [
 });
 
 // ==========================================
-// TASK REMINDER API (For wa-gateway & OpenClaw)
+// TASK REMINDER API (For OpenClaw chat handlers / legacy bridges)
 // ==========================================
 
 // POST /api/task/select - User selected a task from reminder (legacy, use /api/v1/tasks/update-status)

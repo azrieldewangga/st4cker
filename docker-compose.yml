@@ -64,34 +64,7 @@ services:
     networks:
       - st4cker-net
   # --------------------------------------------------------------------------------
-  # 3. WHATSAPP GATEWAY (Baileys)
-  # --------------------------------------------------------------------------------
-  wa-gateway:
-    build: ./wa-gateway
-    container_name: wa-gateway
-    restart: always
-    ports:
-      - "127.0.0.1:4000:4000"  # Local access only for security
-    environment:
-      - TZ=Asia/Jakarta
-      - TARGET_PHONE=${TARGET_PHONE:?TARGET_PHONE must be set}
-      - TARGET_USER_ID=${TARGET_USER_ID:-1168825716}
-      - OPENCLAW_URL=http://openclaw:8000
-      - OPENCLAW_API_KEY=st4cker_openclaw_secure_key_2024
-    volumes:
-      - wa_auth:/app/auth_state
-      - wa_data:/app/data
-    networks:
-      - st4cker-net
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-
-  # --------------------------------------------------------------------------------
-  # 4. OPENCLAW BRAIN (The Decision Maker + Scheduler)
+  # 3. OPENCLAW BRAIN (The Decision Maker + Scheduler)
   # --------------------------------------------------------------------------------
   openclaw:
     build: ./openclaw
@@ -122,8 +95,6 @@ services:
 
 volumes:
   postgres_data:
-  wa_auth:
-  wa_data:
   openclaw_memory:
 
 

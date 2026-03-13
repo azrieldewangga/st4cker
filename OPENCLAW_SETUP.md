@@ -26,8 +26,7 @@ Server akan jalan di `http://localhost:8000`
 Edit file `.env` di server St4cker:
 
 ```env
-# wa-gateway/.env
-OPENCLAW_URL=http://your-openclaw-ip:8000
+# openclaw/.env
 OPENCLAW_API_KEY=your_secret_key_for_st4cker
 
 # reminder-bot/.env  
@@ -57,8 +56,8 @@ curl -X POST http://localhost:8000/webhook/st4cker-task-reminder \
     "date": "2026-02-14"
   }'
 
-# 2. Simulate user reply
-curl -X POST http://localhost:8000/api/v1/st4cker/task-reply \
+# 2. Simulate incoming chat (native OpenClaw chat endpoint)
+curl -X POST http://localhost:8000/api/v1/st4cker/chat \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your_secret_key" \
   -d '{
@@ -99,15 +98,11 @@ Expected response:
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│reminder-bot │────▶│   OpenClaw  │◄────│ wa-gateway  │
-│ (jam 15:00) │     │  (AI Brain) │     │(user reply) │
-└─────────────┘     └──────┬──────┘     └─────────────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │ st4cker-bot │
-                    │  (API/DB)   │
-                    └─────────────┘
+│reminder-bot │────▶│   OpenClaw  │────▶│ st4cker-bot │
+│ (jam 15:00) │     │  (AI Brain) │     │  (API/DB)   │
+└─────────────┘     └─────────────┘     └─────────────┘
+
+Incoming WhatsApp chat handled by OpenClaw native channel (tanpa wa-gateway terpisah).
 ```
 
 ---

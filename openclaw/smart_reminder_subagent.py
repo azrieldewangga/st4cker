@@ -23,7 +23,14 @@ class SmartReminderSubagent:
         if base_url is None:
             base_url = os.getenv("SMARTREMINDER_URL", "http://smartreminder:5001")
         self.base_url = base_url
+        self.api_key = os.getenv("SMARTREMINDER_API_KEY", "smartreminder_secure_key_2024")
         self.timeout = 10.0
+
+    def _headers(self, json: bool = False) -> Dict[str, str]:
+        headers = {"X-API-Key": self.api_key}
+        if json:
+            headers["Content-Type"] = "application/json"
+        return headers
     
     async def get_today_schedule(self) -> Dict[str, Any]:
         """
@@ -51,6 +58,7 @@ class SmartReminderSubagent:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{self.base_url}/api/v1/schedules/today",
+                    headers=self._headers(),
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -87,6 +95,7 @@ class SmartReminderSubagent:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{self.base_url}/api/v1/reminders/next",
+                    headers=self._headers(),
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -122,6 +131,7 @@ class SmartReminderSubagent:
                         'status': status,
                         'data': details or {}
                     },
+                    headers=self._headers(json=True),
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -136,7 +146,8 @@ class SmartReminderSubagent:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"{self.base_url}/api/v1/attendance",
+                    f"{self.base_url}/api/v1/attendance/status",
+                    headers=self._headers(),
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -154,6 +165,7 @@ class SmartReminderSubagent:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.base_url}/api/v1/attendance/reset",
+                    headers=self._headers(),
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -174,6 +186,7 @@ class SmartReminderSubagent:
                         'reason': reason,
                         'date': datetime.now().strftime('%Y-%m-%d')
                     },
+                    headers=self._headers(json=True),
                     timeout=self.timeout
                 )
                 response.raise_for_status()
@@ -189,6 +202,7 @@ class SmartReminderSubagent:
         try:
             response = requests.get(
                 f"{self.base_url}/api/v1/schedules/today",
+                headers=self._headers(),
                 timeout=self.timeout
             )
             response.raise_for_status()
@@ -207,6 +221,7 @@ class SmartReminderSubagent:
         try:
             response = requests.get(
                 f"{self.base_url}/api/v1/reminders/next",
+                headers=self._headers(),
                 timeout=self.timeout
             )
             response.raise_for_status()
@@ -221,9 +236,11 @@ class SmartReminderSubagent:
     def sync_update_attendance(self, status: str, details: Dict[str, Any] = None) -> bool:
         import requests
         try:
+            course_name = details.get('course', 'Unknown') if details else 'Unknown'
             response = requests.post(
-                f"{self.base_url}/api/v1/attendance",
-                json={'status': status, 'details': details or {}},
+                f"{self.base_url}/api/v1/attendance/update",
+                json={'course': course_name, 'status': status, 'data': details or {}},
+                headers=self._headers(json=True),
                 timeout=self.timeout
             )
             response.raise_for_status()

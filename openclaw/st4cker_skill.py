@@ -24,8 +24,7 @@ from memory import get_user_memory, get_memory_store
 from message_gen import MessageGenerator
 from context import ContextStore
 from tools import St4ckerTools
-# NOTE: All attendance detection now goes through LLM NLU (OpenClaw), not pattern-based
-# from attendance_nlu import detect_attendance_intent
+from attendance_nlu import detect_attendance_intent
 # NOTE: All intent parsing goes through LLM NLU (OpenClaw), not pattern-based
 # from course_manager_nlu import parse_course_management
 # NOTE: Pattern-based NLU imports removed - all detection via OpenClaw LLM now
@@ -139,13 +138,13 @@ async def lifespan(app: FastAPI):
     global _scheduler_started
     # Startup: Start reminder scheduler
     print("[Startup] Starting reminder scheduler...")
-    await reminder_scheduler.start()
+    reminder_scheduler.start()
     _scheduler_started = True
     print("[Startup] Reminder scheduler started!")
     yield
     # Shutdown: Stop scheduler
     print("[Shutdown] Stopping reminder scheduler...")
-    await reminder_scheduler.stop()
+    reminder_scheduler.stop()
     _scheduler_started = False
 
 app = FastAPI(
@@ -211,8 +210,6 @@ async def handle_reminder_trigger(
         
         lines.append("")
         lines.append("Jangan lupa siapin perlengkapannya ya! 📚")
-        lines.append("")
-        lines.append("_Balas 'otw' kalau berangkat, atau 'skip' kalau ga jadi_ 😊")
         
         message = "\n".join(lines)
     else:
@@ -318,7 +315,25 @@ async def handle_chat(
     # =============================================================================
     # OPENCLAW LLM: All intent parsing goes through LLM (no pattern-based detection!)
     # =============================================================================
-    await ensure_scheduler_started()
+    ensure_scheduler_started()
+
+    # Fast-path for reminder replies: if we just sent a reminder, force attendance detection first.
+    # This prevents short replies like "iya otw" from being treated as general chat.
+    if user_ctx.get("awaiting_reply"):
+        attendance_result = detect_attendance_intent(data.message, user_ctx)
+        if attendance_result.get("intent") in {"confirmed", "declined", "rescheduled"} and attendance_result.get("confidence", 0) >= 0.5:
+            details = attendance_result.get("details", {})
+            parsed_attendance = {
+                "intent": "attendance_reply",
+                "fields": {
+                    "attendance_intent": attendance_result.get("intent"),
+                    "delay_minutes": details.get("delay_minutes"),
+                    "course": user_ctx.get("last_course") or user_ctx.get("last_data", {}).get("course_name", "")
+                },
+                "confidence": attendance_result.get("confidence", 0)
+            }
+            print(f"[FAST_ATTENDANCE] intent={parsed_attendance['fields']['attendance_intent']} course={parsed_attendance['fields']['course']}")
+            return await handle_intent_v2(parsed_attendance, data, user_ctx, user_memory)
     
     # Check if we're awaiting clarification
     if user_ctx.get("awaiting_clarification"):
@@ -830,9 +845,23 @@ async def handle_intent_v2(
         # Handle attendance reply via LLM detection
         attendance_intent = fields.get("attendance_intent", "confirmed")
         delay_minutes = fields.get("delay_minutes")
+        attendance_status = {
+            "confirmed": "confirmed",
+            "present": "present",
+            "declined": "declined",
+            "absent": "absent",
+            "rescheduled": "uncertain",
+        }.get(attendance_intent, "unknown")
+        course_name = (
+            fields.get("course")
+            or user_ctx.get("last_course")
+            or user_ctx.get("last_data", {}).get("course_name")
+            or ""
+        )
         
         # Update SmartReminder
-        await smart_reminder_subagent.update_attendance(attendance_intent, {
+        await smart_reminder_subagent.update_attendance(attendance_status, {
+            "course": course_name,
             "delay_minutes": delay_minutes,
             "original_message": data.message
         })
@@ -842,8 +871,9 @@ async def handle_intent_v2(
             context=f"attendance_{attendance_intent}",
             data={
                 "intent": attendance_intent,
+                "attendance_status": attendance_status,
                 "delay_minutes": delay_minutes,
-                "course": user_ctx.get("last_course", "")
+                "course": course_name
             },
             user_memory=user_memory
         )
@@ -853,7 +883,7 @@ async def handle_intent_v2(
         return OpenClawResponse(
             reply=response_message,
             action="send",
-            context_update={"awaiting_attendance_reply": False},
+            context_update={"awaiting_reply": False, "last_course": course_name},
             done=True
         )
     
@@ -2846,7 +2876,7 @@ async def poll_reminders(_: bool = Depends(verify_api_key)):
     Called periodically by WhatsApp gateway or other message sender.
     NO CRON JOB NEEDED - Internal timer loop handles checking!
     """
-    await ensure_scheduler_started()
+    ensure_scheduler_started()
     
     messages = reminder_scheduler.get_pending_reminders()
     
@@ -2988,7 +3018,7 @@ async def handle_smart_reminder_reply(
     attendance_status = attendance_map.get(intent, 'uncertain')
     
     # Update SmartReminder attendance
-    course_name = context.get('course', 'Unknown')
+    course_name = context.get('course') or context.get('last_course') or 'Unknown'
     try:
         await smart_reminder.update_attendance(
             status=attendance_status, 

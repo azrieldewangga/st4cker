@@ -266,27 +266,50 @@ app.on('ready', async () => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
+        const backendStatus = normalizeTaskStatusForBackend(data.status) || 'pending';
         // Queue VPS sync (works offline)
         syncCRUD('task', 'create', id, {
             title: data.title || data.type || 'Tugas',
             course: data.course || '',
             deadline: data.deadline || new Date().toISOString(),
             type: data.type || 'Tugas',
-            note: data.note || ''
+            note: data.note || '',
+            status: backendStatus
         }).catch(console.error);
         return newAssignment;
     });
     ipcMain.handle('assignments:update', (_, id, data) => {
         const result = assignments.update(id, data);
-        syncCRUD('task', 'update', id, {
-            status: data.status,
-            deadline: data.deadline
-        }).catch(console.error);
+        const updatePayload: any = {};
+        if (data.status !== undefined) {
+            updatePayload.status = normalizeTaskStatusForBackend(data.status);
+        }
+        if (data.deadline !== undefined) {
+            updatePayload.deadline = data.deadline;
+        }
+        if (data.title !== undefined) {
+            updatePayload.title = data.title;
+        }
+        if (data.type !== undefined) {
+            updatePayload.type = data.type;
+        }
+        if (data.note !== undefined) {
+            updatePayload.note = data.note;
+        }
+        if (data.course !== undefined) {
+            updatePayload.course = data.course;
+        } else if (data.courseId !== undefined) {
+            updatePayload.course = data.courseId;
+        }
+        if (Object.keys(updatePayload).length > 0) {
+            syncCRUD('task', 'update', id, updatePayload).catch(console.error);
+        }
         return result;
     });
     ipcMain.handle('assignments:updateStatus', (_, id, status) => {
         const result = assignments.updateStatus(id, status);
-        syncCRUD('task', 'update', id, { status }).catch(console.error);
+        const backendStatus = normalizeTaskStatusForBackend(status);
+        syncCRUD('task', 'update', id, { status: backendStatus }).catch(console.error);
         return result;
     });
     ipcMain.handle('assignments:delete', (_, id) => {
@@ -581,15 +604,53 @@ app.on('ready', async () => {
         console.warn('[Telegram] WARNING: AGENT_API_KEY env var is not set. VPS sync will fail.');
     }
 
+    function clearTelegramPairingState(reason: string) {
+        if (!telegramStore) return;
+        console.log(`[Telegram] Clearing local pairing state: ${reason}`);
+        telegramStore.delete('sessionToken');
+        telegramStore.delete('paired');
+        telegramStore.delete('expiresAt');
+        telegramStore.delete('deviceId');
+        telegramStore.delete('userId');
+    }
+
+    function normalizeTaskStatusForBackend(status: unknown): string | undefined {
+        if (typeof status !== 'string') return undefined;
+        const normalized = status.trim().toLowerCase();
+        if (['to-do', 'todo', 'to_do', 'pending'].includes(normalized)) return 'pending';
+        if (['progress', 'in progress', 'in-progress', 'in_progress'].includes(normalized)) return 'in-progress';
+        if (['done', 'completed'].includes(normalized)) return 'completed';
+        return status.trim();
+    }
+
+    function normalizeTaskSyncPayload(payload: any): any {
+        if (!payload || typeof payload !== 'object') return payload;
+        const normalizedPayload = { ...payload };
+        if (normalizedPayload.status !== undefined) {
+            normalizedPayload.status = normalizeTaskStatusForBackend(normalizedPayload.status);
+        }
+        return normalizedPayload;
+    }
+
     // ========================================
     // VPS Sync Helpers (Offline-First)
     // ========================================
     async function syncToVPS(method: string, apiPath: string, body?: any): Promise<boolean> {
         if (!WEBSOCKET_URL || !API_KEY) return false; // Can't sync without config
         try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'x-api-key': API_KEY,
+                'x-source': 'desktop'
+            };
+            const sessionToken = telegramStore?.get('sessionToken');
+            if (sessionToken) {
+                headers['x-session-token'] = sessionToken;
+            }
+
             const res = await fetch(`${WEBSOCKET_URL}/api/v1${apiPath}`, {
                 method,
-                headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'x-source': 'desktop' },
+                headers,
                 body: body ? JSON.stringify(body) : undefined
             });
             if (!res.ok) console.error(`[VPS Sync] ${method} ${apiPath} failed:`, res.status);
@@ -619,12 +680,13 @@ app.on('ready', async () => {
 
         for (const item of pending) {
             const payload = JSON.parse(item.payload || '{}');
+            const syncPayload = item.entity_type === 'task' ? normalizeTaskSyncPayload(payload) : payload;
             let success = false;
 
             if (item.action === 'create') {
-                success = await syncToVPS('POST', `/${item.entity_type}s`, { id: item.entity_id, ...payload });
+                success = await syncToVPS('POST', `/${item.entity_type}s`, { id: item.entity_id, ...syncPayload });
             } else if (item.action === 'update') {
-                success = await syncToVPS('PATCH', `/${item.entity_type}s/${item.entity_id}`, payload);
+                success = await syncToVPS('PATCH', `/${item.entity_type}s/${item.entity_id}`, syncPayload);
             } else if (item.action === 'delete') {
                 success = await syncToVPS('DELETE', `/${item.entity_type}s/${item.entity_id}`);
             }
@@ -735,13 +797,14 @@ app.on('ready', async () => {
 
     // Helper: attempt immediate sync, queue if offline
     async function syncCRUD(entityType: string, action: string, entityId: string, payload: any) {
-        queueSync(entityType, action, entityId, payload);
+        const syncPayload = entityType === 'task' ? normalizeTaskSyncPayload(payload) : payload;
+        queueSync(entityType, action, entityId, syncPayload);
         // Try immediate sync
         let success = false;
         if (action === 'create') {
-            success = await syncToVPS('POST', `/${entityType}s`, { id: entityId, ...payload });
+            success = await syncToVPS('POST', `/${entityType}s`, { id: entityId, ...syncPayload });
         } else if (action === 'update') {
-            success = await syncToVPS('PATCH', `/${entityType}s/${entityId}`, payload);
+            success = await syncToVPS('PATCH', `/${entityType}s/${entityId}`, syncPayload);
         } else if (action === 'delete') {
             success = await syncToVPS('DELETE', `/${entityType}s/${entityId}`);
         }
@@ -869,6 +932,7 @@ app.on('ready', async () => {
                                     });
                                 } else {
                                     console.error('[Telegram] Auto-recovery failed, session not found');
+                                    clearTelegramPairingState('auto-recovery-failed');
                                     // Notify UI that pairing is needed
                                     BrowserWindow.getAllWindows().forEach((win: BrowserWindow) => {
                                         win.webContents.send('telegram:session-expired', { recoverable: false });
@@ -876,17 +940,32 @@ app.on('ready', async () => {
                                 }
                             } catch (recoveryError) {
                                 console.error('[Telegram] Auto-recovery error:', recoveryError);
+                                clearTelegramPairingState('auto-recovery-error');
                                 BrowserWindow.getAllWindows().forEach((win: BrowserWindow) => {
                                     win.webContents.send('telegram:session-expired', { recoverable: false });
                                 });
                             }
                         } else {
                             console.log('[Telegram] No device ID stored, cannot auto-recover');
+                            clearTelegramPairingState('missing-device-for-recovery');
                             BrowserWindow.getAllWindows().forEach((win: BrowserWindow) => {
                                 win.webContents.send('telegram:session-expired', { recoverable: false });
                             });
                         }
                     }
+                });
+
+                telegramSocket.on('session-revoked', (payload: any) => {
+                    console.log('[Telegram] Session revoked by server:', payload?.reason || 'unknown');
+                    clearTelegramPairingState('server-session-revoked');
+                    if (telegramSocket) {
+                        telegramSocket.disconnect();
+                        telegramSocket = null;
+                    }
+                    BrowserWindow.getAllWindows().forEach((win: BrowserWindow) => {
+                        win.webContents.send('telegram:status-change', 'disconnected');
+                        win.webContents.send('telegram:session-expired', { recoverable: false });
+                    });
                 });
 
                 telegramSocket.onAny((event: any, ...args: any[]) => {
@@ -1425,25 +1504,32 @@ app.on('ready', async () => {
             telegramSocket.close();
             telegramSocket = null;
         }
-        telegramStore.delete('sessionToken');
-        telegramStore.delete('paired');
-        telegramStore.delete('expiresAt');
+        clearTelegramPairingState('manual-unpair');
+        BrowserWindow.getAllWindows().forEach((win: BrowserWindow) => {
+            win.webContents.send('telegram:status-change', 'disconnected');
+        });
         return { success: true };
     });
 
     ipcMain.handle('telegram:get-status', () => {
         if (!telegramStore) return { paired: false, status: 'unknown' };
         const paired = telegramStore.get('paired', false);
+        const sessionToken = telegramStore.get('sessionToken');
         const expiresAt = telegramStore.get('expiresAt');
         const deviceId = telegramStore.get('deviceId');
         const userId = telegramStore.get('userId');
+        const isExpired = typeof expiresAt === 'number' && Date.now() > expiresAt;
+        if (isExpired) {
+            clearTelegramPairingState('local-expiry-check');
+        }
         const connected = telegramSocket?.connected || false;
+        const activePairing = paired && !!sessionToken && !isExpired;
         return {
-            paired,
+            paired: activePairing,
             expiresAt,
             deviceId,
             userId,
-            status: paired ? (connected ? 'connected' : 'disconnected') : 'unknown'
+            status: activePairing ? (connected ? 'connected' : 'disconnected') : 'unknown'
         };
     });
 
@@ -1634,4 +1720,3 @@ app.on('ready', async () => {
         }
     });
 });
-
