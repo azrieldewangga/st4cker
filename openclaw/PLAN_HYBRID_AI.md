@@ -10,7 +10,7 @@ Implementasi sistem pesan reminder hybrid dengan 2 mode:
 ## Persona Reference (kimi - OpenClaw)
 
 ### Identity
-- **Name**: st4cker
+- **Name**: kimi
 - **Nickname**: kimi
 - **Vibe**: Minimalist, friendly, bold, innovative
 - **Avatar**: AI Assistant / Innovative Collaborator
