@@ -1,7 +1,9 @@
-# st4cker - Student Productivity Desktop App
+# st4cker - Student Productivity Desktop App (v1.9.0)
 
 A modern, offline-first desktop application built with Electron, React, and TypeScript.  
 Designed to help students manage assignments, schedules, grades, and personal finances—all in one elegant platform.
+
+*(Note: This repository contains the core desktop application. External plugins/services like `telegram-bot` and `openclaw` are managed separately and are not required for the main build).*
 
 ## ✨ Features
 
