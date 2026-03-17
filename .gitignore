@@ -44,3 +44,6 @@ project-dashboard-main.zip
 # Non-build related directories
 telegram-bot/
 openclaw/
+.agent/
+.gemini/
+st4cker/

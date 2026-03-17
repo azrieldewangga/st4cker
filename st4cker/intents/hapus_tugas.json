@@ -1,8 +1,0 @@
-{
-    "name": "hapus_tugas",
-    "entities": [
-        "matkul:matkul",
-        "project:project",
-        "tipe_tugas:tipe_tugas"
-    ]
-}

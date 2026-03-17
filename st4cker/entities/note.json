@@ -1,9 +1,0 @@
-{
-    "name": "note",
-    "roles": [
-        "note"
-    ],
-    "lookups": [
-        "free-text"
-    ]
-}
