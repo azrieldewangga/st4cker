@@ -5,22 +5,22 @@ Designed to help students manage assignments, schedules, grades, and personal fi
 
 *(Note: This repository contains the core desktop application. External plugins/services like `telegram-bot` and `openclaw` are managed separately and are not required for the main build).*
 
-## ✨ Features
+## Features
 
-- **📊 Dashboard**: Comprehensive overview of upcoming deadlines, academic performance, and financial health.
-- **📝 Assignments**: Full CRUD operations with smart filtering by status, type, and urgency detection.
-- **📅 Schedule**: Organize and track your class timetables effortlessly.
-- **🎯 Performance**: Monitor grades, GPA trends, and academic progress across semesters.
-- **💰 Cashflow**: Personal finance tracker with income/expense categorization and analytics.
-- **⚙️ Settings**: Customizable user profile, semester management, and application preferences.
-- **🎨 Modern UI**: Glassmorphism design with full dark mode support and smooth animations.
-- **💾 Offline-first**: All data stored locally in SQLite database (no server required).
-- **⚡ Quick Add**: Universal modal for rapid data entry across all modules.
-- **🔍 Global Search**: Instant search across assignments with CTRL+K shortcut.
-- **🌐 Cloud Sync**: Google Drive integration for seamless backup and synchronization.  
+- **Dashboard**: Comprehensive overview of upcoming deadlines, academic performance, and financial health.
+- **Assignments**: Full CRUD operations with smart filtering by status, type, and urgency detection.
+- **Schedule**: Organize and track your class timetables effortlessly.
+- **Performance**: Monitor grades, GPA trends, and academic progress across semesters.
+- **Cashflow**: Personal finance tracker with income/expense categorization and analytics.
+- **Settings**: Customizable user profile, semester management, and application preferences.
+- **Modern UI**: Glassmorphism design with full dark mode support and smooth animations.
+- **Offline-first**: All data stored locally in SQLite database (no server required).
+- **Quick Add**: Universal modal for rapid data entry across all modules.
+- **Global Search**: Instant search across assignments with CTRL+K shortcut.
+- **Cloud Sync**: Google Drive integration for seamless backup and synchronization.  
   > **Note**: Cloud sync functionality is reserved for development builds. Custom OAuth credentials required.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Electron** - Cross-platform desktop framework
 - **React + TypeScript** - UI framework with type safety
@@ -30,7 +30,7 @@ Designed to help students manage assignments, schedules, grades, and personal fi
 - **Recharts** - Data visualization and charting
 - **React Hook Form + Zod** - Form validation and management
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 - **Node.js** (LTS version 18.x or higher recommended)
@@ -78,14 +78,14 @@ The compiled installer will be available in the `dist/` directory.
 └── public/              # Static assets
 ```
 
-## 💾 Data Storage
+##  Data Storage
 
 User data is stored locally in an SQLite database file:
 - **Location**: `%APPDATA%/st4cker/st4cker.db` (Windows)
 - **Automatic backups**: Created on major updates
 - **No internet required**: Full offline functionality
 
-## 🎨 Design Philosophy
+##  Design Philosophy
 
 st4cker embraces modern design principles with:
 - **Glassmorphism**: Translucent UI elements with backdrop blur effects
@@ -93,7 +93,7 @@ st4cker embraces modern design principles with:
 - **Fluid Animations**: Smooth transitions and micro-interactions
 - **Accessibility**: Keyboard shortcuts and screen reader support
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### App won't start
 - Ensure Node.js is installed correctly
@@ -105,7 +105,7 @@ st4cker embraces modern design principles with:
 - Database file may be locked by another process
 - Check file permissions in `%APPDATA%/st4cker/`
 
-## 📄 License
+##  License
 
 This project is developed for personal and educational use.
 
